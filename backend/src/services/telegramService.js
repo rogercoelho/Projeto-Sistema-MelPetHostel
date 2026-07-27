@@ -1,5 +1,9 @@
 const dbPool = require("../config/database");
-const TelegramBot = require("node-telegram-bot-api");
+const TelegramBotPackage = require("node-telegram-bot-api");
+const TelegramBot =
+  TelegramBotPackage.TelegramBot ||
+  TelegramBotPackage.default ||
+  TelegramBotPackage;
 
 const DEFAULT_MODULE = "melpethostel";
 const DEFAULT_TIMEZONE = "America/Sao_Paulo";
