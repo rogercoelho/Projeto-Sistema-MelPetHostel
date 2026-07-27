@@ -1,0 +1,33 @@
+.card {
+  background-color: var(--cor-branco);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  box-shadow: var(--shadow-md);
+  margin-bottom: var(--spacing-md);
+}
+
+/* Make cards full-width on small screens and ensure consistent box-sizing */
+.card {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 768px) {
+  .card {
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+  }
+}
+
+.card-title {
+  font-size: 1.125rem;
+  margin-bottom: var(--spacing-md);
+  color: var(--cor-marrom);
+  font-weight: 600;
+}
+
+@media (min-width: 768px) {
+  .card-title {
+    font-size: 1.25rem;
+  }
+}

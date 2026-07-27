@@ -1,0 +1,206 @@
+/* Mobile-first para modal de renomeio de arquivo */
+.rename-modal-mobile {
+  width: 100vw;
+  max-width: 95vw;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 16px;
+  border-radius: 12px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+@media (min-width: 480px) {
+  .rename-modal-mobile {
+    max-width: 400px;
+    padding: 24px;
+  }
+}
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-md);
+  z-index: 20000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-container {
+  background-color: var(--cor-branco);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  /* use most of the viewport on small screens, limit on large screens */
+  max-width: min(95vw, 720px);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  animation: slideIn 0.2s ease;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--cor-areia);
+}
+
+.modal-header h2 {
+  font-size: 1.1rem;
+  color: var(--cor-marrom);
+  margin: 0;
+}
+
+@media (min-width: 480px) {
+  .modal-header h2 {
+    font-size: 1.25rem;
+  }
+}
+
+/* Slightly smaller modal title on very small screens */
+@media (max-width: 479px) {
+  .modal-header h2 {
+    font-size: 1rem;
+  }
+}
+
+.modal-close {
+  background: var(--cor-branco);
+  border: 1px solid #000;
+  font-size: 1.25rem;
+  color: var(--cor-azul-cinza);
+  cursor: pointer;
+  padding: 6px 8px;
+  line-height: 1;
+  border-radius: 8px;
+  transition:
+    color 0.2s ease,
+    transform 0.08s ease;
+}
+
+.modal-close:hover {
+  color: var(--cor-marrom);
+}
+
+.modal-content {
+  padding: var(--spacing-lg);
+}
+
+/* Responsive modal: larger on desktop, comfortable padding on mobile */
+@media (min-width: 768px) {
+  .modal-content {
+    padding: calc(var(--spacing-lg) + 8px);
+  }
+}
+
+@media (max-width: 479px) {
+  .modal-container {
+    margin: 0 var(--spacing-sm);
+    width: calc(100% - 2 * var(--spacing-sm));
+    max-width: 95vw;
+  }
+  .modal-header {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+  .modal-content {
+    padding: var(--spacing-md);
+  }
+}
+
+/* Dark preview modal used by ListarContas (mobile-first) */
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  z-index: 99999;
+}
+
+.preview-container {
+  width: 100%;
+  max-width: 95vw;
+  box-sizing: border-box;
+  border-radius: 16px;
+  background: #111827; /* dark gray */
+  color: #fff;
+  border: 2px solid #374151;
+  box-shadow: 0 12px 40px rgba(2, 6, 23, 0.6);
+  max-height: 92vh;
+  overflow: auto;
+  padding: 16px;
+}
+
+.preview-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.preview-body {
+  margin-top: 8px;
+}
+
+.preview-body img {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 80vh;
+}
+
+.preview-body iframe {
+  width: 100%;
+  height: 70vh;
+  border: 0;
+}
+
+@media (min-width: 480px) {
+  .preview-container {
+    max-width: 900px;
+    padding: 24px;
+    border-radius: 20px;
+  }
+  .preview-body iframe {
+    height: 75vh;
+  }
+}
+
+@media (min-width: 900px) {
+  .preview-container {
+    max-width: 1100px;
+  }
+}

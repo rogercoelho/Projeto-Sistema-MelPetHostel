@@ -1,0 +1,107 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+@media (min-width: 480px) {
+  .btn {
+    padding: 12px 24px;
+    font-size: 1rem;
+  }
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+}
+
+.btn-lg {
+  padding: 14px 28px;
+  font-size: 1.1rem;
+}
+
+.btn-full {
+  width: 100%;
+}
+
+.btn-primary {
+  background-color: var(--cor-marrom);
+  color: var(--cor-branco);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--cor-marrom-claro);
+}
+
+.btn-secondary {
+  background-color: var(--cor-azul-cinza);
+  color: var(--cor-branco);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--cor-azul-cinza-escuro);
+}
+
+.btn-danger {
+  background-color: var(--cor-erro);
+  color: var(--cor-branco);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
+
+.btn-success {
+  background-color: var(--cor-sucesso);
+  color: var(--cor-branco);
+}
+
+.btn-success:hover:not(:disabled) {
+  background-color: #15803d;
+}
+
+.btn-outline {
+  background-color: transparent;
+  border: 2px solid var(--cor-marrom);
+  color: var(--cor-marrom);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background-color: var(--cor-marrom);
+  color: var(--cor-branco);
+}
+
+/* Black outline helper for specific actions like the 'Fechar' button */
+.btn-black-outline {
+  border: 2px solid #000 !important;
+}
+
+/* Ensure buttons can shrink on small containers */
+.btn {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Mobile tweak: slightly tighter padding on very small screens */
+@media (max-width: 479px) {
+  .btn {
+    padding: 9px 12px;
+    font-size: 0.9rem;
+  }
+}

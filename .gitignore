@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+*.zip
+
+backend/uploads/
+backend/stderr.log
+backend/start-server*.log
+frontend/dev-server*.log

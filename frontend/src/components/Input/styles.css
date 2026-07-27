@@ -1,0 +1,146 @@
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  width: 100%;
+}
+
+.input-group label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--cor-marrom);
+}
+
+@media (min-width: 480px) {
+  .input-group label {
+    font-size: 0.875rem;
+  }
+}
+
+.input-group input,
+.input-group select,
+.input-group textarea {
+  padding: 10px 12px;
+  border: 2px solid var(--cor-areia);
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  background-color: var(--cor-branco);
+  color: var(--cor-texto);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+  width: 100%;
+}
+
+.input-with-toggle {
+  position: relative;
+}
+
+.input-with-toggle.has-toggle input {
+  padding-right: 44px;
+}
+
+.eye-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cor-azul-cinza);
+  cursor: pointer;
+}
+
+.eye-toggle:focus {
+  outline: none;
+}
+
+/* Animated eye toggle */
+.eye-toggle svg {
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease,
+    color 180ms ease;
+  opacity: 0.9;
+  display: block;
+}
+
+.eye-toggle:hover svg {
+  transform: scale(1.08);
+  opacity: 1;
+}
+
+.eye-toggle.open svg {
+  transform: scale(1.04) rotate(0deg);
+  opacity: 1;
+}
+
+.eye-toggle:active svg {
+  transform: scale(0.98);
+}
+
+@media (min-width: 480px) {
+  .input-group input,
+  .input-group select,
+  .input-group textarea {
+    padding: 12px 14px;
+  }
+}
+
+.input-group input:focus,
+.input-group select:focus,
+.input-group textarea:focus {
+  outline: none;
+  border-color: var(--cor-marrom);
+  box-shadow: 0 0 0 3px rgba(77, 50, 39, 0.1);
+}
+
+.input-group input:disabled,
+.input-group select:disabled,
+.input-group textarea:disabled {
+  background-color: var(--cor-areia-claro);
+  cursor: not-allowed;
+}
+
+.input-group input::placeholder,
+.input-group textarea::placeholder {
+  color: var(--cor-azul-cinza);
+}
+
+.input-group textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* Ensure predictable sizing on small screens */
+.input-group,
+.input-group input,
+.input-group select,
+.input-group textarea {
+  box-sizing: border-box;
+}
+
+@media (max-width: 479px) {
+  .input-group input,
+  .input-group select,
+  .input-group textarea {
+    padding: 9px 10px;
+    font-size: 0.95rem;
+  }
+}
+
+.input-error input,
+.input-error select,
+.input-error textarea {
+  border-color: var(--cor-erro);
+}
+
+.input-error-message {
+  font-size: 0.75rem;
+  color: var(--cor-erro);
+  margin-top: var(--spacing-xs);
+}

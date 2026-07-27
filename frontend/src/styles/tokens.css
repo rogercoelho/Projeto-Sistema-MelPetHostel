@@ -1,0 +1,40 @@
+:root {
+  /* Paleta de cores Mel Pet Hostel */
+  --cor-marrom: #4d3227;
+  --cor-marrom-claro: #6b4a3a;
+  /* RGB helper for semi-transparent uses */
+  --cor-marrom-rgb: 77, 50, 39;
+  --cor-areia: #e7dac0;
+  --cor-areia-claro: #f5f1e6;
+  --cor-azul-cinza: #64748b;
+  --cor-azul-cinza-escuro: #475569;
+  --cor-branco: #ffffff;
+  --cor-texto: #4d3227;
+  --cor-texto-claro: #6b4a3a;
+  --cor-erro: #dc2626;
+  --cor-sucesso: #16a34a;
+
+  /* Espaçamentos */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Sombras */
+  --shadow-sm: 0 1px 3px rgba(77, 50, 39, 0.1);
+  --shadow-md: 0 2px 8px rgba(77, 50, 39, 0.1);
+  --shadow-lg: 0 4px 20px rgba(77, 50, 39, 0.15);
+
+  /* Breakpoints como referência */
+  /* Mobile: < 480px */
+  /* Tablet: 480px - 768px */
+  /* Desktop: > 768px */
+}
