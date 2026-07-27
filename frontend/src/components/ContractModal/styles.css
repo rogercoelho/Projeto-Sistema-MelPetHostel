@@ -419,6 +419,24 @@
   width: 100%;
 }
 
+.contract-reject-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: #111;
+}
+
+.contract-reject-dialog p {
+  margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.55;
+}
+
+.contract-reject-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 @media (min-width: 640px) {
   .contract-hero {
     padding: 20px 24px 14px;

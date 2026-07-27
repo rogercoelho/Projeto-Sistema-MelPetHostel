@@ -18,6 +18,8 @@ const {
 } = require("../../services/telegramService");
 
 const DEFAULT_MODULE = "melpethostel";
+const DEFAULT_TEST_MESSAGE =
+  "Mensagem de teste enviada pelo sistema Mel Pet Hostel";
 
 function clean(value) {
   return value === undefined || value === null ? "" : String(value).trim();
@@ -557,11 +559,9 @@ router.post("/test", async (req, res) => {
       });
     }
 
-    await sendTelegram(
-      chatId,
-      "Mensagem de teste enviada pelo sistema Mel Pet Hostel",
-      { module },
-    );
+    const testMessage = clean(req.body?.message) || DEFAULT_TEST_MESSAGE;
+
+    await sendTelegram(chatId, testMessage, { module });
     res.json({ status: "sucesso", mensagem: "Mensagem de teste enviada." });
   } catch (err) {
     console.error("Error in POST /melpethostel/telegram/test:", err);

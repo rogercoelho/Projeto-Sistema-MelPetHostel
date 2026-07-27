@@ -509,6 +509,110 @@ router.post("/users", async (req, res) => {
   }
 });
 
+router.put("/users/:id", async (req, res) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+    const id = Number(req.params.id);
+    const login = clean(req.body?.login);
+    const grupo = req.body?.grupo;
+    const modulo = getModulo(req);
+
+    if (!id || !login) {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "ID e login sao obrigatorios",
+      });
+    }
+
+    const existingAdmin = await AdminUsuario.findByLogin(req, login);
+    const existingMelPetHostel = await MelPetHostelUsuario.findByLogin(
+      req,
+      login,
+    );
+
+    if (
+      existingAdmin &&
+      (modulo !== ADMIN_MODULE || Number(existingAdmin.Usuario_ID) !== id)
+    ) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Usuario ja existe" });
+    }
+
+    if (
+      existingMelPetHostel &&
+      (modulo !== DEFAULT_MODULE ||
+        Number(existingMelPetHostel.Usuario_ID) !== id)
+    ) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Usuario ja existe" });
+    }
+
+    if (modulo === DEFAULT_MODULE) {
+      const grupoId = await resolveMelPetHostelGroupId(req, grupo);
+      if (!grupoId) {
+        return res
+          .status(400)
+          .json({ status: "erro", mensagem: "Grupo invalido" });
+      }
+
+      const grupoRec = await MelPetHostelGrupo.findById(req, grupoId);
+      const result = await MelPetHostelUsuario.update(req, id, {
+        login,
+        grupoId,
+        grupoNome: grupoRec && grupoRec.Grupo_Nome,
+      });
+
+      if (!result || result.affectedRows === 0) {
+        return res
+          .status(404)
+          .json({ status: "erro", mensagem: "Usuario nao encontrado" });
+      }
+
+      await ensureUserDir({
+        login,
+        grupoNome: grupoRec && grupoRec.Grupo_Nome,
+      });
+
+      return res.json({
+        status: "sucesso",
+        mensagem: "Usuario atualizado",
+        user: await MelPetHostelUsuario.findById(req, id),
+      });
+    }
+
+    if (modulo === ADMIN_MODULE) {
+      const groupName = clean(grupo) || "Administradores";
+      const result = await AdminUsuario.update(req, id, {
+        login,
+        grupo: groupName,
+      });
+
+      if (!result || result.affectedRows === 0) {
+        return res
+          .status(404)
+          .json({ status: "erro", mensagem: "Usuario nao encontrado" });
+      }
+
+      await ensureUserDir({ login, grupoNome: groupName, admin: true });
+
+      return res.json({
+        status: "sucesso",
+        mensagem: "Usuario atualizado",
+        user: await AdminUsuario.findById(req, id),
+      });
+    }
+
+    return res
+      .status(400)
+      .json({ status: "erro", mensagem: "Modulo nao suportado" });
+  } catch (error) {
+    console.error("Error in PUT /auth/users/:id:", error);
+    res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
 router.put("/users/:id/password", async (req, res) => {
   try {
     if (!requireAdmin(req, res)) return;

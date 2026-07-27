@@ -26,14 +26,11 @@ async function findById(req, id) {
 async function list(req) {
   const columnsMap = await getTableColumnsMap(req, TABLE);
   const hasGrupoId = columnsMap.has("grupo_id");
-  const hasUsuarioGrupo = columnsMap.has("usuario_grupo");
 
   let grupoExpr = "NULL AS grupo";
-  if (hasGrupoId && hasUsuarioGrupo) {
-    grupoExpr = "COALESCE(Grupo_ID, Usuario_Grupo) AS grupo";
-  } else if (hasGrupoId) {
+  if (hasGrupoId) {
     grupoExpr = "Grupo_ID AS grupo";
-  } else if (hasUsuarioGrupo) {
+  } else if (columnsMap.has("usuario_grupo")) {
     grupoExpr = "Usuario_Grupo AS grupo";
   }
 
@@ -55,7 +52,9 @@ async function create(req, { login, senhaHash, grupoId, grupoNome = null }) {
   const insertVals = [login, senhaHash];
 
   const grupoIdCol = pickColumn(columnsMap, ["Grupo_ID"]);
-  const usuarioGrupoCol = pickColumn(columnsMap, ["Usuario_Grupo"]);
+  const usuarioGrupoCol = !grupoIdCol
+    ? pickColumn(columnsMap, ["Usuario_Grupo"])
+    : null;
   if (grupoIdCol) {
     insertCols.push(grupoIdCol);
     insertVals.push(grupoId || null);
@@ -93,6 +92,34 @@ async function updatePassword(req, id, senhaHash) {
     );
     return result;
   }
+}
+
+async function update(req, id, { login, grupoId, grupoNome = null }) {
+  const columnsMap = await getTableColumnsMap(req, TABLE);
+  const updates = ["Usuario_Login = ?"];
+  const values = [login];
+
+  const grupoIdCol = pickColumn(columnsMap, ["Grupo_ID"]);
+  const usuarioGrupoCol = pickColumn(columnsMap, ["Usuario_Grupo"]);
+
+  if (grupoIdCol) {
+    updates.push(`${grupoIdCol} = ?`);
+    values.push(grupoId || null);
+    if (usuarioGrupoCol) {
+      updates.push(`${usuarioGrupoCol} = NULL`);
+    }
+  } else if (usuarioGrupoCol) {
+    updates.push(`${usuarioGrupoCol} = ?`);
+    values.push(grupoNome || null);
+  }
+
+  values.push(id);
+
+  const [result] = await dbFor(req).query(
+    `UPDATE ${TABLE} SET ${updates.join(", ")} WHERE Usuario_ID = ?`,
+    values,
+  );
+  return result;
 }
 
 async function remove(req, id) {
@@ -143,5 +170,6 @@ module.exports = {
   list,
   remove,
   removeByGroup,
+  update,
   updatePassword,
 };

@@ -5,6 +5,7 @@ Scripts mantidos para operacao do Sistema MelPetHostel.
 - `npm run db:check`: testa a conexao com o MySQL usando as variaveis `DB_*`.
 - `npm run db:setup`: aplica o schema oficial em `create_melpethostel_schema.sql`.
 - `npm run db:migrate`: copia os dados MelPetHostel do banco legado para o banco oficial.
+- `npm run db:migrate:group-id`: adiciona/preenche `Grupo_ID` em `MelPetHostel_Usuarios`.
 - `npm run uploads:ensure`: cria as pastas de upload para os grupos cadastrados.
 
 ## Migracao

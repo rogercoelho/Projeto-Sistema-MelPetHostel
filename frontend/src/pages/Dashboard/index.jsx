@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
-import { Button, Card } from "../../components";
+import { Button } from "../../components";
 import { useToast } from "../../components/Toast/ToastContext";
 import { useAuth } from "../../contexts/AuthContext";
 import api from "../../services/api";
 import MelPetHostel from "../MelPetHostel";
-import Gerenciamento from "../Gerenciamento";
-import AdminManagementModal from "./AdminManagementModal";
+import melPetLogo from "../MelPetHostel/assets/MelPetHostel_Logo.jpeg";
+import AdminGroupsPage from "./AdminGroupsPage";
+import AdminPasswordsPage from "./AdminPasswordsPage";
+import AdminUsersPage from "./AdminUsersPage";
 import ChangePasswordModal from "./ChangePasswordModal";
 import SessionTimerBadge from "./SessionTimerBadge";
+import TelegramStatusPage from "./TelegramStatusPage";
+import TelegramTestPage from "./TelegramTestPage";
+import TelegramTokenPage from "./TelegramTokenPage";
 import {
   clearPasswordChangeFlagsFromStorage,
   isAdminUser,
@@ -21,7 +26,8 @@ function Dashboard() {
   const [view, setView] = useState("home");
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [forcePasswordModalOpen, setForcePasswordModalOpen] = useState(false);
-  const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [openAdminSection, setOpenAdminSection] = useState("melpethostel");
+  const [contractPromptRequest, setContractPromptRequest] = useState(0);
 
   const usuarioGrupo = usuario && (usuario.grupoNome || usuario.grupo);
   const isAdmin = isAdminUser(usuario);
@@ -30,6 +36,65 @@ function Dashboard() {
     : ["melpethostel"];
   const hasMelPetHostelAccess = allowedModules.includes("melpethostel");
   const shouldOpenMelPetDirectly = !isAdmin && hasMelPetHostelAccess;
+
+  const adminSections = [
+    hasMelPetHostelAccess
+      ? {
+          id: "melpethostel",
+          title: "Mel Pet Hostel",
+          summary: "Acesse o sistema operacional do pet hotel.",
+          actionLabel: "Acessar sistema",
+          onAction: () => setView("mel"),
+          items: [
+            "Cadastro de tutores e pets",
+            "Contrato, documentos e anamnese",
+            "Presenca, hospedagem e rotina do pet",
+          ],
+        }
+      : null,
+    isAdmin
+      ? {
+          id: "usuarios",
+          title: "Gerenciar Grupos e Usuarios",
+          summary: "Cadastre grupos, crie usuarios e altere senhas de acesso.",
+          items: [
+            {
+              label: "Criacao e edicao de usuarios",
+              onAction: () => setView("admin-users"),
+            },
+            {
+              label: "Vinculo de grupos e permissoes",
+              onAction: () => setView("admin-groups"),
+            },
+            {
+              label: "Alteracao de senha administrativa",
+              onAction: () => setView("admin-passwords"),
+            },
+          ],
+        }
+      : null,
+    isAdmin
+      ? {
+          id: "telegram",
+          title: "Configurar Bot Telegram",
+          summary: "Configure o bot usado para alertas e notificacoes.",
+          items: [
+            {
+              label: "Token salvo no banco de dados",
+              onAction: () => setView("telegram-token"),
+            },
+            {
+              label: "Ativacao ou desativacao do bot",
+              onAction: () => setView("telegram-status"),
+            },
+            {
+              label: "Envio de mensagem de teste",
+              onAction: () => setView("telegram-test"),
+            },
+          ],
+        }
+      : null,
+  ].filter(Boolean);
 
   useEffect(() => {
     if (!usuario || isAdmin) {
@@ -48,6 +113,11 @@ function Dashboard() {
     showToast("Senha alterada com sucesso.", "success");
   }
 
+  async function changeFirstAccessPassword(payload) {
+    await changeOwnPassword(payload);
+    setContractPromptRequest((current) => current + 1);
+  }
+
   const handleUserKeyDown = (event) => {
     if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
       setPasswordModalOpen(true);
@@ -58,7 +128,11 @@ function Dashboard() {
     <div className="dashboard">
       <header className="dashboard-header">
         <div className="header-content">
-          <h1>{isAdmin ? "Painel Administrativo" : "Mel Pet Hostel"}</h1>
+          <div className="dashboard-brand">
+            <img src={melPetLogo} alt="Mel Pet Hostel" />
+            <h1>{isAdmin ? "Painel Administrativo" : "Mel Pet Hostel"}</h1>
+          </div>
+
           <div className="user-info">
             <span>
               Ola,{" "}
@@ -74,19 +148,7 @@ function Dashboard() {
             </span>
 
             {isAdmin ? (
-              <strong
-                className="user-badge"
-                role="button"
-                tabIndex={0}
-                onClick={() => setAdminModalOpen(true)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    setAdminModalOpen(true);
-                  }
-                }}
-              >
-                {usuarioGrupo || "Administrador"}
-              </strong>
+              <span className="user-badge">{usuarioGrupo || "Administrador"}</span>
             ) : (
               <span className="user-badge">{usuarioGrupo}</span>
             )}
@@ -100,45 +162,88 @@ function Dashboard() {
       </header>
 
       {shouldOpenMelPetDirectly ? (
-        <MelPetHostel />
+        <MelPetHostel contractPromptRequest={contractPromptRequest} />
       ) : view === "home" ? (
         <main className="dashboard-content">
-          {hasMelPetHostelAccess ? (
-            <Card
-              title="Mel Pet Hostel"
-              className="card-categoria card-modulos"
-            >
-              <p className="card-descricao">Sistema de gestao Mel Pet Hostel</p>
-              <Button fullWidth onClick={() => setView("mel")}>
-                Acessar
-              </Button>
-            </Card>
-          ) : null}
+          <section className="admin-home-panel">
+            <div className="admin-accordion" aria-label="Modulos administrativos">
+              {adminSections.map((section) => {
+                const isOpen = openAdminSection === section.id;
 
-          {isAdmin ? (
-            <Card
-              title="Configurar Bot Telegram"
-              className="card-categoria card-modulos"
-            >
-              <p className="card-descricao">
-                Configuracao do bot para a Mel Pet Hostel
-              </p>
-              <Button fullWidth onClick={() => setView("telegram-bot-module")}>
-                Acessar
-              </Button>
-            </Card>
-          ) : null}
+                return (
+                  <section
+                    className={`admin-accordion-section ${isOpen ? "is-open" : ""}`}
+                    key={section.id}
+                  >
+                    <button
+                      className="admin-accordion-trigger"
+                      type="button"
+                      aria-expanded={isOpen}
+                      onClick={() =>
+                        setOpenAdminSection((current) =>
+                          current === section.id ? "" : section.id,
+                        )
+                      }
+                    >
+                      <span>
+                        <strong>{section.title}</strong>
+                        <small>{section.summary}</small>
+                      </span>
+                    </button>
+
+                    {isOpen ? (
+                      <div className="admin-accordion-content">
+                        <ul>
+                          {section.items.map((item) => (
+                            <li key={item.label || item}>
+                              {typeof item === "string" ? (
+                                <span className="admin-static-item">{item}</span>
+                              ) : (
+                                <button type="button" onClick={item.onAction}>
+                                  <strong>{item.label}</strong>
+                                  {item.description ? <span>{item.description}</span> : null}
+                                </button>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+
+                        {section.actionLabel ? (
+                          <Button type="button" onClick={section.onAction}>
+                            {section.actionLabel}
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </section>
+                );
+              })}
+            </div>
+          </section>
         </main>
       ) : view === "mel" ? (
-        <MelPetHostel onBack={() => setView("home")} />
-      ) : view === "telegram-bot-module" ? (
-        <Gerenciamento onBack={() => setView("home")} />
+        <MelPetHostel
+          onBack={() => setView("home")}
+          contractPromptRequest={contractPromptRequest}
+        />
+      ) : view === "admin-users" ? (
+        <AdminUsersPage onBack={() => setView("home")} />
+      ) : view === "admin-groups" ? (
+        <AdminGroupsPage onBack={() => setView("home")} />
+      ) : view === "admin-passwords" ? (
+        <AdminPasswordsPage onBack={() => setView("home")} />
+      ) : view === "telegram-token" ? (
+        <TelegramTokenPage onBack={() => setView("home")} />
+      ) : view === "telegram-status" ? (
+        <TelegramStatusPage onBack={() => setView("home")} />
+      ) : view === "telegram-test" ? (
+        <TelegramTestPage onBack={() => setView("home")} />
       ) : null}
 
       <ChangePasswordModal
         isOpen={passwordModalOpen}
         onClose={() => setPasswordModalOpen(false)}
-        onSubmit={changeOwnPassword}
+        onSubmit={changeFirstAccessPassword}
         title="Alterar Senha"
       />
 
@@ -152,10 +257,6 @@ function Dashboard() {
         description="Detectamos que esta e sua primeira entrada no sistema. Altere sua senha para continuar. Fechar este modal encerra a sessao."
       />
 
-      <AdminManagementModal
-        isOpen={adminModalOpen}
-        onClose={() => setAdminModalOpen(false)}
-      />
     </div>
   );
 }

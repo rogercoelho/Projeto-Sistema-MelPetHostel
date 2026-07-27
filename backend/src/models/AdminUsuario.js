@@ -114,6 +114,26 @@ async function updatePassword(req, id, senhaHash) {
   }
 }
 
+async function update(req, id, { login, grupo = "Administradores" }) {
+  const columnsMap = await getTableColumnsMap(req, TABLE);
+  const updates = ["Usuario_Login = ?"];
+  const values = [login];
+
+  const usuarioGrupoCol = pickColumn(columnsMap, ["Usuario_Grupo"]);
+  if (usuarioGrupoCol) {
+    updates.push(`${usuarioGrupoCol} = ?`);
+    values.push(grupo || "Administradores");
+  }
+
+  values.push(id);
+
+  const [result] = await dbFor(req).query(
+    `UPDATE ${TABLE} SET ${updates.join(", ")} WHERE Usuario_ID = ?`,
+    values,
+  );
+  return result;
+}
+
 async function remove(req, id) {
   const [result] = await dbFor(req).query(
     `DELETE FROM ${TABLE} WHERE Usuario_ID = ?`,
@@ -139,5 +159,6 @@ module.exports = {
   listAdmins,
   remove,
   removeAllAdmins,
+  update,
   updatePassword,
 };

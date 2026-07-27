@@ -172,10 +172,6 @@ async function getContratosTableMeta(req) {
     ]),
     statusCol: pickColumn(columnsLowerMap, ["Status", "Contrato_Status"]),
     updatedAtCol: pickColumn(columnsLowerMap, ["Updated_At", "UpdatedAt"]),
-    adminNotifiedAtCol: pickColumn(columnsLowerMap, [
-      "Admin_Notified_At",
-      "admin_notified_at",
-    ]),
   };
 }
 
@@ -191,7 +187,6 @@ async function getLatestContratoRow(req, meta, login) {
         meta.conferidoPorCol,
         meta.statusCol,
         meta.updatedAtCol,
-        meta.adminNotifiedAtCol,
       ].filter(Boolean),
     )
     .filter(Boolean);
@@ -1110,10 +1105,6 @@ router.post(
           setParts.push(`${qcol(meta.statusCol)} = ?`);
           params.push("pendente");
         }
-        if (meta.adminNotifiedAtCol) {
-          setParts.push(`${qcol(meta.adminNotifiedAtCol)} = NULL`);
-        }
-
         params.push(existingRow[meta.idCol]);
 
         await dbFor(req).query(
@@ -1136,11 +1127,6 @@ router.post(
           insertCols.push(meta.statusCol);
           insertVals.push("pendente");
         }
-        if (meta.adminNotifiedAtCol) {
-          insertCols.push(meta.adminNotifiedAtCol);
-          insertVals.push(null);
-        }
-
         await dbFor(req).query(
           `INSERT INTO MelPetHostel_Contratos (${insertCols.map(qcol).join(", ")}) VALUES (${insertCols
             .map(() => "?")

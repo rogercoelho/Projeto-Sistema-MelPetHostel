@@ -3,6 +3,7 @@ import { Button, ContractModal, Modal, PdfViewer } from "../../components";
 import { useToast } from "../../components/Toast/ToastContext";
 import { useAuth } from "../../contexts/AuthContext";
 import api, { API_URL } from "../../services/api";
+import PetRegistrationForm from "./PetRegistrationForm";
 import "./styles.css";
 
 const SUPPORT_DOC_FIELDS = [
@@ -34,11 +35,12 @@ function normalizeText(value) {
     .toLowerCase();
 }
 
-export default function MelPetHostel({ onBack }) {
-  const { usuario } = useAuth();
+export default function MelPetHostel({ onBack, contractPromptRequest = 0 }) {
+  const { usuario, logout } = useAuth();
   const { showToast } = useToast();
   const fileInputRef = useRef(null);
   const supportFileRefs = useRef({});
+  const handledContractPromptRef = useRef(contractPromptRequest);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [statusError, setStatusError] = useState("");
   const [contractStatus, setContractStatus] = useState(null);
@@ -61,6 +63,7 @@ export default function MelPetHostel({ onBack }) {
   const [uploading, setUploading] = useState(false);
   const [uploadingSupportKey, setUploadingSupportKey] = useState("");
   const [contractModalOpen, setContractModalOpen] = useState(false);
+  const [registeredPets, setRegisteredPets] = useState([]);
   const [openMenu, setOpenMenu] = useState(null);
   const [activeMenu, setActiveMenu] = useState("");
   const [pendingUsers, setPendingUsers] = useState([]);
@@ -117,6 +120,16 @@ export default function MelPetHostel({ onBack }) {
       )
       .map((d) => d.label),
   ];
+
+  useEffect(() => {
+    if (
+      contractPromptRequest > 0 &&
+      handledContractPromptRef.current !== contractPromptRequest
+    ) {
+      handledContractPromptRef.current = contractPromptRequest;
+      setContractModalOpen(true);
+    }
+  }, [contractPromptRequest]);
 
   async function loadContractStatus() {
     setLoadingStatus(true);
@@ -482,6 +495,23 @@ export default function MelPetHostel({ onBack }) {
     openFilePicker();
   }
 
+  async function handlePetRegistrationSubmit(payload) {
+    const createdAt = payload.cadastradoEm || new Date().toISOString();
+    setRegisteredPets((current) => [
+      {
+        id: `${createdAt}-${payload.nomePet}`,
+        nome: payload.nomePet,
+        raca: payload.raca,
+        idade: payload.idade,
+        pesoAproximado: payload.pesoAproximado,
+        cadastradoEm: createdAt,
+        ficha: payload,
+      },
+      ...current,
+    ]);
+    showToast("Ficha do pet cadastrada com sucesso.", "success");
+  }
+
   async function handleUploadSupportDoc(key) {
     const file = selectedSupportFiles[key];
     if (!file || uploadingSupportKey) return;
@@ -577,7 +607,7 @@ export default function MelPetHostel({ onBack }) {
         ) : acessoDiretoMenu ? (
           <>
             <section className="melpet-menu-surface">
-              <h2>Menu do Mel Pet Hostel</h2>
+              <h2>Menu da Mel Pet Hostel</h2>
 
               <div className="melpet-menu">
                 {isAdmin ? (
@@ -647,7 +677,7 @@ export default function MelPetHostel({ onBack }) {
                         setOpenMenu(null);
                       }}
                     >
-                      <span>Cadastrar Pet</span>
+                      <span>Cadastre seu Pet</span>
                     </button>
                   </div>
                 )}
@@ -846,15 +876,41 @@ export default function MelPetHostel({ onBack }) {
                 </p>
               </section>
             ) : !isAdmin && activeMenu === "cadastrarPet" ? (
-              <section className="melpet-menu-content">
-                <p>Área de cadastro de pet.</p>
+              <section className="melpet-menu-content pet-registration-area">
+                <div className="pet-registration-container">
+                  <PetRegistrationForm onSubmit={handlePetRegistrationSubmit} />
+                </div>
+
+                <div className="pet-registration-list">
+                  {registeredPets.length ? (
+                    registeredPets.map((pet) => (
+                      <article className="pet-registration-item" key={pet.id}>
+                        <div>
+                          <h4>{pet.nome}</h4>
+                          <p>
+                            {pet.raca} | {pet.idade} | {pet.pesoAproximado}
+                          </p>
+                        </div>
+                        <span>
+                          {new Intl.DateTimeFormat("pt-BR").format(
+                            new Date(pet.cadastradoEm),
+                          )}
+                        </span>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="pet-registration-empty">
+                      Nenhum pet cadastrado ainda.
+                    </p>
+                  )}
+                </div>
               </section>
             ) : null}
           </>
         ) : (
           <section className="melpet-panel melpet-contract-gate">
             {contratoDetectado && requiredDocsComplete ? (
-              <p>
+              <p className="melpet-contract-review-message">
                 Localizamos seu contrato assinado, mas ainda nao foi conferido
                 pela nossa equipe. Aguarde a conferencia para desbloquear o
                 menu.
@@ -1030,6 +1086,7 @@ export default function MelPetHostel({ onBack }) {
       <ContractModal
         isOpen={contractModalOpen}
         onClose={() => setContractModalOpen(false)}
+        onRejectBeforeAccept={logout}
         onGovBrSign={async () => {
           setContractModalOpen(false);
           await loadContractStatus();

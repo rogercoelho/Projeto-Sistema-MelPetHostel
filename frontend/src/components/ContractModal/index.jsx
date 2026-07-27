@@ -1,6 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import html2canvas from "html2canvas";
-import { jsPDF } from "jspdf";
+﻿import { useEffect, useRef, useState } from "react";
 import Button from "../Button";
 import Modal from "../Modal";
 import melPetHostelHeaderImage from "../../pages/MelPetHostel/assets/MelPetHostel_Background.png";
@@ -127,7 +125,7 @@ function ContractSection({ number, title, children }) {
   );
 }
 
-function ContractModal({ isOpen, onClose, onGovBrSign }) {
+function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
   const govBrSignerUrl = "https://assinador.iti.br/assinatura/index.xhtml";
   const [contractorData, setContractorData] = useState(EMPTY_CONTRACTOR);
   const [cepLoading, setCepLoading] = useState(false);
@@ -137,9 +135,9 @@ function ContractModal({ isOpen, onClose, onGovBrSign }) {
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [contractPdfSaved, setContractPdfSaved] = useState(false);
   const [saveDialogPending, setSaveDialogPending] = useState(false);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const lastCepLookupRef = useRef("");
   const currentCepDigitsRef = useRef("");
-  const contractDocumentRef = useRef(null);
   const cepDigits = onlyDigits(contractorData.cep);
   const addressLocked = cepLoading || cepDigits.length !== 8;
   const browserName = getBrowserName();
@@ -156,6 +154,7 @@ function ContractModal({ isOpen, onClose, onGovBrSign }) {
       setClientIp("IP não disponível");
       setContractPdfSaved(false);
       setSaveDialogPending(false);
+      setRejectDialogOpen(false);
       lastCepLookupRef.current = "";
       currentCepDigitsRef.current = "";
     }
@@ -193,393 +192,6 @@ function ContractModal({ isOpen, onClose, onGovBrSign }) {
 
   function updateField(field, value) {
     setContractorData((prev) => ({ ...prev, [field]: value }));
-  }
-
-  function sanitizeFileName(value) {
-    return String(value || "contrato-mel-pet-hostel")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-zA-Z0-9_-]+/g, "_")
-      .replace(/_+/g, "_")
-      .replace(/^_|_$/g, "")
-      .toLowerCase();
-  }
-
-  function waitForNextTick() {
-    return new Promise((resolve) => setTimeout(resolve, 0));
-  }
-
-  async function savePdfFile(pdf, fileName) {
-    const pdfBlob = pdf.output("blob");
-
-    if (typeof window.showSaveFilePicker === "function") {
-      try {
-        const handle = await window.showSaveFilePicker({
-          suggestedName: fileName,
-          types: [
-            {
-              description: "Documento PDF",
-              accept: {
-                "application/pdf": [".pdf"],
-              },
-            },
-          ],
-        });
-
-        const writable = await handle.createWritable();
-        await writable.write(pdfBlob);
-        await writable.close();
-        return true;
-      } catch (error) {
-        if (error?.name === "AbortError") {
-          return false;
-        }
-        throw error;
-      }
-    }
-
-    const saveResult = pdf.save(fileName, { returnPromise: true });
-    if (saveResult && typeof saveResult.then === "function") {
-      await saveResult;
-    }
-    return true;
-  }
-
-  async function generateContractPdf() {
-    const sourceNode = contractDocumentRef.current?.closest(".contract-modal");
-    if (!sourceNode) {
-      throw new Error("Não foi possível localizar o conteúdo do contrato.");
-    }
-
-    const clone = sourceNode.cloneNode(true);
-    const sandbox = document.createElement("div");
-    sandbox.style.position = "fixed";
-    sandbox.style.left = "-10000px";
-    sandbox.style.top = "0";
-    // use the source modal's rendered width so exported pages match on-screen
-    const sourceWidth =
-      Math.round(sourceNode.getBoundingClientRect().width) || 794;
-    sandbox.style.width = `${sourceWidth}px`;
-    sandbox.style.background = "#fff";
-    sandbox.style.pointerEvents = "none";
-    sandbox.style.overflow = "visible";
-
-    clone.style.width = `${sourceWidth}px`;
-    clone.style.maxWidth = `${sourceWidth}px`;
-    clone.style.height = "auto";
-    clone.style.minHeight = "auto";
-    clone.style.maxHeight = "none";
-    clone.style.overflow = "visible";
-    clone.style.background = "#fff";
-
-    const documentWrapper = clone.querySelector(".contract-document");
-    if (documentWrapper) {
-      documentWrapper.style.display = "flex";
-      documentWrapper.style.flexDirection = "column";
-      documentWrapper.style.flex = "none";
-      documentWrapper.style.height = "auto";
-      documentWrapper.style.minHeight = "auto";
-    }
-
-    const scrollArea = clone.querySelector(".contract-scroll");
-    if (scrollArea) {
-      scrollArea.style.overflow = "visible";
-      scrollArea.style.maxHeight = "none";
-      scrollArea.style.height = "auto";
-      scrollArea.style.minHeight = "auto";
-      scrollArea.style.flex = "none";
-    }
-
-    const paper = clone.querySelector(".contract-paper");
-    if (paper) {
-      paper.style.maxWidth = "100%";
-      paper.style.margin = "0";
-    }
-
-    const complementInput = clone.querySelector('input[name="complemento"]');
-    if (complementInput && !complementInput.value.trim()) {
-      complementInput.value = "Sem Complemento";
-    }
-
-    const headerNode = clone.querySelector(".contract-hero")?.cloneNode(true);
-    const sourceHeaderEl = sourceNode.querySelector(".contract-hero");
-    const sourceHeaderHeight = sourceHeaderEl
-      ? Math.ceil(sourceHeaderEl.getBoundingClientRect().height)
-      : 170;
-    const paperNode = clone.querySelector(".contract-paper")?.cloneNode(false);
-    const footerTextNode = clone
-      .querySelector(".contract-footer-text")
-      ?.cloneNode(true);
-
-    const paperContentNodes = paper ? Array.from(paper.children) : [];
-
-    if (paper) {
-      paper.innerHTML = "";
-    }
-
-    const actionFooter = clone.querySelector(".contract-actions");
-    if (actionFooter) {
-      actionFooter.remove();
-    }
-
-    if (documentWrapper) {
-      documentWrapper.innerHTML = "";
-    }
-
-    function createPdfPage(includeHeader) {
-      const page = document.createElement("div");
-      page.className = "contract-pdf-page";
-      page.style.width = `${sourceWidth}px`;
-      page.style.background = "#fff";
-      page.style.boxSizing = "border-box";
-      page.style.padding = "0";
-      page.style.display = "block";
-
-      if (includeHeader && headerNode) {
-        const headerClone = headerNode.cloneNode(true);
-        headerClone.style.position = "relative";
-        headerClone.style.minHeight = `${sourceHeaderHeight}px`;
-        headerClone.style.overflow = "hidden";
-
-        const overlay = headerClone.querySelector(".contract-hero-overlay");
-        if (overlay) {
-          overlay.style.position = "relative";
-          overlay.style.top = "auto";
-          overlay.style.transform = "none";
-          overlay.style.display = "flex";
-          overlay.style.flexDirection = "column";
-          overlay.style.alignItems = "center";
-          overlay.style.justifyContent = "center";
-          overlay.style.padding = "10px 12px";
-        }
-
-        page.appendChild(headerClone);
-      }
-
-      const pagePaper = paperNode
-        ? paperNode.cloneNode(false)
-        : document.createElement("article");
-      pagePaper.className = paperNode ? paperNode.className : "contract-paper";
-      pagePaper.style.maxWidth = "100%";
-      pagePaper.style.margin = includeHeader ? "0 auto" : "0";
-      // force white background to avoid inheriting page body background
-      pagePaper.style.background = "#fff";
-      page.appendChild(pagePaper);
-
-      sandbox.appendChild(page);
-      return { page, pagePaper };
-    }
-
-    const pdfPages = [];
-    const pdfTempPage = createPdfPage(true);
-    pdfPages.push(pdfTempPage);
-
-    const pdf = new jsPDF("p", "mm", "a4");
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const imageWidth = pageWidth - 20;
-    const xOffset = 10;
-    const yOffset = 10;
-
-    function createFreshPage(includeHeader) {
-      const page = createPdfPage(includeHeader);
-      pdfPages.push(page);
-      return page;
-    }
-
-    let currentPage = pdfPages[0];
-
-    // Attach sandbox early so measurements (scrollHeight) are accurate
-    document.body.appendChild(sandbox);
-
-    // compute page height limit in DOM px using sandbox rendered width
-    const sandboxWidthPx = sandbox.clientWidth || 794;
-    const pxPerMm = sandboxWidthPx / (pageWidth - 20);
-    const maxPageHeightPx = Math.floor((pageHeight - 20) * pxPerMm);
-
-    for (const node of paperContentNodes) {
-      const child = node.cloneNode(true);
-      currentPage.pagePaper.appendChild(child);
-
-      if (currentPage.page.scrollHeight > maxPageHeightPx) {
-        currentPage.pagePaper.removeChild(child);
-        // Include header on every new page so the banner/logo appears on all pages
-        currentPage = createFreshPage(true);
-        currentPage.pagePaper.appendChild(child);
-      }
-    }
-
-    if (footerTextNode) {
-      const footerContainer = document.createElement("div");
-      footerContainer.className = "contract-pdf-footer-note";
-      footerContainer.appendChild(footerTextNode.cloneNode(true));
-
-      currentPage.pagePaper.appendChild(footerContainer);
-      if (currentPage.page.scrollHeight > maxPageHeightPx) {
-        currentPage.pagePaper.removeChild(footerContainer);
-        // Ensure footer flows to a new page with header as well
-        currentPage = createFreshPage(true);
-        currentPage.pagePaper.appendChild(footerContainer);
-      }
-    }
-
-    try {
-      let isFirstPdfPage = true;
-
-      for (const pageElement of pdfPages) {
-        // Remove any inherited global list backgrounds (e.g., ul li) by forcing
-        // transparent background on the cloned contract-note-list items. This
-        // ensures the PDF matches the modal (no creme boxes).
-        try {
-          const noteListItems = pageElement.page.querySelectorAll(
-            ".contract-note-list li",
-          );
-          noteListItems.forEach((li) => {
-            li.style.background = "transparent";
-            li.style.backgroundColor = "transparent";
-            li.style.boxShadow = "none";
-            li.style.borderRadius = "0";
-          });
-        } catch (e) {
-          // ignore
-        }
-
-        const canvas = await html2canvas(pageElement.page, {
-          backgroundColor: "#ffffff",
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          scrollX: 0,
-          scrollY: 0,
-        });
-
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
-
-        // compute limit in canvas px for a single PDF page (respecting 10mm margins top/bottom)
-        const pxPerMm = canvasWidth / imageWidth;
-        const pageCanvasHeightPxLimit = Math.floor((pageHeight - 20) * pxPerMm);
-
-        if (canvasHeight <= pageCanvasHeightPxLimit) {
-          // Fits in one PDF page
-          const pageImage = canvas.toDataURL("image/png");
-          const pageImageHeight = (canvasHeight * imageWidth) / canvasWidth;
-
-          if (!isFirstPdfPage) pdf.addPage();
-
-          pdf.addImage(
-            pageImage,
-            "PNG",
-            xOffset,
-            yOffset,
-            imageWidth,
-            pageImageHeight,
-            undefined,
-            "FAST",
-          );
-          isFirstPdfPage = false;
-          continue;
-        }
-
-        // Canvas is taller than a single PDF page: slice vertically and repeat header on each page
-        const headerEl = pageElement.page.querySelector(".contract-hero");
-        let headerCanvas = null;
-        let headerHeightPx = 0;
-        const headerDomHeight = headerEl
-          ? headerEl.getBoundingClientRect().height
-          : 0;
-
-        if (headerEl) {
-          try {
-            headerCanvas = await html2canvas(headerEl, {
-              backgroundColor: "#ffffff",
-              scale: 2,
-              useCORS: true,
-              allowTaint: true,
-              scrollX: 0,
-              scrollY: 0,
-            });
-          } catch (err) {
-            headerCanvas = null;
-          }
-        }
-
-        // compute header height in canvas px using measured DOM header height
-        headerHeightPx = Math.round(
-          (headerDomHeight * canvas.width) / (sandboxWidthPx || 794),
-        );
-
-        const contentAreaPx = Math.max(
-          1,
-          pageCanvasHeightPxLimit - headerHeightPx,
-        );
-        const totalContentHeight = Math.max(0, canvasHeight - headerHeightPx);
-        const sliceCount = Math.ceil(totalContentHeight / contentAreaPx);
-
-        for (let si = 0; si < sliceCount; si++) {
-          const contentStartY = headerHeightPx + si * contentAreaPx;
-          const sliceContentH = Math.min(
-            contentAreaPx,
-            canvasHeight - contentStartY,
-          );
-
-          const tempCanvas = document.createElement("canvas");
-          tempCanvas.width = canvasWidth;
-          const tempCanvasHeaderHeight = headerHeightPx;
-          tempCanvas.height = tempCanvasHeaderHeight + sliceContentH;
-
-          const ctx = tempCanvas.getContext("2d");
-
-          if (headerCanvas) {
-            ctx.drawImage(
-              headerCanvas,
-              0,
-              0,
-              headerCanvas.width,
-              headerCanvas.height,
-              0,
-              0,
-              canvasWidth,
-              tempCanvasHeaderHeight,
-            );
-          }
-
-          ctx.drawImage(
-            canvas,
-            0,
-            contentStartY,
-            canvasWidth,
-            sliceContentH,
-            0,
-            tempCanvasHeaderHeight,
-            canvasWidth,
-            sliceContentH,
-          );
-
-          const sliceData = tempCanvas.toDataURL("image/png");
-          const sliceImageHeight =
-            (tempCanvas.height * imageWidth) / tempCanvas.width;
-
-          if (!isFirstPdfPage) pdf.addPage();
-          pdf.addImage(
-            sliceData,
-            "PNG",
-            xOffset,
-            yOffset,
-            imageWidth,
-            sliceImageHeight,
-            undefined,
-            "FAST",
-          );
-          isFirstPdfPage = false;
-        }
-      }
-
-      const fileName = `contrato-mel-pet-hostel-${sanitizeFileName(contractorData.nome) || "cliente"}.pdf`;
-      return await savePdfFile(pdf, fileName);
-    } finally {
-      document.body.removeChild(sandbox);
-    }
   }
 
   async function lookupCepAndFill(cepValue) {
@@ -649,13 +261,19 @@ function ContractModal({ isOpen, onClose, onGovBrSign }) {
     setSaveDialogPending(true);
 
     try {
-      await waitForNextTick();
-      await waitForNextTick();
-      const didSavePdf = await generateContractPdf();
+      const { saveContractPdf } = await import("./contractPdfService");
+      const didSavePdf = await saveContractPdf({
+        browserName,
+        clientIp,
+        contractorData,
+        signatureCity: contractorData.cidade?.trim() || "Cidade nao informada",
+        signatureDate: formatDateLong(acceptMoment),
+        signatureTime: formatTime(acceptMoment),
+      });
       setContractPdfSaved(didSavePdf);
     } catch (error) {
       console.error("Erro ao gerar o PDF do contrato:", error);
-      window.alert("Não foi possível gerar o PDF do contrato.");
+      window.alert("Nao foi possivel gerar o PDF do contrato.");
     } finally {
       setPdfGenerating(false);
       setSaveDialogPending(false);
@@ -669,31 +287,53 @@ function ContractModal({ isOpen, onClose, onGovBrSign }) {
     }
   }
 
+  function handleSecondaryAction() {
+    if (contractPdfSaved) {
+      onClose();
+      return;
+    }
+
+    setRejectDialogOpen(true);
+  }
+
+  function handleConfirmReject() {
+    setRejectDialogOpen(false);
+
+    if (onRejectBeforeAccept) {
+      onRejectBeforeAccept();
+      return;
+    }
+
+    onClose();
+  }
+
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="INSTRUMENTO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS ESPECIALIZADOS PARA PETS"
-      hideHeader
-      containerStyle={{ maxWidth: 980, overflow: "hidden" }}
-      contentStyle={{ padding: 0, overflow: "hidden" }}
-    >
-      <form className="contract-modal" onSubmit={handleAccept}>
-        <div ref={contractDocumentRef} className="contract-document">
-          <header
-            className="contract-hero contract-hero--with-background"
-            style={{ backgroundImage: `url(${melPetHostelHeaderImage})` }}
-          >
-            <div className="contract-hero-overlay">
-              <p className="contract-summary">
-                LEITURA E ACEITE OBRIGATÓRIOS. AO CONCORDAR, O(A) CONTRATANTE
-                DECLARA TER CIÊNCIA INTEGRAL DAS CONDIÇÕES ABAIXO.
-              </p>
-              <div className="contract-legal-note">
-                DOCUMENTO CONTRATUAL PARA ACEITE ELETRÔNICO
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="INSTRUMENTO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS ESPECIALIZADOS PARA PETS"
+        hideHeader
+        closeOnBackdropClick={false}
+        containerStyle={{ maxWidth: 980, overflow: "hidden" }}
+        contentStyle={{ padding: 0, overflow: "hidden" }}
+      >
+        <form className="contract-modal" onSubmit={handleAccept}>
+          <div className="contract-document">
+            <header
+              className="contract-hero contract-hero--with-background"
+              style={{ backgroundImage: `url(${melPetHostelHeaderImage})` }}
+            >
+              <div className="contract-hero-overlay">
+                <p className="contract-summary">
+                  LEITURA E ACEITE OBRIGATÓRIOS. AO CONCORDAR, O(A) CONTRATANTE
+                  DECLARA TER CIÊNCIA INTEGRAL DAS CONDIÇÕES ABAIXO.
+                </p>
+                <div className="contract-legal-note">
+                  DOCUMENTO CONTRATUAL PARA ACEITE ELETRÔNICO
+                </div>
               </div>
-            </div>
-          </header>
+            </header>
 
           <div className="contract-scroll">
             <article className="contract-paper">
@@ -1280,31 +920,55 @@ function ContractModal({ isOpen, onClose, onGovBrSign }) {
           </div>
         </div>
 
-        <footer className="contract-actions">
-          <p className="contract-footer-text">
-            O ACEITE FORMALIZA A CIÊNCIA DO CONTRATANTE SOBRE TODAS AS
-            CLÁUSULAS, DIREITOS, DEVERES E RESPONSABILIDADES AQUI DESCRITOS.
+          <footer className="contract-actions">
+            <p className="contract-footer-text">
+              O ACEITE FORMALIZA A CIÊNCIA DO CONTRATANTE SOBRE TODAS AS
+              CLÁUSULAS, DIREITOS, DEVERES E RESPONSABILIDADES AQUI DESCRITOS.
+            </p>
+            {!contractPdfSaved ? (
+              <Button type="submit" disabled={pdfGenerating}>
+                {pdfGenerating
+                  ? "Gerando PDF..."
+                  : "Li e concordo com os termos"}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                disabled={pdfGenerating || saveDialogPending}
+                onClick={handleGovBrClick}
+              >
+                Assinar com Gov.BR (E-CPF)
+              </Button>
+            )}
+            <Button type="button" variant="secondary" onClick={handleSecondaryAction}>
+              {contractPdfSaved ? "Vou assinar Depois" : "Sair sem aceitar"}
+            </Button>
+          </footer>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={rejectDialogOpen}
+        onClose={() => {}}
+        hideHeader
+        closeOnBackdropClick={false}
+        containerStyle={{ maxWidth: 430 }}
+      >
+        <div className="contract-reject-dialog">
+          <p>
+            Apenas usuarios com contrato assinado podem utilizar o sistema. Voce
+            será deslogado.
           </p>
-          {!contractPdfSaved ? (
-            <Button type="submit" disabled={pdfGenerating}>
-              {pdfGenerating ? "Gerando PDF..." : "Li e concordo com os termos"}
+          <div className="contract-reject-actions">
+            <Button type="button" onClick={handleConfirmReject}>
+              Ok
             </Button>
-          ) : (
-            <Button
-              type="button"
-              disabled={pdfGenerating || saveDialogPending}
-              onClick={handleGovBrClick}
-            >
-              Assinar com Gov.BR (E-CPF)
-            </Button>
-          )}
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Sair sem aceitar
-          </Button>
-        </footer>
-      </form>
-    </Modal>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }
 
 export default ContractModal;
+
