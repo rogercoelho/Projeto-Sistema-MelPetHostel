@@ -1,5 +1,7 @@
 module.exports = {
   AdminUsuario: require("./AdminUsuario"),
-  MelPetHostelGrupo: require("./MelPetHostelGrupo"),
-  MelPetHostelUsuario: require("./MelPetHostelUsuario"),
+  Cliente: require("./Cliente"),
+  Endereco: require("./Endereco"),
+  Grupo: require("./Grupo"),
+  Usuario: require("./Usuario"),
 };

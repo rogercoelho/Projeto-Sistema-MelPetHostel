@@ -9,7 +9,6 @@ export function isAdminUser(usuario) {
     usuario &&
       (usuario.admin ||
         usuario.isAdmin ||
-        usuario.source === "usuarios" ||
         (usuario.perfil && String(usuario.perfil).toLowerCase() === "admin") ||
         normalizedGroup.includes("admin")),
   );
@@ -76,10 +75,14 @@ export function userBelongsToGroup(usuario, grupo) {
     usuario.grupo ??
     usuario.group ??
     usuario.Grupo_ID ??
-    usuario.Usuario_Grupo ??
     ""
   ).toString();
   const groupId = (grupo.id ?? "").toString();
   const groupName = (grupo.nome ?? grupo.name ?? "").toString();
-  return Boolean(userGroup && (userGroup === groupId || userGroup === groupName));
+
+  if (!userGroup || !groupId) return false;
+  if (userGroup === groupId) return true;
+  if (/^\d+$/.test(groupId)) return false;
+
+  return userGroup === groupName;
 }

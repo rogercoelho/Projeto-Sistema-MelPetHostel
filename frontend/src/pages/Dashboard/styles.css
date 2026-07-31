@@ -373,6 +373,107 @@
   gap: var(--spacing-sm);
 }
 
+.admin-page-form-grid {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.admin-page-fieldset {
+  display: grid;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.14);
+  border-radius: 8px;
+  margin: 0;
+  padding: var(--spacing-sm);
+}
+
+.admin-page-fieldset legend {
+  color: var(--cor-marrom);
+  font-weight: 900;
+  padding: 0 6px;
+}
+
+.address-fields {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.address-fields-header,
+.address-fieldset-header,
+.address-fieldset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.address-fields-header,
+.address-fieldset-header {
+  justify-content: space-between;
+}
+
+.address-fields-header span,
+.address-fieldset-header strong {
+  color: var(--cor-marrom);
+  font-weight: 900;
+}
+
+.address-fields-list {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.address-fieldset {
+  display: grid;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.14);
+  border-radius: 8px;
+  margin: 0;
+  padding: var(--spacing-sm);
+}
+
+.address-grid {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.address-grid label,
+.address-primary-toggle {
+  display: grid;
+  gap: var(--spacing-sm);
+  color: var(--cor-marrom);
+  font-weight: 800;
+}
+
+.address-primary-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.address-primary-toggle input {
+  width: 18px;
+  height: 18px;
+}
+
+.address-grid input {
+  width: 100%;
+  min-height: 42px;
+  box-sizing: border-box;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.18);
+  border-radius: 8px;
+  background: var(--cor-areia-claro);
+  color: var(--cor-texto);
+  padding: 0 var(--spacing-sm);
+}
+
+.address-grid small {
+  color: var(--cor-marrom-claro);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .admin-page-form.compact {
   margin-bottom: var(--spacing-md);
 }
@@ -431,6 +532,11 @@
   width: 18px;
   height: 18px;
   flex: 0 0 auto;
+}
+
+.admin-page-checkbox-field {
+  min-height: 42px;
+  align-self: end;
 }
 
 .admin-page-actions,
@@ -606,6 +712,14 @@
     grid-template-columns: minmax(160px, 1fr) auto;
   }
 
+  .admin-page-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .address-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .telegram-admin-status-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -666,9 +780,52 @@
   min-width: 120px;
 }
 
+.client-profile-form {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.client-profile-form p {
+  margin: 0;
+  color: var(--cor-marrom-claro);
+  line-height: 1.45;
+}
+
+.client-profile-grid {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.client-profile-notes {
+  display: grid;
+  gap: var(--spacing-sm);
+  color: var(--cor-marrom);
+  font-weight: 800;
+}
+
+.client-profile-notes textarea {
+  width: 100%;
+  min-height: 96px;
+  box-sizing: border-box;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.18);
+  border-radius: 8px;
+  background: var(--cor-areia-claro);
+  color: var(--cor-texto);
+  font: inherit;
+  line-height: 1.45;
+  padding: var(--spacing-sm);
+  resize: vertical;
+}
+
 @media (min-width: 480px) {
   .modal-actions .btn {
     flex: initial;
+  }
+}
+
+@media (min-width: 640px) {
+  .client-profile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

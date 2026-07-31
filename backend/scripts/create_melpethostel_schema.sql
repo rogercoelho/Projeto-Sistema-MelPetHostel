@@ -1,37 +1,46 @@
-CREATE TABLE IF NOT EXISTS Usuarios (
-  Usuario_ID INT AUTO_INCREMENT PRIMARY KEY,
-  Usuario_Login VARCHAR(191) NOT NULL UNIQUE,
-  Usuario_Senha VARCHAR(255) NOT NULL,
-  Usuario_Grupo VARCHAR(191) DEFAULT 'Administradores',
-  Primeiro_Acesso TINYINT(1) NOT NULL DEFAULT 1,
-  Created_At DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  Updated_At DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS Clientes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(191) NULL,
+  cpf VARCHAR(14) NULL,
+  rg VARCHAR(30) NULL,
+  data_nascimento DATE NULL,
+  telefone VARCHAR(30) NULL,
+  whatsapp VARCHAR(30) NULL,
+  email VARCHAR(191) NULL,
+  observacoes TEXT NULL,
+  ativo TINYINT(1) NOT NULL DEFAULT 1,
+  criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS MelPetHostel_Grupos (
-  Grupo_ID INT AUTO_INCREMENT PRIMARY KEY,
-  Grupo_Nome VARCHAR(191) NOT NULL UNIQUE,
-  Created_At DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  Updated_At DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS Grupos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  Nome_Grupo VARCHAR(191) NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS MelPetHostel_Usuarios (
-  Usuario_ID INT AUTO_INCREMENT PRIMARY KEY,
-  Usuario_Login VARCHAR(191) NOT NULL UNIQUE,
-  Usuario_Senha VARCHAR(255) NOT NULL,
-  Grupo_ID INT DEFAULT NULL,
-  Usuario_Grupo VARCHAR(191) DEFAULT NULL,
-  Primeiro_Acesso TINYINT(1) NOT NULL DEFAULT 1,
-  Created_At DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  Updated_At DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_mph_usuarios_grupo_id (Grupo_ID),
-  CONSTRAINT fk_mph_usuarios_grupo
-    FOREIGN KEY (Grupo_ID)
-    REFERENCES MelPetHostel_Grupos (Grupo_ID)
-    ON DELETE SET NULL
+CREATE TABLE IF NOT EXISTS usuarios (
+  usuario_id INT AUTO_INCREMENT PRIMARY KEY,
+  cliente_id INT NULL,
+  usuario_login VARCHAR(191) NOT NULL UNIQUE,
+  usuario_senha VARCHAR(255) NOT NULL,
+  primeiro_acesso TINYINT(1) NOT NULL DEFAULT 1,
+  ativo TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  grupo_id INT NOT NULL,
+  INDEX idx_usuarios_cliente_id (cliente_id),
+  INDEX idx_usuarios_grupo_id (grupo_id),
+  CONSTRAINT fk_usuarios_cliente
+    FOREIGN KEY (cliente_id)
+    REFERENCES Clientes (id)
+    ON DELETE SET NULL,
+  CONSTRAINT fk_usuarios_grupo
+    FOREIGN KEY (grupo_id)
+    REFERENCES Grupos (id)
+    ON DELETE RESTRICT
 );
 
-CREATE TABLE IF NOT EXISTS MelPetHostel_Contratos (
+CREATE TABLE IF NOT EXISTS Contratos (
   Contrato_ID INT AUTO_INCREMENT PRIMARY KEY,
   Usuario_Login VARCHAR(191) NOT NULL,
   Nome_Arquivo VARCHAR(255) DEFAULT NULL,
@@ -47,18 +56,18 @@ CREATE TABLE IF NOT EXISTS MelPetHostel_Contratos (
   INDEX idx_mph_contratos_conferido (Conferido)
 );
 
-CREATE TABLE IF NOT EXISTS MelPetHostel_Documentos_Tipos (
+CREATE TABLE IF NOT EXISTS Documentos_Tipo (
   Id INT AUTO_INCREMENT PRIMARY KEY,
   Documento_Tipo VARCHAR(191) NOT NULL UNIQUE
 );
 
-INSERT IGNORE INTO MelPetHostel_Documentos_Tipos (Id, Documento_Tipo)
+INSERT IGNORE INTO Documentos_Tipo (Id, Documento_Tipo)
 VALUES
   (1, 'Documento de Identificacao'),
   (2, 'Comprovante de Endereco'),
   (3, 'Outros Documentos');
 
-CREATE TABLE IF NOT EXISTS MelPetHostel_Documentos (
+CREATE TABLE IF NOT EXISTS Documentos (
   Id INT AUTO_INCREMENT PRIMARY KEY,
   Usuario_ID INT NOT NULL,
   Contrato_ID INT NOT NULL,
@@ -70,13 +79,13 @@ CREATE TABLE IF NOT EXISTS MelPetHostel_Documentos (
   Created_At DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   Updated_At DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_mph_doc_usuario FOREIGN KEY (Usuario_ID)
-    REFERENCES MelPetHostel_Usuarios (Usuario_ID)
+    REFERENCES usuarios (usuario_id)
     ON DELETE CASCADE,
   CONSTRAINT fk_mph_doc_contrato FOREIGN KEY (Contrato_ID)
-    REFERENCES MelPetHostel_Contratos (Contrato_ID)
+    REFERENCES Contratos (Contrato_ID)
     ON DELETE CASCADE,
   CONSTRAINT fk_mph_doc_tipo FOREIGN KEY (Documento_Tipo_ID)
-    REFERENCES MelPetHostel_Documentos_Tipos (Id)
+    REFERENCES Documentos_Tipo (Id)
     ON DELETE RESTRICT,
   INDEX idx_mph_doc_usuario_contrato_tipo (Usuario_ID, Contrato_ID, Documento_Tipo_ID),
   INDEX idx_mph_doc_conferido (Conferido)

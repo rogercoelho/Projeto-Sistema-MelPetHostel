@@ -26,11 +26,11 @@ const storage = multer.diskStorage({
         try {
           const gid = Number(rawUserGrupo);
           const [grows] = await db.query(
-            "SELECT Grupo_Nome FROM MelPetHostel_Grupos WHERE Grupo_ID = ? LIMIT 1",
+            "SELECT Nome_Grupo FROM Grupos WHERE id = ? LIMIT 1",
             [gid],
           );
-          if (grows && grows.length && grows[0].Grupo_Nome) {
-            userGrupoName = grows[0].Grupo_Nome;
+          if (grows && grows.length && grows[0].Nome_Grupo) {
+            userGrupoName = grows[0].Nome_Grupo;
           }
         } catch {
           // ignore DB lookup errors and continue using raw value

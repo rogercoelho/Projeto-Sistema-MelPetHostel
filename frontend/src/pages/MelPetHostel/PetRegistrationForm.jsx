@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Button } from "../../components";
+import { Button } from "../../components";
 import {
   PET_ANAMNESIS_SECTIONS,
   findMissingRequiredField,
@@ -95,6 +95,7 @@ function ChoiceField({ field, value, onChange, onToggleOption }) {
                 name={field.name}
                 value={option}
                 checked={checked}
+                required={field.required && !isCheckboxGroup}
                 onChange={() => {
                   if (isCheckboxGroup) {
                     onToggleOption(field.name, option);
@@ -121,6 +122,7 @@ function ConfirmationField({ field, value, onChange }) {
           type="checkbox"
           name={field.name}
           checked={Boolean(value)}
+          required={field.required}
           onChange={(event) => onChange(field.name, event.target.checked)}
         />
         <span>
@@ -153,22 +155,26 @@ function PetFormField({ field, value, onChange, onToggleOption }) {
   return <TextField field={field} value={value} onChange={onChange} />;
 }
 
-export default function PetRegistrationForm({ onSubmit }) {
+export default function PetRegistrationForm({ onBack, onSubmit }) {
   const [formData, setFormData] = useState(getEmptyPetAnamnesisForm);
-  const [errorMessage, setErrorMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
+  function clearFieldValidity(name) {
+    const field = document.querySelector(`[name="${name}"]`);
+    field?.setCustomValidity("");
+  }
+
   function updateField(name, value) {
+    clearFieldValidity(name);
     setFormData((current) => ({ ...current, [name]: value }));
-    setErrorMessage("");
   }
 
   function resetForm() {
     setFormData(getEmptyPetAnamnesisForm());
-    setErrorMessage("");
   }
 
   function toggleCheckboxGroupOption(name, option) {
+    clearFieldValidity(name);
     setFormData((current) => {
       const selected = new Set(current[name] || []);
 
@@ -180,15 +186,52 @@ export default function PetRegistrationForm({ onSubmit }) {
 
       return { ...current, [name]: Array.from(selected) };
     });
-    setErrorMessage("");
+  }
+
+  function findMissingCheckboxGroup() {
+    for (const section of PET_ANAMNESIS_SECTIONS) {
+      for (const field of section.fields) {
+        if (!field.required || field.type !== "checkboxGroup") continue;
+        if (!formData[field.name]?.length) return field;
+      }
+    }
+
+    return null;
+  }
+
+  function revealInvalidField(field) {
+    if (!field) return;
+
+    field.scrollIntoView({ behavior: "smooth", block: "center" });
+    field.focus({ preventScroll: true });
+  }
+
+  function handleInvalid(event) {
+    revealInvalidField(event.target);
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
 
+    const form = event.currentTarget;
+    if (!form.checkValidity()) {
+      revealInvalidField(form.querySelector(":invalid"));
+      return;
+    }
+
+    const missingCheckboxGroup = findMissingCheckboxGroup();
+    if (missingCheckboxGroup) {
+      const target = form.elements[missingCheckboxGroup.name]?.[0];
+      target?.setCustomValidity(
+        `Preencha o campo obrigatório: ${missingCheckboxGroup.label}`,
+      );
+      revealInvalidField(target);
+      window.setTimeout(() => target?.reportValidity(), 250);
+      return;
+    }
+
     const missingField = findMissingRequiredField(formData);
     if (missingField) {
-      setErrorMessage(`Preencha o campo obrigatório: ${missingField}`);
       return;
     }
 
@@ -200,21 +243,23 @@ export default function PetRegistrationForm({ onSubmit }) {
       });
       resetForm();
     } catch (error) {
-      setErrorMessage(error?.message || "Não foi possível cadastrar o pet.");
+      window.alert(error?.message || "Não foi possível cadastrar o pet.");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <form className="pet-registration-form" onSubmit={handleSubmit} noValidate>
+    <form
+      className="pet-registration-form"
+      onSubmit={handleSubmit}
+      onInvalidCapture={handleInvalid}
+    >
       <div className="pet-form-body">
-        {errorMessage ? <Alert type="error">{errorMessage}</Alert> : null}
-
-        {PET_ANAMNESIS_SECTIONS.map((section) => (
+        {PET_ANAMNESIS_SECTIONS.map((section, sectionIndex) => (
           <fieldset className="pet-form-section" key={section.number}>
             <legend>
-              <span>{section.number}</span>
+              <span>{sectionIndex + 1}</span>
               {section.title}
             </legend>
             <p>{section.description}</p>
@@ -243,6 +288,16 @@ export default function PetRegistrationForm({ onSubmit }) {
         >
           Limpar
         </Button>
+        {onBack ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onBack}
+            disabled={saving}
+          >
+            Voltar
+          </Button>
+        ) : null}
         <Button type="submit" disabled={saving}>
           {saving ? "Salvando..." : "Salvar ficha"}
         </Button>

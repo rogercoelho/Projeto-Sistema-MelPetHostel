@@ -35,17 +35,17 @@ async function main() {
 
   try {
     const [groups] = await db.query(
-      "SELECT Grupo_ID, Grupo_Nome FROM MelPetHostel_Grupos ORDER BY Grupo_Nome",
+      "SELECT id, Nome_Grupo FROM Grupos ORDER BY Nome_Grupo",
     );
     console.log(`Grupos encontrados: ${groups.length}`);
 
     for (const group of groups) {
-      const safeName = safeNameFor(group.Grupo_Nome) || String(group.Grupo_ID);
+      const safeName = safeNameFor(group.Nome_Grupo) || String(group.id);
       const groupDir = path.join(uploadsRoot, safeName);
       const createdGroupDir = await ensureDir(groupDir);
 
       console.log(
-        `Grupo ${group.Grupo_ID} -> ${safeName}: pasta ${createdGroupDir ? "criada" : "ok"}`,
+        `Grupo ${group.id} -> ${safeName}: pasta ${createdGroupDir ? "criada" : "ok"}`,
       );
     }
   } catch (error) {

@@ -3,6 +3,7 @@
   box-sizing: border-box;
   padding: var(--spacing-sm);
   margin: 0 auto;
+  scroll-padding-top: 120px;
 }
 
 .melpet-shell {
@@ -10,7 +11,7 @@
   width: calc(100% - 2 * var(--spacing-md));
   box-sizing: border-box;
   padding: var(--spacing-md);
-  margin: 0 auto;
+  margin: var(--spacing-md) auto;
   background-color: var(--cor-areia);
   border-radius: var(--radius-lg);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -64,7 +65,6 @@
 }
 
 .pet-registration-container {
-  overflow: hidden;
   border: 1px solid #d7dee8;
   border-radius: 12px;
   background: #f4f7fb;
@@ -109,16 +109,11 @@
 
 .pet-registration-form {
   display: flex;
-  height: min(78vh, 880px);
-  min-height: 0;
   flex-direction: column;
   background: #ffffff;
 }
 
 .pet-form-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
   padding: 14px;
   background: #f4f7fb;
 }
@@ -200,6 +195,13 @@
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
+}
+
+.pet-form-field input,
+.pet-form-field textarea,
+.pet-choice input,
+.pet-confirmation input {
+  scroll-margin-top: 140px;
 }
 
 .pet-form-field textarea {
@@ -545,11 +547,6 @@
   font-weight: 600;
 }
 
-.melpet-contract-missing {
-  color: #111;
-  font-weight: 700;
-}
-
 .melpet-contract-review-message {
   padding: 12px 14px;
   border: 1px solid #f59e0b;
@@ -563,10 +560,84 @@
   box-shadow: 0 4px 12px rgba(180, 83, 9, 0.12);
 }
 
-.melpet-contract-gate {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.melpet-upload-home {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+}
+
+.melpet-upload-accordion {
+  width: 100%;
+}
+
+.melpet-upload-content {
+  align-items: stretch;
+}
+
+.melpet-upload-doc-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.melpet-upload-doc-item {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: var(--cor-branco);
+}
+
+.melpet-upload-doc-item.is-done {
+  border-left-color: #1d4ed8;
+}
+
+.melpet-upload-doc-item.is-pending {
+  border-left-color: var(--cor-marrom);
+}
+
+.melpet-upload-doc-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.melpet-upload-doc-copy strong {
+  color: var(--cor-marrom);
+}
+
+.melpet-upload-doc-copy span {
+  color: var(--cor-marrom-claro);
+  font-size: 0.86rem;
+}
+
+.melpet-upload-doc-copy .melpet-doc-status--pending {
+  color: #b91c1c;
+}
+
+.melpet-upload-doc-copy .melpet-doc-status--done {
+  color: #1d4ed8;
+}
+
+.melpet-upload-doc-main {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.melpet-upload-doc-main .btn {
+  width: 100%;
+}
+
+.melpet-upload-content .melpet-selected-file-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
 }
 
 .melpet-contract-actions {
@@ -600,7 +671,6 @@
   word-break: break-word;
 }
 
-.melpet-selected-file-label,
 .melpet-selected-file-value {
   display: block;
 }
@@ -632,36 +702,16 @@
   cursor: not-allowed;
 }
 
-.melpet-footer-actions {
-  display: flex;
-  width: 100%;
-}
-
-.melpet-footer-actions .btn {
-  width: 100%;
-}
-
-.melpet-support-docs-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.melpet-support-doc-item {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 6px;
-}
-
-.melpet-support-doc-item + .melpet-support-doc-item {
-  border-top: 1px solid #e2e8f0;
-  padding-top: 14px;
-}
-
-.melpet-support-doc-title {
-  color: #0f172a;
+.melpet-first-step-message {
+  margin: 2px 0 0;
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 0.94rem;
   font-weight: 700;
+  line-height: 1.45;
 }
 
 .melpet-doc-status {
@@ -773,16 +823,12 @@
     min-width: 150px;
   }
 
-  .melpet-footer-actions {
-    justify-content: flex-start;
+  .melpet-upload-doc-main {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
   }
 
-  .melpet-footer-actions .btn {
-    width: auto;
-    min-width: 140px;
-  }
-
-  .melpet-support-doc-item .btn {
+  .melpet-upload-doc-main .btn {
     width: fit-content;
     min-width: 150px;
   }

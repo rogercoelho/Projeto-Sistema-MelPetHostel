@@ -4,14 +4,12 @@ import api from "../../services/api";
 import AdminPageShell from "./AdminPageShell";
 import { userBelongsToGroup } from "./utils";
 import {
-  MODULES,
   getGroupLabel,
   getUserGroupLabel,
   getUserGroupValue,
 } from "./adminManagementUtils";
 
 function AdminGroupsPage({ onBack }) {
-  const [selectedModulo, setSelectedModulo] = useState("melpethostel");
   const [grupos, setGrupos] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [novoGrupoNome, setNovoGrupoNome] = useState("");
@@ -20,12 +18,12 @@ function AdminGroupsPage({ onBack }) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
 
-  async function loadData(modulo = selectedModulo) {
+  async function loadData() {
     setLoading(true);
     try {
       const [groupsData, usersData] = await Promise.all([
-        api.get(`/auth/groups?modulo=${encodeURIComponent(modulo)}`),
-        api.get(`/auth/users?modulo=${encodeURIComponent(modulo)}`),
+        api.get("/auth/groups"),
+        api.get("/auth/users"),
       ]);
       const nextGroups = Array.isArray(groupsData) ? groupsData : [];
       const nextUsers = Array.isArray(usersData) ? usersData : [];
@@ -50,9 +48,8 @@ function AdminGroupsPage({ onBack }) {
   }
 
   useEffect(() => {
-    loadData(selectedModulo);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModulo]);
+    loadData();
+  }, []);
 
   async function createGroup(event) {
     event.preventDefault();
@@ -60,7 +57,7 @@ function AdminGroupsPage({ onBack }) {
     if (!nome) return;
 
     try {
-      await api.post("/auth/groups", { nome, modulo: selectedModulo });
+      await api.post("/auth/groups", { nome });
       setNovoGrupoNome("");
       setMessage({ type: "sucesso", text: "Grupo criado." });
       await loadData();
@@ -74,9 +71,7 @@ function AdminGroupsPage({ onBack }) {
 
   async function deleteGroup(group) {
     try {
-      await api.delete(
-        `/auth/groups/${group.id}?modulo=${encodeURIComponent(selectedModulo)}`,
-      );
+      await api.delete(`/auth/groups/${group.id}`);
       setConfirmDeleteId(null);
       setMessage({ type: "sucesso", text: "Grupo excluido." });
       await loadData();
@@ -96,10 +91,11 @@ function AdminGroupsPage({ onBack }) {
     }
 
     try {
-      await api.put(
-        `/auth/users/${user.id}?modulo=${encodeURIComponent(selectedModulo)}`,
-        { login: user.login, grupo },
-      );
+      await api.put(`/auth/users/${user.id}`, {
+        login: user.login,
+        grupo,
+        ativo: user.ativo !== false,
+      });
       setMessage({ type: "sucesso", text: "Vinculo atualizado." });
       await loadData();
     } catch (error) {
@@ -113,7 +109,7 @@ function AdminGroupsPage({ onBack }) {
   return (
     <AdminPageShell
       title="Vinculo de grupos e permissoes"
-      description="Crie grupos, confira usuarios vinculados e altere o grupo de cada usuario sem abrir modal."
+      description="Crie grupos, confira usuarios vinculados e altere o grupo de cada usuario."
       onBack={onBack}
     >
       <section className="admin-page-layout">
@@ -123,23 +119,6 @@ function AdminGroupsPage({ onBack }) {
             <h3>Criar e acompanhar</h3>
           </div>
 
-          <label className="admin-page-form-field">
-            Modulo
-            <select
-              value={selectedModulo}
-              onChange={(event) => {
-                setSelectedModulo(event.target.value);
-                setNovoGrupoNome("");
-              }}
-            >
-              {MODULES.map((modulo) => (
-                <option key={modulo.value} value={modulo.value}>
-                  {modulo.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
           <form className="admin-page-form compact" onSubmit={createGroup}>
             <label>
               Novo grupo
@@ -148,19 +127,15 @@ function AdminGroupsPage({ onBack }) {
                 value={novoGrupoNome}
                 onChange={(event) => setNovoGrupoNome(event.target.value)}
                 placeholder="Nome do grupo"
-                disabled={selectedModulo === "administradores"}
               />
             </label>
-            {selectedModulo === "administradores" ? (
-              <p>Administradores usam o grupo padrao Administradores.</p>
-            ) : null}
-            <Button type="submit" disabled={selectedModulo === "administradores"}>
-              Criar grupo
-            </Button>
+            <Button type="submit">Criar grupo</Button>
           </form>
 
           {message ? (
-            <p className={`admin-page-message ${message.type}`}>{message.text}</p>
+            <p className={`admin-page-message ${message.type}`}>
+              {message.text}
+            </p>
           ) : null}
 
           {loading ? (
@@ -178,24 +153,37 @@ function AdminGroupsPage({ onBack }) {
                       <strong>{getGroupLabel(grupo)}</strong>
                       <span>{linkedUsers.length} usuario(s) vinculado(s)</span>
                     </div>
-                    {selectedModulo !== "administradores" ? (
-                      <div className="admin-page-row-actions">
-                        {confirmDeleteId === grupo.id ? (
-                          <>
-                            <Button type="button" variant="danger" size="sm" onClick={() => deleteGroup(grupo)}>
-                              Confirmar
-                            </Button>
-                            <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmDeleteId(null)}>
-                              Cancelar
-                            </Button>
-                          </>
-                        ) : (
-                          <Button type="button" variant="outline" size="sm" onClick={() => setConfirmDeleteId(grupo.id)}>
-                            Excluir
+                    <div className="admin-page-row-actions">
+                      {confirmDeleteId === grupo.id ? (
+                        <>
+                          <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            onClick={() => deleteGroup(grupo)}
+                          >
+                            Confirmar
                           </Button>
-                        )}
-                      </div>
-                    ) : null}
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setConfirmDeleteId(null)}
+                          >
+                            Cancelar
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setConfirmDeleteId(grupo.id)}
+                        >
+                          Excluir
+                        </Button>
+                      )}
+                    </div>
                   </article>
                 );
               })}
@@ -236,7 +224,11 @@ function AdminGroupsPage({ onBack }) {
                         </option>
                       ))}
                     </select>
-                    <Button type="button" size="sm" onClick={() => saveUserGroup(user)}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => saveUserGroup(user)}
+                    >
                       Salvar
                     </Button>
                   </div>
@@ -253,4 +245,3 @@ function AdminGroupsPage({ onBack }) {
 }
 
 export default AdminGroupsPage;
-

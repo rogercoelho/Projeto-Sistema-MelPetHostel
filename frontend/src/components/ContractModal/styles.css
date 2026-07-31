@@ -316,6 +316,16 @@
   box-shadow: inset 0 0 0 1px #111;
 }
 
+.contract-field input.is-readonly,
+.contract-field input.is-readonly:hover,
+.contract-field input.is-readonly:focus {
+  background-color: #f8fafc;
+  border-color: #b9c3cf;
+  color: #111;
+  cursor: default;
+  box-shadow: none;
+}
+
 .contract-field input.is-disabled,
 .contract-field input:disabled,
 .contract-field input.is-disabled:hover,

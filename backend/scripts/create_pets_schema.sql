@@ -1,0 +1,148 @@
+SET @clientes_table = (
+  SELECT TABLE_NAME
+    FROM INFORMATION_SCHEMA.TABLES
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND LOWER(TABLE_NAME) = 'clientes'
+   ORDER BY CASE WHEN TABLE_NAME = 'Clientes' THEN 0 ELSE 1 END
+   LIMIT 1
+);
+
+SET @sql = IF(
+  @clientes_table IS NULL,
+  'CREATE TABLE IF NOT EXISTS `Clientes` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `nome` VARCHAR(191) NULL,
+    `cpf` VARCHAR(14) NULL,
+    `rg` VARCHAR(30) NULL,
+    `data_nascimento` DATE NULL,
+    `telefone` VARCHAR(30) NULL,
+    `whatsapp` VARCHAR(30) NULL,
+    `email` VARCHAR(191) NULL,
+    `observacoes` TEXT NULL,
+    `ativo` TINYINT(1) NOT NULL DEFAULT 1,
+    `criado_em` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `atualizado_em` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+  'SELECT ''Tabela Clientes encontrada'' AS status'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @clientes_table = (
+  SELECT TABLE_NAME
+    FROM INFORMATION_SCHEMA.TABLES
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND LOWER(TABLE_NAME) = 'clientes'
+   ORDER BY CASE WHEN TABLE_NAME = 'Clientes' THEN 0 ELSE 1 END
+   LIMIT 1
+);
+
+SET @clientes_table_q = CONCAT('`', REPLACE(@clientes_table, '`', '``'), '`');
+
+SET @cliente_id_type = (
+  SELECT COLUMN_TYPE
+    FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = @clientes_table
+     AND COLUMN_NAME = 'id'
+   LIMIT 1
+);
+
+SET @sql = CONCAT('ALTER TABLE ', @clientes_table_q, ' ENGINE=InnoDB');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @clientes_id_has_index = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.STATISTICS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = @clientes_table
+     AND COLUMN_NAME = 'id'
+);
+
+SET @sql = IF(
+  @clientes_id_has_index > 0,
+  'SELECT ''Clientes.id ja possui indice'' AS status',
+  CONCAT('ALTER TABLE ', @clientes_table_q, ' ADD INDEX `idx_clientes_id_pets_fk` (`id`)')
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = CONCAT(
+  'CREATE TABLE IF NOT EXISTS `Pets` (',
+  '`id` INT AUTO_INCREMENT PRIMARY KEY,',
+  '`cliente_id` ', @cliente_id_type, ' NOT NULL,',
+  '`nome` VARCHAR(160) NOT NULL,',
+  '`raca` VARCHAR(120) NOT NULL,',
+  '`idade` VARCHAR(60) NOT NULL,',
+  '`peso_aproximado` VARCHAR(60) NOT NULL,',
+  '`ativo` TINYINT(1) NOT NULL DEFAULT 1,',
+  '`criado_em` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,',
+  '`atualizado_em` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,',
+  'INDEX `idx_pets_cliente` (`cliente_id`),',
+  'CONSTRAINT `fk_pets_cliente` FOREIGN KEY (`cliente_id`) REFERENCES ',
+  @clientes_table_q,
+  ' (`id`) ON DELETE CASCADE',
+  ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+CREATE TABLE IF NOT EXISTS `Pet_Fichas` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `pet_id` INT NOT NULL,
+  `veterinario_nome` VARCHAR(160) NOT NULL,
+  `clinica_nome` VARCHAR(160) NOT NULL,
+  `clinica_telefone` VARCHAR(40) NOT NULL,
+  `clinica_endereco` TEXT NOT NULL,
+  `autoriza_atendimento_emergencial` VARCHAR(20) NOT NULL,
+  `autoriza_medicacao` VARCHAR(20) NOT NULL,
+  `sexo` VARCHAR(20) NOT NULL,
+  `castrado` VARCHAR(20) NOT NULL,
+  `doenca_diagnosticada` VARCHAR(20) NOT NULL,
+  `doenca_detalhes` TEXT NULL,
+  `cirurgias_historico` VARCHAR(20) NOT NULL,
+  `cirurgias_detalhes` TEXT NULL,
+  `medicamento_continuo` VARCHAR(20) NOT NULL,
+  `medicamento_detalhes` TEXT NULL,
+  `alimentacao_tipos` TEXT NOT NULL,
+  `alimentacao_marca` VARCHAR(160) NOT NULL,
+  `alimentacao_quantidade_horarios` TEXT NOT NULL,
+  `restricoes_alimentares` TEXT NOT NULL,
+  `deixa_mexer_potinho` VARCHAR(20) NOT NULL,
+  `petiscos` VARCHAR(80) NOT NULL,
+  `comportamento_caes` VARCHAR(80) NOT NULL,
+  `agressividade` VARCHAR(20) NOT NULL,
+  `agressividade_situacoes` TEXT NULL,
+  `destroi_objetos` VARCHAR(20) NOT NULL,
+  `ansiedade_separacao` VARCHAR(20) NOT NULL,
+  `medos_especificos` TEXT NOT NULL,
+  `reacao_medo` TEXT NOT NULL,
+  `como_acalmar` TEXT NOT NULL,
+  `fica_sozinho` VARCHAR(20) NOT NULL,
+  `tempo_sozinho` VARCHAR(120) NULL,
+  `local_dormir` VARCHAR(200) NOT NULL,
+  `ritual_dormir_comer` TEXT NOT NULL,
+  `aceita_banho_escovacao` VARCHAR(20) NOT NULL,
+  `aceita_roupinha` VARCHAR(20) NOT NULL,
+  `permite_manuseio` VARCHAR(20) NOT NULL,
+  `gosta_colo` VARCHAR(20) NOT NULL,
+  `sensibilidade_fisica` VARCHAR(20) NOT NULL,
+  `sensibilidade_detalhes` TEXT NULL,
+  `brinca_piscina` VARCHAR(20) NOT NULL,
+  `brinca_mangueira` VARCHAR(20) NOT NULL,
+  `brinca_bolinha` VARCHAR(20) NOT NULL,
+  `brinca_madeira` VARCHAR(20) NOT NULL,
+  `observacoes_tutor` TEXT NULL,
+  `veracidade_informacoes` TINYINT(1) NOT NULL DEFAULT 0,
+  `criado_em` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `atualizado_em` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_pet_fichas_pet` (`pet_id`),
+  CONSTRAINT `fk_pet_fichas_pet` FOREIGN KEY (`pet_id`)
+    REFERENCES `Pets` (`id`)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

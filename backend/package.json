@@ -10,8 +10,7 @@
     "lint": "eslint .",
     "db:setup": "node scripts/run_sql.js",
     "db:check": "node scripts/check_db_connection.js",
-    "db:migrate": "node scripts/migrate_melpethostel_data.js",
-    "db:migrate:group-id": "node scripts/run_sql.js migrate_user_group_id.sql",
+    "db:fix-documentos-fk": "node scripts/run_sql.js fix_documentos_usuario_fk.sql",
     "uploads:ensure": "node scripts/ensure_group_upload_dirs.js"
   },
   "keywords": [],

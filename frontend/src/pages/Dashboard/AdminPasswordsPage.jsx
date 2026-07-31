@@ -2,24 +2,24 @@ import { useEffect, useState } from "react";
 import { Button } from "../../components";
 import api from "../../services/api";
 import AdminPageShell from "./AdminPageShell";
-import { MODULES, getUserGroupLabel } from "./adminManagementUtils";
+import { getUserGroupLabel } from "./adminManagementUtils";
 
 function AdminPasswordsPage({ onBack }) {
-  const [selectedModulo, setSelectedModulo] = useState("melpethostel");
   const [grupos, setGrupos] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
+  const [primeiroAcesso, setPrimeiroAcesso] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
 
-  async function loadData(modulo = selectedModulo) {
+  async function loadData() {
     setLoading(true);
     try {
       const [groupsData, usersData] = await Promise.all([
-        api.get(`/auth/groups?modulo=${encodeURIComponent(modulo)}`),
-        api.get(`/auth/users?modulo=${encodeURIComponent(modulo)}`),
+        api.get("/auth/groups"),
+        api.get("/auth/users"),
       ]);
       setGrupos(Array.isArray(groupsData) ? groupsData : []);
       setUsuarios(Array.isArray(usersData) ? usersData : []);
@@ -36,12 +36,16 @@ function AdminPasswordsPage({ onBack }) {
   }
 
   useEffect(() => {
-    setSelectedUser(null);
+    loadData();
+  }, []);
+
+  function selectUser(user) {
+    setSelectedUser(user);
     setNovaSenha("");
     setConfirmarSenha("");
-    loadData(selectedModulo);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModulo]);
+    setPrimeiroAcesso(Boolean(user.primeiroAcesso));
+    setMessage(null);
+  }
 
   async function savePassword(event) {
     event.preventDefault();
@@ -62,13 +66,17 @@ function AdminPasswordsPage({ onBack }) {
     }
 
     try {
-      await api.put(
-        `/auth/users/${selectedUser.id}/password?modulo=${encodeURIComponent(selectedModulo)}`,
-        { novaSenha },
-      );
+      await api.put(`/auth/users/${selectedUser.id}/password`, {
+        novaSenha,
+        primeiroAcesso,
+      });
       setNovaSenha("");
       setConfirmarSenha("");
+      setSelectedUser((state) =>
+        state ? { ...state, primeiroAcesso } : state,
+      );
       setMessage({ type: "sucesso", text: "Senha alterada." });
+      await loadData();
     } catch (error) {
       setMessage({
         type: "erro",
@@ -80,7 +88,7 @@ function AdminPasswordsPage({ onBack }) {
   return (
     <AdminPageShell
       title="Alteracao de senha administrativa"
-      description="Selecione um usuario e redefina a senha diretamente na pagina."
+      description="Selecione um usuario, redefina a senha e informe se o proximo login sera primeiro acesso."
       onBack={onBack}
     >
       <section className="admin-page-layout">
@@ -89,17 +97,6 @@ function AdminPasswordsPage({ onBack }) {
             <span>Usuarios</span>
             <h3>Selecionar acesso</h3>
           </div>
-
-          <label className="admin-page-form-field">
-            Modulo
-            <select value={selectedModulo} onChange={(event) => setSelectedModulo(event.target.value)}>
-              {MODULES.map((modulo) => (
-                <option key={modulo.value} value={modulo.value}>
-                  {modulo.label}
-                </option>
-              ))}
-            </select>
-          </label>
 
           {loading ? (
             <p>Carregando...</p>
@@ -113,8 +110,15 @@ function AdminPasswordsPage({ onBack }) {
                   <div>
                     <strong>{user.login}</strong>
                     <span>{getUserGroupLabel(user, grupos)}</span>
+                    <span>
+                      Primeiro acesso: {user.primeiroAcesso ? "Sim" : "Nao"}
+                    </span>
                   </div>
-                  <Button type="button" size="sm" onClick={() => setSelectedUser(user)}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => selectUser(user)}
+                  >
                     Selecionar
                   </Button>
                 </article>
@@ -151,12 +155,24 @@ function AdminPasswordsPage({ onBack }) {
             />
           </label>
 
+          <label className="admin-page-checkbox">
+            <input
+              type="checkbox"
+              checked={primeiroAcesso}
+              onChange={(event) => setPrimeiroAcesso(event.target.checked)}
+              disabled={!selectedUser}
+            />
+            Marcar como primeiro acesso
+          </label>
+
           <Button type="submit" disabled={!selectedUser}>
             Alterar senha
           </Button>
 
           {message ? (
-            <p className={`admin-page-message ${message.type}`}>{message.text}</p>
+            <p className={`admin-page-message ${message.type}`}>
+              {message.text}
+            </p>
           ) : null}
         </form>
       </section>
@@ -165,4 +181,3 @@ function AdminPasswordsPage({ onBack }) {
 }
 
 export default AdminPasswordsPage;
-

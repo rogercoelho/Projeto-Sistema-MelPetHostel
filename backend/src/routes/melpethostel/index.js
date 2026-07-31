@@ -11,6 +11,8 @@ const {
   normalizeModule,
   sendTelegram,
 } = require("../../services/telegramService");
+const { Endereco, Grupo, Usuario } = require("../../models");
+const { getClienteCadastroStatus } = require("../../utils/clientProfile");
 
 const uploadsRootDefault =
   process.env.UPLOADS_ROOT || path.resolve(__dirname, "../../../uploads");
@@ -18,6 +20,20 @@ const uploadContrato = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
 });
+
+const TABLE_NAMES = Object.freeze({
+  contratos: "Contratos",
+  documentos: "Documentos",
+  documentosTipo: "Documentos_Tipo",
+  pets: "Pets",
+  petFichas: "Pet_Fichas",
+});
+
+const DEFAULT_DOCUMENT_TYPES = Object.freeze([
+  { id: 1, nome: "Documento de Identificacao" },
+  { id: 2, nome: "Comprovante de Endereco" },
+  { id: 3, nome: "Outros Documentos" },
+]);
 
 router.use("/telegram", require("./telegram"));
 
@@ -27,6 +43,25 @@ function dbFor(req) {
 
 function qcol(name) {
   return `\`${String(name || "").replace(/`/g, "")}\``;
+}
+
+function qtable(name) {
+  return qcol(name);
+}
+
+async function resolveTableName(req, preferredName) {
+  const [rows] = await dbFor(req).query(
+    `
+      SELECT TABLE_NAME
+      FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = LOWER(?)
+      ORDER BY CASE WHEN TABLE_NAME = ? THEN 0 ELSE 1 END
+      LIMIT 1
+    `,
+    [preferredName, preferredName],
+  );
+
+  return rows && rows.length ? rows[0].TABLE_NAME : null;
 }
 
 function sanitizePart(value) {
@@ -121,12 +156,22 @@ function isValidDbDate(value) {
 }
 
 async function getContratosTableMeta(req) {
+  const tableName = await resolveTableName(req, TABLE_NAMES.contratos);
+  if (!tableName) {
+    return {
+      exists: false,
+      tableName: TABLE_NAMES.contratos,
+      columnsLowerMap: new Map(),
+    };
+  }
+
   const [rows] = await dbFor(req).query(
     `
       SELECT COLUMN_NAME
       FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'MelPetHostel_Contratos'
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
     `,
+    [tableName],
   );
 
   const columnsLowerMap = new Map();
@@ -137,21 +182,51 @@ async function getContratosTableMeta(req) {
 
   return {
     exists: columnsLowerMap.size > 0,
+    tableName,
     columnsLowerMap,
-    idCol: pickColumn(columnsLowerMap, ["Contrato_ID", "ID", "Id"]),
+    idCol: pickColumn(columnsLowerMap, [
+      "Contrato_ID",
+      "contrato_id",
+      "ID",
+      "Id",
+      "id",
+    ]),
     loginCol: pickColumn(columnsLowerMap, [
       "Usuario_Login",
+      "usuario_login",
       "Login",
+      "login",
       "Usuario",
+      "usuario",
       "User_Login",
+      "user_login",
     ]),
     nomeArquivoCol: pickColumn(columnsLowerMap, [
       "Nome_Arquivo",
+      "nome_arquivo",
       "NomeArquivo",
+      "nomeArquivo",
       "Nome_Documento",
+      "nome_documento",
       "File_Name",
+      "file_name",
+      "Arquivo",
+      "arquivo",
+      "Arquivo_Nome",
+      "arquivo_nome",
     ]),
-    filePathCol: pickColumn(columnsLowerMap, ["File_Path", "FilePath", "Path"]),
+    filePathCol: pickColumn(columnsLowerMap, [
+      "File_Path",
+      "file_path",
+      "FilePath",
+      "filePath",
+      "Path",
+      "path",
+      "Caminho",
+      "caminho",
+      "Caminho_Arquivo",
+      "caminho_arquivo",
+    ]),
     conferidoCol: pickColumn(columnsLowerMap, [
       "Conferido",
       "Contrato_Conferido",
@@ -171,7 +246,13 @@ async function getContratosTableMeta(req) {
       "Checked_By",
     ]),
     statusCol: pickColumn(columnsLowerMap, ["Status", "Contrato_Status"]),
-    updatedAtCol: pickColumn(columnsLowerMap, ["Updated_At", "UpdatedAt"]),
+    updatedAtCol: pickColumn(columnsLowerMap, [
+      "Updated_At",
+      "updated_at",
+      "UpdatedAt",
+      "updatedAt",
+      "atualizado_em",
+    ]),
   };
 }
 
@@ -196,7 +277,7 @@ async function getLatestContratoRow(req, meta, login) {
 
   const sql = `
     SELECT ${uniqueCols.map(qcol).join(", ")}
-    FROM MelPetHostel_Contratos
+    FROM ${qtable(meta.tableName)}
     WHERE ${qcol(meta.loginCol)} = ?
     ORDER BY ${qcol(orderCol)} DESC
     LIMIT 1
@@ -243,12 +324,78 @@ function getReqLogin(req) {
   );
 }
 
+function toText(value) {
+  return String(value ?? "").trim();
+}
+
+function toJsonText(value) {
+  return JSON.stringify(Array.isArray(value) ? value : []);
+}
+
+function parseJsonArray(value) {
+  try {
+    const parsed = JSON.parse(String(value || "[]"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function getCurrentClienteId(req) {
+  const login = getReqLogin(req);
+  if (!login) return null;
+
+  const usuario = await Usuario.findByLogin(req, login);
+  const clienteId =
+    usuario?.cliente_id ?? usuario?.Cliente_ID ?? usuario?.clienteId ?? null;
+
+  return clienteId ? Number(clienteId) : null;
+}
+
+function normalizeDocumentUser(row) {
+  if (!row) return null;
+
+  const id = row.Usuario_ID ?? row.usuario_id ?? row.id;
+  const login = row.Usuario_Login ?? row.usuario_login ?? row.login;
+  const grupoId = row.Grupo_ID ?? row.grupo_id ?? row.grupo;
+
+  if (!id || !login) return null;
+
+  return {
+    ...row,
+    Usuario_ID: id,
+    Usuario_Login: login,
+    Grupo_ID: grupoId || null,
+  };
+}
+
 async function getUsuarioByLogin(req, login) {
-  const [rows] = await dbFor(req).query(
-    "SELECT Usuario_ID, Usuario_Login, Usuario_Grupo FROM MelPetHostel_Usuarios WHERE Usuario_Login = ? LIMIT 1",
-    [login],
+  return normalizeDocumentUser(await Usuario.findByLogin(req, login));
+}
+
+async function getUsuarioById(req, id) {
+  return normalizeDocumentUser(await Usuario.findById(req, id));
+}
+
+async function listUsuariosForDocuments(req) {
+  const usuarios = ((await Usuario.list(req)) || [])
+    .map(normalizeDocumentUser)
+    .filter(Boolean);
+
+  return usuarios.sort((a, b) =>
+    String(a.Usuario_Login).localeCompare(String(b.Usuario_Login)),
   );
-  return rows && rows.length ? rows[0] : null;
+}
+
+function isNumericId(value) {
+  return /^\d+$/.test(String(value || "").trim());
+}
+
+async function getGroupNameById(req, grupoId) {
+  if (!isNumericId(grupoId)) return null;
+
+  const grupo = await Grupo.findById(req, Number(grupoId));
+  return grupo?.Grupo_Nome || grupo?.nome || null;
 }
 
 const MODULE = normalizeModule("melpethostel");
@@ -294,8 +441,6 @@ function getReqGrupo(req) {
   return (
     (req && req.user && req.user.grupoNome) ||
     (req && req.user && req.user.grupo) ||
-    (req && req.user && req.user.Usuario_Grupo) ||
-    (req && req.user && req.user.usuarioGrupo) ||
     null
   );
 }
@@ -303,25 +448,18 @@ function getReqGrupo(req) {
 async function resolveGroupNameForUser(req, login) {
   const fromToken = getReqGrupo(req);
   if (fromToken && String(fromToken).trim()) {
+    if (isNumericId(fromToken)) {
+      const groupName = await getGroupNameById(req, fromToken);
+      return groupName ? sanitizePart(groupName) : null;
+    }
     return sanitizePart(fromToken);
   }
 
   const userRow = await getUsuarioByLogin(req, login);
-  const grupoRaw = userRow ? userRow.Usuario_Grupo : null;
-  if (!grupoRaw) return null;
-
-  // If user stores group id, resolve to group name.
-  if (/^\d+$/.test(String(grupoRaw))) {
-    const [groupRows] = await dbFor(req).query(
-      "SELECT Grupo_Nome FROM MelPetHostel_Grupos WHERE Grupo_ID = ? LIMIT 1",
-      [Number(grupoRaw)],
-    );
-    if (groupRows && groupRows.length && groupRows[0].Grupo_Nome) {
-      return sanitizePart(groupRows[0].Grupo_Nome);
-    }
-  }
-
-  return sanitizePart(grupoRaw);
+  const groupName = userRow
+    ? await getGroupNameById(req, userRow.Grupo_ID)
+    : null;
+  return groupName ? sanitizePart(groupName) : null;
 }
 
 function isAdminGroupValue(value) {
@@ -336,11 +474,41 @@ async function isAdminUser(req, login) {
   const fromToken = getReqGrupo(req);
   if (isAdminGroupValue(fromToken)) return true;
 
-  const userRow = await getUsuarioByLogin(req, login);
-  if (userRow && isAdminGroupValue(userRow.Usuario_Grupo)) return true;
-
   const resolvedGroup = await resolveGroupNameForUser(req, login);
   return isAdminGroupValue(resolvedGroup);
+}
+
+function isNewUsuariosSource(req) {
+  return req?.user?.source === "usuarios";
+}
+
+async function getClienteCadastroStatusByLogin(req, login) {
+  const usuario = await Usuario.findByLogin(req, login);
+  if (!usuario || !usuario.cliente) {
+    return getClienteCadastroStatus(null, []);
+  }
+
+  const enderecos = await Endereco.listByCliente(
+    req,
+    usuario.Cliente_ID || usuario.clienteId,
+  );
+  return getClienteCadastroStatus(usuario.cliente, enderecos);
+}
+
+async function requireCompleteClienteCadastro(req, res, login) {
+  if (!isNewUsuariosSource(req) || (await isAdminUser(req, login))) {
+    return true;
+  }
+
+  const cadastro = await getClienteCadastroStatusByLogin(req, login);
+  if (!cadastro.pendente) return true;
+
+  res.status(400).json({
+    status: "erro",
+    mensagem: "Complete os dados cadastrais antes de continuar.",
+    pendencias: cadastro.pendencias,
+  });
+  return false;
 }
 
 async function resolveUserDocumentsRelativeDir(req, login) {
@@ -364,28 +532,82 @@ async function resolveUserDocumentsRelativeDir(req, login) {
   };
 }
 
+async function ensureDocumentoTiposSeeded(req) {
+  const tableName = await resolveTableName(req, TABLE_NAMES.documentosTipo);
+  if (!tableName) {
+    throw new Error(`Tabela ${TABLE_NAMES.documentosTipo} nao encontrada.`);
+  }
+
+  for (const tipo of DEFAULT_DOCUMENT_TYPES) {
+    await dbFor(req).query(
+      `INSERT IGNORE INTO ${qtable(tableName)}
+        (Id, Documento_Tipo)
+       VALUES (?, ?)`,
+      [tipo.id, tipo.nome],
+    );
+  }
+}
+
+function normalizeDocumentoTipo(row) {
+  if (!row) return null;
+
+  const id = row.Id ?? row.id;
+  const nome =
+    row.Documento_Tipo ?? row.documento_tipo ?? row.nome ?? row.Nome ?? "";
+
+  if (!id || !nome) return null;
+
+  return {
+    ...row,
+    Id: id,
+    Documento_Tipo: nome,
+    key: mapRequiredDocKey(nome),
+  };
+}
+
 async function getDocumentoTipos(req) {
+  await ensureDocumentoTiposSeeded(req);
+  const tableName = await resolveTableName(req, TABLE_NAMES.documentosTipo);
+
   const [rows] = await dbFor(req).query(
-    "SELECT Id, Documento_Tipo FROM MelPetHostel_Documentos_Tipos ORDER BY Id",
+    `SELECT Id, Documento_Tipo
+       FROM ${qtable(tableName)}
+      ORDER BY Id`,
   );
-  return rows || [];
+  return (rows || []).map(normalizeDocumentoTipo).filter(Boolean);
 }
 
 async function getDocumentoTipoById(req, id) {
+  await ensureDocumentoTiposSeeded(req);
+  const tableName = await resolveTableName(req, TABLE_NAMES.documentosTipo);
+
   const [rows] = await dbFor(req).query(
-    "SELECT Id, Documento_Tipo FROM MelPetHostel_Documentos_Tipos WHERE Id = ? LIMIT 1",
+    `SELECT Id, Documento_Tipo
+       FROM ${qtable(tableName)}
+      WHERE Id = ?
+      LIMIT 1`,
     [id],
   );
-  return rows && rows.length ? rows[0] : null;
+  return normalizeDocumentoTipo(rows && rows.length ? rows[0] : null);
 }
 
 async function getDocumentosTableMeta(req) {
+  const tableName = await resolveTableName(req, TABLE_NAMES.documentos);
+  if (!tableName) {
+    return {
+      exists: false,
+      tableName: TABLE_NAMES.documentos,
+      columnsLowerMap: new Map(),
+    };
+  }
+
   const [rows] = await dbFor(req).query(
     `
       SELECT COLUMN_NAME
       FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'MelPetHostel_Documentos'
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
     `,
+    [tableName],
   );
 
   const columnsLowerMap = new Map();
@@ -396,20 +618,53 @@ async function getDocumentosTableMeta(req) {
 
   return {
     exists: columnsLowerMap.size > 0,
+    tableName,
     columnsLowerMap,
-    idCol: pickColumn(columnsLowerMap, ["Id", "ID"]),
-    usuarioIdCol: pickColumn(columnsLowerMap, ["Usuario_ID", "UsuarioId"]),
-    contratoIdCol: pickColumn(columnsLowerMap, ["Contrato_ID", "ContratoId"]),
+    idCol: pickColumn(columnsLowerMap, ["Id", "ID", "id"]),
+    usuarioIdCol: pickColumn(columnsLowerMap, [
+      "Usuario_ID",
+      "usuario_id",
+      "UsuarioId",
+      "usuarioId",
+    ]),
+    contratoIdCol: pickColumn(columnsLowerMap, [
+      "Contrato_ID",
+      "contrato_id",
+      "ContratoId",
+      "contratoId",
+    ]),
     tipoIdCol: pickColumn(columnsLowerMap, [
       "Documento_Tipo_ID",
+      "documento_tipo_id",
       "DocumentoTipoId",
+      "documentoTipoId",
     ]),
-    filePathCol: pickColumn(columnsLowerMap, ["File_Path", "FilePath"]),
-    conferidoCol: pickColumn(columnsLowerMap, ["Conferido", "Checked"]),
-    conferidoAtCol: pickColumn(columnsLowerMap, ["Conferido_At", "Checked_At"]),
+    filePathCol: pickColumn(columnsLowerMap, [
+      "File_Path",
+      "file_path",
+      "FilePath",
+      "filePath",
+      "Caminho",
+      "caminho",
+    ]),
+    conferidoCol: pickColumn(columnsLowerMap, [
+      "Conferido",
+      "conferido",
+      "Checked",
+      "checked",
+    ]),
+    conferidoAtCol: pickColumn(columnsLowerMap, [
+      "Conferido_At",
+      "conferido_at",
+      "Checked_At",
+      "checked_at",
+      "conferido_em",
+    ]),
     conferidoPorCol: pickColumn(columnsLowerMap, [
       "Conferido_Por",
+      "conferido_por",
       "Checked_By",
+      "checked_by",
     ]),
   };
 }
@@ -424,8 +679,13 @@ function normalizeText(value) {
 
 function mapRequiredDocKey(tipoNome) {
   const v = normalizeText(tipoNome);
-  if (v === normalizeText("Documento de Identificacao")) return "identificacao";
-  if (v === normalizeText("Comprovante de Endereço")) return "comprovante";
+  if (v.includes("identificacao") || v.includes("identidade")) {
+    return "identificacao";
+  }
+  if (v.includes("comprovante") && v.includes("endere")) {
+    return "comprovante";
+  }
+  if (v.includes("outro")) return "outros";
   return "outros";
 }
 
@@ -441,6 +701,18 @@ function buildSupportDocumentFileName(safeUsuario, key, sequence = 1) {
 
 async function checkAllRequiredDocsConcluded(req, userId, contratoId) {
   const tipos = await getDocumentoTipos(req);
+  const docsMeta = await getDocumentosTableMeta(req);
+  if (
+    !docsMeta.exists ||
+    !docsMeta.idCol ||
+    !docsMeta.usuarioIdCol ||
+    !docsMeta.contratoIdCol ||
+    !docsMeta.tipoIdCol ||
+    !docsMeta.filePathCol
+  ) {
+    return false;
+  }
+
   const requiredTipos = tipos.filter(
     (t) => mapRequiredDocKey(t.Documento_Tipo) !== "outros",
   );
@@ -448,10 +720,13 @@ async function checkAllRequiredDocsConcluded(req, userId, contratoId) {
   for (const tipo of requiredTipos) {
     const [docRows] = await dbFor(req).query(
       `
-        SELECT Id, File_Path
-        FROM MelPetHostel_Documentos
-        WHERE Usuario_ID = ? AND Contrato_ID = ? AND Documento_Tipo_ID = ?
-        ORDER BY Id DESC
+        SELECT ${qcol(docsMeta.idCol)} AS id,
+               ${qcol(docsMeta.filePathCol)} AS filePath
+        FROM ${qtable(docsMeta.tableName)}
+        WHERE ${qcol(docsMeta.usuarioIdCol)} = ?
+          AND ${qcol(docsMeta.contratoIdCol)} = ?
+          AND ${qcol(docsMeta.tipoIdCol)} = ?
+        ORDER BY ${qcol(docsMeta.idCol)} DESC
       `,
       [userId, contratoId, tipo.Id],
     );
@@ -462,8 +737,8 @@ async function checkAllRequiredDocsConcluded(req, userId, contratoId) {
 
     let hasAnyValidFile = false;
     for (const row of docRows) {
-      if (!row?.File_Path) continue;
-      if (await fileExistsByStoredPath(row.File_Path)) {
+      if (!row?.filePath) continue;
+      if (await fileExistsByStoredPath(row.filePath)) {
         hasAnyValidFile = true;
         break;
       }
@@ -530,7 +805,7 @@ async function checkAllDocsConferidosByContratoId(req, contratoId) {
         ${qcol(docsMeta.idCol)} AS id,
         ${qcol(docsMeta.conferidoCol)} AS conferidoFlag,
         ${qcol(docsMeta.conferidoAtCol)} AS conferidoAt
-      FROM MelPetHostel_Documentos
+      FROM ${qtable(docsMeta.tableName)}
       WHERE ${qcol(docsMeta.contratoIdCol)} = ?
     `,
     [contratoId],
@@ -627,6 +902,233 @@ router.post("/acesso", async (req, res) => {
   }
 });
 
+router.get("/pets", async (req, res) => {
+  try {
+    const clienteId = await getCurrentClienteId(req);
+    if (!clienteId) {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Usuário sem cliente vinculado para listar pets.",
+      });
+    }
+
+    const petsTable = await resolveTableName(req, TABLE_NAMES.pets);
+    const fichasTable = await resolveTableName(req, TABLE_NAMES.petFichas);
+    if (!petsTable || !fichasTable) {
+      return res.json({ status: "ok", pets: [] });
+    }
+
+    const [rows] = await dbFor(req).query(
+      `
+        SELECT
+          p.id,
+          p.nome,
+          p.raca,
+          p.idade,
+          p.peso_aproximado,
+          p.criado_em,
+          f.alimentacao_tipos
+        FROM ${qtable(petsTable)} p
+        LEFT JOIN ${qtable(fichasTable)} f ON f.pet_id = p.id
+        WHERE p.cliente_id = ? AND p.ativo = 1
+        ORDER BY p.criado_em DESC, p.id DESC
+      `,
+      [clienteId],
+    );
+
+    return res.json({
+      status: "ok",
+      pets: (rows || []).map((pet) => ({
+        id: pet.id,
+        nome: pet.nome,
+        raca: pet.raca,
+        idade: pet.idade,
+        pesoAproximado: pet.peso_aproximado,
+        cadastradoEm: pet.criado_em,
+        alimentacaoTipos: parseJsonArray(pet.alimentacao_tipos),
+      })),
+    });
+  } catch (error) {
+    console.error("Error in GET /melpethostel/pets:", error);
+    return res.status(500).json({
+      status: "erro",
+      mensagem: error?.message || "Não foi possível listar os pets.",
+    });
+  }
+});
+
+router.post("/pets", async (req, res) => {
+  const conn = await dbFor(req).getConnection();
+
+  try {
+    const clienteId = await getCurrentClienteId(req);
+    if (!clienteId) {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Usuário sem cliente vinculado para cadastrar pet.",
+      });
+    }
+
+    const petsTable = await resolveTableName(req, TABLE_NAMES.pets);
+    const fichasTable = await resolveTableName(req, TABLE_NAMES.petFichas);
+    if (!petsTable || !fichasTable) {
+      return res.status(400).json({
+        status: "erro",
+        mensagem:
+          "Tabelas Pets e Pet_Fichas não encontradas. Execute create_pets_schema.sql.",
+      });
+    }
+
+    const data = req.body || {};
+
+    await conn.beginTransaction();
+
+    const [petResult] = await conn.query(
+      `
+        INSERT INTO ${qtable(petsTable)}
+          (cliente_id, nome, raca, idade, peso_aproximado)
+        VALUES (?, ?, ?, ?, ?)
+      `,
+      [
+        clienteId,
+        toText(data.nomePet),
+        toText(data.raca),
+        toText(data.idade),
+        toText(data.pesoAproximado),
+      ],
+    );
+
+    const petId = petResult.insertId;
+
+    await conn.query(
+      `
+        INSERT INTO ${qtable(fichasTable)} (
+          pet_id,
+          veterinario_nome,
+          clinica_nome,
+          clinica_telefone,
+          clinica_endereco,
+          autoriza_atendimento_emergencial,
+          autoriza_medicacao,
+          sexo,
+          castrado,
+          doenca_diagnosticada,
+          doenca_detalhes,
+          cirurgias_historico,
+          cirurgias_detalhes,
+          medicamento_continuo,
+          medicamento_detalhes,
+          alimentacao_tipos,
+          alimentacao_marca,
+          alimentacao_quantidade_horarios,
+          restricoes_alimentares,
+          deixa_mexer_potinho,
+          petiscos,
+          comportamento_caes,
+          agressividade,
+          agressividade_situacoes,
+          destroi_objetos,
+          ansiedade_separacao,
+          medos_especificos,
+          reacao_medo,
+          como_acalmar,
+          fica_sozinho,
+          tempo_sozinho,
+          local_dormir,
+          ritual_dormir_comer,
+          aceita_banho_escovacao,
+          aceita_roupinha,
+          permite_manuseio,
+          gosta_colo,
+          sensibilidade_fisica,
+          sensibilidade_detalhes,
+          brinca_piscina,
+          brinca_mangueira,
+          brinca_bolinha,
+          brinca_madeira,
+          observacoes_tutor,
+          veracidade_informacoes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        petId,
+        toText(data.veterinarioNome),
+        toText(data.clinicaNome),
+        toText(data.clinicaTelefone),
+        toText(data.clinicaEndereco),
+        toText(data.autorizaAtendimentoEmergencial),
+        toText(data.autorizaMedicacao),
+        toText(data.sexo),
+        toText(data.castrado),
+        toText(data.doencaDiagnosticada),
+        toText(data.doencaDetalhes),
+        toText(data.cirurgiasHistorico),
+        toText(data.cirurgiasDetalhes),
+        toText(data.medicamentoContinuo),
+        toText(data.medicamentoDetalhes),
+        toJsonText(data.alimentacaoTipos),
+        toText(data.alimentacaoMarca),
+        toText(data.alimentacaoQuantidadeHorarios),
+        toText(data.restricoesAlimentares),
+        toText(data.deixaMexerPotinho),
+        toText(data.petiscos),
+        toText(data.comportamentoCaes),
+        toText(data.agressividade),
+        toText(data.agressividadeSituacoes),
+        toText(data.destroiObjetos),
+        toText(data.ansiedadeSeparacao),
+        toText(data.medosEspecificos),
+        toText(data.reacaoMedo),
+        toText(data.comoAcalmar),
+        toText(data.ficaSozinho),
+        toText(data.tempoSozinho),
+        toText(data.localDormir),
+        toText(data.ritualDormirComer),
+        toText(data.aceitaBanhoEscovacao),
+        toText(data.aceitaRoupinha),
+        toText(data.permiteManuseio),
+        toText(data.gostaColo),
+        toText(data.sensibilidadeFisica),
+        toText(data.sensibilidadeDetalhes),
+        toText(data.brincaPiscina),
+        toText(data.brincaMangueira),
+        toText(data.brincaBolinha),
+        toText(data.brincaMadeira),
+        toText(data.observacoesTutor),
+        data.veracidadeInformacoes ? 1 : 0,
+      ],
+    );
+
+    await conn.commit();
+
+    return res.status(201).json({
+      status: "ok",
+      pet: {
+        id: petId,
+        nome: toText(data.nomePet),
+        raca: toText(data.raca),
+        idade: toText(data.idade),
+        pesoAproximado: toText(data.pesoAproximado),
+        cadastradoEm: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    try {
+      await conn.rollback();
+    } catch {
+      // ignore rollback errors
+    }
+
+    console.error("Error in POST /melpethostel/pets:", error);
+    return res.status(500).json({
+      status: "erro",
+      mensagem: error?.message || "Não foi possível cadastrar o pet.",
+    });
+  } finally {
+    conn.release();
+  }
+});
+
 router.get("/documentos/pendentes", async (req, res) => {
   try {
     const login = getReqLogin(req);
@@ -640,18 +1142,11 @@ router.get("/documentos/pendentes", async (req, res) => {
     if (!meta.exists || !meta.idCol) {
       return res.status(500).json({
         status: "erro",
-        mensagem:
-          "Tabela MelPetHostel_Contratos não está pronta para varredura.",
+        mensagem: `Tabela ${TABLE_NAMES.contratos} não está pronta para varredura.`,
       });
     }
 
-    const [users] = await dbFor(req).query(
-      `
-        SELECT Usuario_ID, Usuario_Login
-        FROM MelPetHostel_Usuarios
-        ORDER BY Usuario_Login
-      `,
-    );
+    const users = await listUsuariosForDocuments(req);
 
     const pendentes = [];
     for (const user of users || []) {
@@ -716,17 +1211,7 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
         .json({ status: "erro", mensagem: "usuarioId inválido" });
     }
 
-    const [userRows] = await dbFor(req).query(
-      `
-        SELECT Usuario_ID, Usuario_Login
-        FROM MelPetHostel_Usuarios
-        WHERE Usuario_ID = ?
-        LIMIT 1
-      `,
-      [usuarioId],
-    );
-
-    const user = userRows && userRows.length ? userRows[0] : null;
+    const user = await getUsuarioById(req, usuarioId);
     if (!user) {
       return res
         .status(404)
@@ -737,7 +1222,7 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
     if (!meta.exists || !meta.idCol) {
       return res.status(500).json({
         status: "erro",
-        mensagem: "Tabela MelPetHostel_Contratos não está pronta.",
+        mensagem: `Tabela ${TABLE_NAMES.contratos} não está pronta.`,
       });
     }
 
@@ -791,6 +1276,9 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
     }
 
     const docsMeta = await getDocumentosTableMeta(req);
+    const tipoTableName =
+      (await resolveTableName(req, TABLE_NAMES.documentosTipo)) ||
+      TABLE_NAMES.documentosTipo;
     const docsSelectCols = [
       `d.${qcol(docsMeta.idCol || "Id")} AS docId`,
       `d.${qcol(docsMeta.filePathCol || "File_Path")} AS filePath`,
@@ -815,8 +1303,8 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
     const [docRows] = await dbFor(req).query(
       `
         SELECT ${docsSelectCols.join(", ")}
-        FROM MelPetHostel_Documentos d
-        LEFT JOIN MelPetHostel_Documentos_Tipos t ON t.Id = d.${qcol(docsMeta.tipoIdCol || "Documento_Tipo_ID")}
+        FROM ${qtable(docsMeta.tableName)} d
+        LEFT JOIN ${qtable(tipoTableName)} t ON t.Id = d.${qcol(docsMeta.tipoIdCol || "Documento_Tipo_ID")}
         WHERE d.${qcol(docsMeta.usuarioIdCol || "Usuario_ID")} = ?
           AND d.${qcol(docsMeta.contratoIdCol || "Contrato_ID")} = ?
         ORDER BY d.${qcol(docsMeta.idCol || "Id")} ASC
@@ -881,21 +1369,21 @@ router.post("/contratos/:contratoId/conferir", async (req, res) => {
     if (!meta.exists || !meta.idCol) {
       return res.status(500).json({
         status: "erro",
-        mensagem: "Tabela MelPetHostel_Contratos não está pronta.",
+        mensagem: `Tabela ${TABLE_NAMES.contratos} não está pronta.`,
       });
     }
 
     if (!meta.conferidoCol || !meta.conferidoAtCol || !meta.conferidoPorCol) {
       return res.status(500).json({
         status: "erro",
-        mensagem: "Colunas de conferência ausentes em MelPetHostel_Contratos.",
+        mensagem: `Colunas de conferência ausentes em ${TABLE_NAMES.contratos}.`,
       });
     }
 
     const [existingRows] = await dbFor(req).query(
       `
         SELECT ${qcol(meta.idCol)} AS id
-        FROM MelPetHostel_Contratos
+        FROM ${qtable(meta.tableName)}
         WHERE ${qcol(meta.idCol)} = ?
         LIMIT 1
       `,
@@ -912,7 +1400,7 @@ router.post("/contratos/:contratoId/conferir", async (req, res) => {
     if (!docsCheck.ok) {
       const mensagem =
         docsCheck.reason === "metadata_missing"
-          ? "Tabela MelPetHostel_Documentos sem colunas de conferência para validar os documentos."
+          ? `Tabela ${TABLE_NAMES.documentos} sem colunas de conferência para validar os documentos.`
           : docsCheck.reason === "no_documents"
             ? "Não há documentos vinculados para conferir este contrato."
             : `Ainda existem ${docsCheck.pendentes} documento(s) sem conferência.`;
@@ -921,7 +1409,7 @@ router.post("/contratos/:contratoId/conferir", async (req, res) => {
 
     await dbFor(req).query(
       `
-        UPDATE MelPetHostel_Contratos
+        UPDATE ${qtable(meta.tableName)}
         SET ${qcol(meta.conferidoCol)} = 1,
             ${qcol(meta.conferidoAtCol)} = NOW(),
             ${qcol(meta.conferidoPorCol)} = ?
@@ -968,7 +1456,7 @@ router.post("/documentos/:documentoId/conferir", async (req, res) => {
     if (!docsMeta.exists || !docsMeta.idCol) {
       return res.status(500).json({
         status: "erro",
-        mensagem: "Tabela MelPetHostel_Documentos não está pronta.",
+        mensagem: `Tabela ${TABLE_NAMES.documentos} não está pronta.`,
       });
     }
 
@@ -980,14 +1468,14 @@ router.post("/documentos/:documentoId/conferir", async (req, res) => {
       return res.status(500).json({
         status: "erro",
         mensagem:
-          "Colunas de conferência ausentes em MelPetHostel_Documentos. Execute o script add_conferido_columns_to_melpethostel_documentos.sql.",
+          `Colunas de conferência ausentes em ${TABLE_NAMES.documentos}. Execute o script add_conferido_columns_to_melpethostel_documentos.sql.`,
       });
     }
 
     const [existingRows] = await dbFor(req).query(
       `
         SELECT ${qcol(docsMeta.idCol)} AS id
-        FROM MelPetHostel_Documentos
+        FROM ${qtable(docsMeta.tableName)}
         WHERE ${qcol(docsMeta.idCol)} = ?
         LIMIT 1
       `,
@@ -1002,7 +1490,7 @@ router.post("/documentos/:documentoId/conferir", async (req, res) => {
 
     await dbFor(req).query(
       `
-        UPDATE MelPetHostel_Documentos
+        UPDATE ${qtable(docsMeta.tableName)}
         SET ${qcol(docsMeta.conferidoCol)} = 1,
             ${qcol(docsMeta.conferidoAtCol)} = NOW(),
             ${qcol(docsMeta.conferidoPorCol)} = ?
@@ -1056,7 +1544,15 @@ router.post(
           .json({ status: "erro", mensagem: "Envie um arquivo PDF" });
       }
 
+      if (!(await requireCompleteClienteCadastro(req, res, login))) return;
+
       const meta = await getContratosTableMeta(req);
+      const missingUploadColumns = [
+        !meta.exists ? "tabela" : null,
+        !meta.loginCol ? "Usuario_Login/usuario_login" : null,
+        !meta.nomeArquivoCol ? "Nome_Arquivo/nome_arquivo" : null,
+        !meta.filePathCol ? "File_Path/file_path" : null,
+      ].filter(Boolean);
       if (
         !meta.exists ||
         !meta.loginCol ||
@@ -1066,7 +1562,7 @@ router.post(
         return res.status(500).json({
           status: "erro",
           mensagem:
-            "Tabela MelPetHostel_Contratos não está pronta para upload (colunas obrigatórias ausentes).",
+            `Tabela ${meta.tableName || TABLE_NAMES.contratos} nao esta pronta para upload. Faltando: ${missingUploadColumns.join(", ")}.`,
         });
       }
 
@@ -1108,7 +1604,7 @@ router.post(
         params.push(existingRow[meta.idCol]);
 
         await dbFor(req).query(
-          `UPDATE MelPetHostel_Contratos SET ${setParts.join(", ")} WHERE ${qcol(meta.idCol)} = ?`,
+          `UPDATE ${qtable(meta.tableName)} SET ${setParts.join(", ")} WHERE ${qcol(meta.idCol)} = ?`,
           params,
         );
       } else {
@@ -1128,7 +1624,7 @@ router.post(
           insertVals.push("pendente");
         }
         await dbFor(req).query(
-          `INSERT INTO MelPetHostel_Contratos (${insertCols.map(qcol).join(", ")}) VALUES (${insertCols
+          `INSERT INTO ${qtable(meta.tableName)} (${insertCols.map(qcol).join(", ")}) VALUES (${insertCols
             .map(() => "?")
             .join(", ")})`,
           insertVals,
@@ -1181,7 +1677,7 @@ router.get("/documentos/status", async (req, res) => {
       return res.status(500).json({
         status: "erro",
         mensagem:
-          "Tabela MelPetHostel_Contratos não está pronta para verificação.",
+          `Tabela ${TABLE_NAMES.contratos} não está pronta para verificação.`,
       });
     }
 
@@ -1192,19 +1688,34 @@ router.get("/documentos/status", async (req, res) => {
 
     const contratoId = latestContrato[meta.idCol];
     const tipos = await getDocumentoTipos(req);
+    const docsMeta = await getDocumentosTableMeta(req);
+    if (
+      !docsMeta.exists ||
+      !docsMeta.usuarioIdCol ||
+      !docsMeta.contratoIdCol ||
+      !docsMeta.tipoIdCol ||
+      !docsMeta.filePathCol
+    ) {
+      return res.status(500).json({
+        status: "erro",
+        mensagem: `Tabela ${TABLE_NAMES.documentos} nao esta pronta para verificacao.`,
+      });
+    }
 
     const [docRows] = await dbFor(req).query(
       `
-        SELECT Id, Usuario_ID, Contrato_ID, Documento_Tipo_ID, File_Path
-        FROM MelPetHostel_Documentos
-        WHERE Usuario_ID = ? AND Contrato_ID = ?
+        SELECT ${qcol(docsMeta.tipoIdCol)} AS tipoId,
+               ${qcol(docsMeta.filePathCol)} AS filePath
+        FROM ${qtable(docsMeta.tableName)}
+        WHERE ${qcol(docsMeta.usuarioIdCol)} = ?
+          AND ${qcol(docsMeta.contratoIdCol)} = ?
       `,
       [userRow.Usuario_ID, contratoId],
     );
 
     const docsByTipoId = new Map();
     for (const d of docRows || []) {
-      const tipoId = Number(d.Documento_Tipo_ID);
+      const tipoId = Number(d.tipoId);
       const existing = docsByTipoId.get(tipoId) || [];
       existing.push(d);
       docsByTipoId.set(tipoId, existing);
@@ -1219,14 +1730,14 @@ router.get("/documentos/status", async (req, res) => {
 
       let identifiedCount = 0;
       for (const candidate of docsForTipo) {
-        if (!candidate?.File_Path) continue;
-        if (await fileExistsByStoredPath(candidate.File_Path)) {
+        if (!candidate?.filePath) continue;
+        if (await fileExistsByStoredPath(candidate.filePath)) {
           identifiedCount += 1;
         }
       }
 
       const existsDb = docsForTipo.some((candidate) =>
-        Boolean(candidate?.File_Path),
+        Boolean(candidate?.filePath),
       );
       const existsDisk = identifiedCount > 0;
 
@@ -1240,7 +1751,7 @@ router.get("/documentos/status", async (req, res) => {
         existsDisk,
         identifiedCount,
         status: existsDb && existsDisk ? "concluido" : "pendente",
-        filePath: doc && doc.File_Path ? doc.File_Path : null,
+        filePath: doc && doc.filePath ? doc.filePath : null,
       });
     }
 
@@ -1286,6 +1797,8 @@ router.post(
           .json({ status: "erro", mensagem: "Envie um arquivo PDF" });
       }
 
+      if (!(await requireCompleteClienteCadastro(req, res, login))) return;
+
       const tipo = await getDocumentoTipoById(req, tipoId);
       if (!tipo) {
         return res
@@ -1297,7 +1810,7 @@ router.post(
       if (!userRow || !userRow.Usuario_ID) {
         return res.status(400).json({
           status: "erro",
-          mensagem: "Usuário não encontrado na base MelPetHostel_Usuarios.",
+          mensagem: "Usuário não encontrado para vincular o documento.",
         });
       }
 
@@ -1306,7 +1819,7 @@ router.post(
         return res.status(500).json({
           status: "erro",
           mensagem:
-            "Tabela MelPetHostel_Contratos não está pronta para vincular documento (ID ausente).",
+            `Tabela ${TABLE_NAMES.contratos} não está pronta para vincular documento (ID ausente).`,
         });
       }
 
@@ -1339,12 +1852,30 @@ router.post(
       const diskDir = resolveUploadsDirToDisk(relativeDir);
       await fs.mkdir(diskDir, { recursive: true });
 
+      const docsMeta = await getDocumentosTableMeta(req);
+      if (
+        !docsMeta.exists ||
+        !docsMeta.idCol ||
+        !docsMeta.usuarioIdCol ||
+        !docsMeta.contratoIdCol ||
+        !docsMeta.tipoIdCol ||
+        !docsMeta.filePathCol
+      ) {
+        return res.status(500).json({
+          status: "erro",
+          mensagem: `Tabela ${TABLE_NAMES.documentos} nao esta pronta para upload (colunas obrigatorias ausentes).`,
+        });
+      }
+
       const [existingRows] = await dbFor(req).query(
         `
-          SELECT Id, File_Path
-          FROM MelPetHostel_Documentos
-          WHERE Usuario_ID = ? AND Contrato_ID = ? AND Documento_Tipo_ID = ?
-          ORDER BY Id
+          SELECT ${qcol(docsMeta.idCol)} AS id,
+                 ${qcol(docsMeta.filePathCol)} AS filePath
+          FROM ${qtable(docsMeta.tableName)}
+          WHERE ${qcol(docsMeta.usuarioIdCol)} = ?
+            AND ${qcol(docsMeta.contratoIdCol)} = ?
+            AND ${qcol(docsMeta.tipoIdCol)} = ?
+          ORDER BY ${qcol(docsMeta.idCol)}
         `,
         [userRow.Usuario_ID, contratoId, tipo.Id],
       );
@@ -1377,7 +1908,15 @@ router.post(
       if (docKey === "outros") {
         await dbFor(req).query(
           `
-            INSERT INTO MelPetHostel_Documentos (Usuario_ID, Contrato_ID, Documento_Tipo_ID, File_Path)
+            INSERT INTO ${qtable(docsMeta.tableName)}
+              (${[
+                docsMeta.usuarioIdCol,
+                docsMeta.contratoIdCol,
+                docsMeta.tipoIdCol,
+                docsMeta.filePathCol,
+              ]
+                .map(qcol)
+                .join(", ")})
             VALUES (?, ?, ?, ?)
           `,
           [userRow.Usuario_ID, contratoId, tipo.Id, filePath],
@@ -1385,16 +1924,24 @@ router.post(
       } else if (existingRows && existingRows.length) {
         await dbFor(req).query(
           `
-            UPDATE MelPetHostel_Documentos
-            SET File_Path = ?
-            WHERE Id = ?
+            UPDATE ${qtable(docsMeta.tableName)}
+            SET ${qcol(docsMeta.filePathCol)} = ?
+            WHERE ${qcol(docsMeta.idCol)} = ?
           `,
-          [filePath, existingRows[0].Id],
+          [filePath, existingRows[0].id],
         );
       } else {
         await dbFor(req).query(
           `
-            INSERT INTO MelPetHostel_Documentos (Usuario_ID, Contrato_ID, Documento_Tipo_ID, File_Path)
+            INSERT INTO ${qtable(docsMeta.tableName)}
+              (${[
+                docsMeta.usuarioIdCol,
+                docsMeta.contratoIdCol,
+                docsMeta.tipoIdCol,
+                docsMeta.filePathCol,
+              ]
+                .map(qcol)
+                .join(", ")})
             VALUES (?, ?, ?, ?)
           `,
           [userRow.Usuario_ID, contratoId, tipo.Id, filePath],
@@ -1420,7 +1967,7 @@ router.post(
         return res.status(409).json({
           status: "erro",
           mensagem:
-            "A base ainda está com chave única em MelPetHostel_Documentos. Execute o script API/scripts/drop_unique_mph_documentos.sql para permitir múltiplos 'Outros Documentos'.",
+            `A base ainda está com chave única em ${TABLE_NAMES.documentos}. Execute o script API/scripts/drop_unique_mph_documentos.sql para permitir múltiplos 'Outros Documentos'.`,
         });
       }
 
@@ -1433,10 +1980,8 @@ router.post(
 // List groups
 router.get("/groups", async (req, res) => {
   try {
-    const [rows] = await dbFor(req).query(
-      "SELECT Grupo_ID AS id, Grupo_Nome AS nome, Created_At, Updated_At FROM MelPetHostel_Grupos ORDER BY Grupo_Nome",
-    );
-    return res.json(rows);
+    const grupos = await Grupo.list(req);
+    return res.json(grupos);
   } catch (error) {
     console.error("Error in /melpethostel/groups:", error);
     res.status(500).json({ status: "erro", mensagem: error.message });
@@ -1452,10 +1997,7 @@ router.post("/groups", async (req, res) => {
         .status(400)
         .json({ status: "erro", mensagem: "Nome é obrigatório" });
 
-    await dbFor(req).query(
-      "INSERT INTO MelPetHostel_Grupos (Grupo_Nome) VALUES (?)",
-      [nome.trim()],
-    );
+    await Grupo.create(req, nome.trim());
 
     // create upload folders for the group if not present
     try {
@@ -1483,10 +2025,16 @@ router.post("/groups", async (req, res) => {
 // List users
 router.get("/users", async (req, res) => {
   try {
-    const [rows] = await dbFor(req).query(
-      "SELECT Usuario_ID AS id, Usuario_Login AS login, Usuario_Grupo AS grupo, Created_At, Updated_At FROM MelPetHostel_Usuarios ORDER BY Usuario_Login",
+    const usuarios = await Usuario.list(req);
+    return res.json(
+      usuarios.map((usuario) => ({
+        id: usuario.id,
+        login: usuario.login,
+        grupo: usuario.grupo,
+        Created_At: usuario.created_at,
+        Updated_At: usuario.updated_at,
+      })),
     );
-    return res.json(rows);
   } catch (error) {
     console.error("Error in /melpethostel/users:", error);
     res.status(500).json({ status: "erro", mensagem: error.message });
@@ -1503,11 +2051,28 @@ router.post("/users", async (req, res) => {
         .json({ status: "erro", mensagem: "Login e senha são obrigatórios" });
 
     const senhaHash = await bcrypt.hash(String(senhaProvisoria), 10);
+    const grupoId = Number(grupo);
 
-    await dbFor(req).query(
-      "INSERT INTO MelPetHostel_Usuarios (Usuario_Login, Usuario_Senha, Usuario_Grupo) VALUES (?, ?, ?)",
-      [login.trim(), senhaHash, grupo || null],
-    );
+    if (!Number.isInteger(grupoId) || grupoId <= 0) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Grupo invalido" });
+    }
+
+    const group = await Grupo.findById(req, grupoId);
+    if (!group) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Grupo invalido" });
+    }
+
+    await Usuario.create(req, {
+      login: login.trim(),
+      senhaHash,
+      grupoId,
+      primeiroAcesso: 1,
+      ativo: 1,
+    });
     return res.json({ status: "sucesso", mensagem: "Usuário criado" });
   } catch (error) {
     console.error("Error in POST /melpethostel/users:", error);

@@ -3,17 +3,23 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const path = require("path");
 const fs = require("fs").promises;
+const { getClientFieldValidationMessage } = require("../utils/brFields");
+const {
+  getClienteCadastroStatus,
+  getClienteCadastroValidationMessage,
+} = require("../utils/clientProfile");
 const { sanitizePart } = require("../utils/uploadsUtils");
 const {
   AdminUsuario,
-  MelPetHostelGrupo,
-  MelPetHostelUsuario,
+  Cliente,
+  Endereco,
+  Grupo,
+  Usuario,
 } = require("../models");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
 const DEFAULT_MODULE = "melpethostel";
-const ADMIN_MODULE = "administradores";
 
 function clean(value) {
   return value === undefined || value === null ? "" : String(value).trim();
@@ -44,7 +50,6 @@ function isAdminUser(req) {
   return Boolean(
     user.admin ||
       user.isAdmin ||
-      user.source === "usuarios" ||
       values.some((value) => isAdminGroupValue(value)),
   );
 }
@@ -58,13 +63,6 @@ function requireAdmin(req, res) {
     return false;
   }
   return true;
-}
-
-function getModulo(req) {
-  const value = clean(req.query?.modulo || req.body?.modulo || DEFAULT_MODULE)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
-  return value || DEFAULT_MODULE;
 }
 
 function sanitizeSegment(value, fallback = "") {
@@ -117,20 +115,142 @@ async function resolveMelPetHostelGroupName(req, groupValue) {
   if (!value) return null;
 
   if (isNumeric(value)) {
-    const group = await MelPetHostelGrupo.findById(req, Number(value));
-    return group ? group.Grupo_Nome : null;
+    const group = await Grupo.findById(req, Number(value));
+    return group ? group.Grupo_Nome || group.nome : null;
   }
 
   return value;
 }
 
-async function resolveMelPetHostelGroupId(req, groupValue) {
+async function resolveGroupName(req, groupValue) {
+  const value = clean(groupValue);
+  if (!value) return null;
+
+  if (isNumeric(value)) {
+    const group = await Grupo.findById(req, Number(value));
+    return group ? group.nome || group.Nome_Grupo : null;
+  }
+
+  return value;
+}
+
+async function resolveGroupId(req, groupValue) {
   const value = clean(groupValue);
   if (!value) return null;
   if (isNumeric(value)) return Number(value);
 
-  const group = await MelPetHostelGrupo.findByName(req, value);
-  return group ? group.Grupo_ID : null;
+  const group = await Grupo.findByName(req, value);
+  return group ? group.id : null;
+}
+
+function parseDbBoolean(value, fallback = true) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (value === true || value === 1 || value === "1") return true;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "sim", "s", "yes"].includes(normalized)) return true;
+    if (["false", "nao", "n", "no", "0"].includes(normalized)) return false;
+  }
+  return Boolean(value);
+}
+
+function getClientePayload(body = {}) {
+  const source = body.cliente && typeof body.cliente === "object"
+    ? body.cliente
+    : body;
+
+  return {
+    nome: clean(source.nome),
+    cpf: clean(source.cpf),
+    rg: clean(source.rg),
+    data_nascimento: clean(source.data_nascimento),
+    telefone: clean(source.telefone),
+    whatsapp: clean(source.whatsapp),
+    email: clean(source.email),
+    observacoes: clean(source.observacoes),
+    ativo: parseDbBoolean(source.ativo, true),
+  };
+}
+
+function getEnderecoPayloads(body = {}) {
+  const source = body.cliente && typeof body.cliente === "object"
+    ? body.cliente
+    : body;
+
+  return Array.isArray(source.enderecos) ? source.enderecos : [];
+}
+
+function hasClientePayload(body = {}) {
+  if (body.cliente && typeof body.cliente === "object") return true;
+
+  return [
+    "nome",
+    "cpf",
+    "rg",
+    "data_nascimento",
+    "telefone",
+    "whatsapp",
+    "email",
+    "observacoes",
+  ].some((key) => Object.prototype.hasOwnProperty.call(body, key));
+}
+
+function requireValidClientePayload(payload, res) {
+  const mensagem = getClientFieldValidationMessage(payload);
+  if (mensagem) {
+    res.status(400).json({ status: "erro", mensagem });
+    return false;
+  }
+  return true;
+}
+
+function requireValidEnderecoPayloads(addresses, res) {
+  const mensagem = Endereco.getListValidationMessage(addresses);
+  if (mensagem) {
+    res.status(400).json({ status: "erro", mensagem });
+    return false;
+  }
+  return true;
+}
+
+function requireCompleteClienteCadastro(payload, enderecos, res) {
+  const mensagem = getClienteCadastroValidationMessage(payload, enderecos);
+  if (mensagem) {
+    res.status(400).json({ status: "erro", mensagem });
+    return false;
+  }
+  return true;
+}
+
+async function attachEnderecosToCliente(req, cliente) {
+  if (!cliente || !cliente.id) return cliente;
+  return {
+    ...cliente,
+    enderecos: await Endereco.listByCliente(req, cliente.id),
+  };
+}
+
+function buildClienteProfileResponse(cliente) {
+  const cadastro = getClienteCadastroStatus(cliente, cliente?.enderecos);
+  return {
+    cliente,
+    pendente: cadastro.pendente,
+    cadastroCompleto: cadastro.completo,
+    pendencias: cadastro.pendencias,
+    enderecoPrincipal: cadastro.enderecoPrincipal,
+  };
+}
+
+async function attachEnderecosToUser(req, user) {
+  if (!user || !user.cliente) return user;
+  return {
+    ...user,
+    cliente: await attachEnderecosToCliente(req, user.cliente),
+  };
+}
+
+async function attachEnderecosToUsers(req, users) {
+  return Promise.all((users || []).map((user) => attachEnderecosToUser(req, user)));
 }
 
 function userNeedsFirstAccess(row) {
@@ -146,14 +266,44 @@ function userNeedsFirstAccess(row) {
 }
 
 function createTokenPayload({ row, source, grupo, grupoNome }) {
+  const admin = isAdminGroupValue(grupoNome || grupo);
+
   return {
     id: row.Usuario_ID,
     login: row.Usuario_Login,
     grupo: grupo || null,
     grupoNome: grupoNome || null,
+    admin,
     source,
     modules: [DEFAULT_MODULE],
   };
+}
+
+function getPasswordHash(row) {
+  return row && (row.Usuario_Senha || row.usuario_senha);
+}
+
+function buildReservedClientePayload(login) {
+  return {
+    nome: `Cadastro pendente - ${clean(login) || "usuario"}`,
+    observacoes: "Cadastro reservado para preenchimento no primeiro acesso.",
+    ativo: true,
+  };
+}
+
+function requireAuthenticatedUser(req, res) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    res.status(401).json({ status: "erro", mensagem: "Token nao fornecido" });
+    return null;
+  }
+
+  try {
+    return jwt.verify(authHeader.replace("Bearer ", ""), JWT_SECRET);
+  } catch {
+    res.status(401).json({ status: "erro", mensagem: "Token invalido" });
+    return null;
+  }
 }
 
 router.get("/login", (req, res) => {
@@ -175,12 +325,12 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    let match = await AdminUsuario.findByLogin(req, login);
+    let match = await Usuario.findByLogin(req, login);
     let source = match ? "usuarios" : null;
 
     if (!match) {
-      match = await MelPetHostelUsuario.findByLogin(req, login);
-      source = match ? DEFAULT_MODULE : null;
+      match = await AdminUsuario.findByLogin(req, login);
+      source = match ? "legacy-admin" : null;
     }
 
     if (!match) {
@@ -189,25 +339,58 @@ router.post("/login", async (req, res) => {
         .json({ status: "erro", mensagem: "Usuario ou senha invalidos" });
     }
 
-    const senhaValida = await bcrypt.compare(senha, match.Usuario_Senha);
+    if (match.ativo === false || match.ativo === 0) {
+      return res
+        .status(403)
+        .json({ status: "erro", mensagem: "Usuario inativo" });
+    }
+
+    const passwordHash = getPasswordHash(match);
+    if (!passwordHash) {
+      return res.status(500).json({
+        status: "erro",
+        mensagem: "Cadastro do usuario sem senha cadastrada.",
+      });
+    }
+
+    const senhaValida = await bcrypt.compare(senha, passwordHash);
     if (!senhaValida) {
       return res
         .status(401)
         .json({ status: "erro", mensagem: "Usuario ou senha invalidos" });
     }
 
-    const grupo = match.Grupo_ID || match.Usuario_Grupo || null;
-    const grupoNome =
-      source === "usuarios"
+    const grupo =
+      source === "legacy-admin"
         ? clean(match.Usuario_Grupo) || "Administradores"
-        : await resolveMelPetHostelGroupName(req, grupo);
+        : match.Grupo_ID || match.grupo || null;
+    let grupoNome;
+
+    if (source === "usuarios") {
+      grupoNome = match.grupoNome || (await resolveGroupName(req, grupo));
+    } else if (source === "legacy-admin") {
+      grupoNome = grupo;
+    } else {
+      grupoNome = await resolveMelPetHostelGroupName(req, grupo);
+    }
+
+    const admin =
+      source === "legacy-admin" || isAdminGroupValue(grupoNome || grupo);
 
     await ensureUserDir({
       login: match.Usuario_Login,
       grupoNome,
-      admin: source === "usuarios" || isAdminGroupValue(grupoNome),
+      admin,
     });
 
+    let cadastro = { pendente: false, completo: true };
+    if (source === "usuarios") {
+      const enderecos = await Endereco.listByCliente(
+        req,
+        match.Cliente_ID || match.clienteId,
+      );
+      cadastro = getClienteCadastroStatus(match.cliente, enderecos);
+    }
     const payload = createTokenPayload({ row: match, source, grupo, grupoNome });
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "1h" });
 
@@ -220,6 +403,11 @@ router.post("/login", async (req, res) => {
         login: match.Usuario_Login,
         grupo: grupo || null,
         grupoNome: grupoNome || null,
+        clienteId: match.Cliente_ID || match.clienteId || null,
+        clienteCadastroPendente: Boolean(cadastro.pendente),
+        cadastroCompleto: Boolean(cadastro.completo),
+        admin,
+        source,
         modules: [DEFAULT_MODULE],
         primeiroAcesso: userNeedsFirstAccess(match),
       },
@@ -309,18 +497,19 @@ router.post("/alterar-senha", async (req, res) => {
     let source = decoded.source || null;
 
     if (source === "usuarios") {
+      usuario = await Usuario.findById(req, decoded.id);
+    } else if (source === "legacy-admin") {
       usuario = await AdminUsuario.findById(req, decoded.id);
-    } else if (source === DEFAULT_MODULE) {
-      usuario = await MelPetHostelUsuario.findById(req, decoded.id);
     }
 
     if (!usuario) {
-      usuario =
-        (await AdminUsuario.findById(req, decoded.id)) ||
-        (await MelPetHostelUsuario.findById(req, decoded.id));
-      source = usuario && isAdminGroupValue(usuario.Usuario_Grupo)
-        ? "usuarios"
-        : DEFAULT_MODULE;
+      usuario = await Usuario.findById(req, decoded.id);
+      source = usuario ? "usuarios" : null;
+    }
+
+    if (!usuario) {
+      usuario = await AdminUsuario.findById(req, decoded.id);
+      source = usuario ? "legacy-admin" : null;
     }
 
     if (!usuario) {
@@ -329,10 +518,15 @@ router.post("/alterar-senha", async (req, res) => {
         .json({ status: "erro", mensagem: "Usuario nao encontrado" });
     }
 
-    const senhaValida = await bcrypt.compare(
-      String(senhaAtual),
-      usuario.Usuario_Senha,
-    );
+    const passwordHash = getPasswordHash(usuario);
+    if (!passwordHash) {
+      return res.status(500).json({
+        status: "erro",
+        mensagem: "Cadastro do usuario sem senha cadastrada.",
+      });
+    }
+
+    const senhaValida = await bcrypt.compare(String(senhaAtual), passwordHash);
     if (!senhaValida) {
       return res
         .status(401)
@@ -341,9 +535,11 @@ router.post("/alterar-senha", async (req, res) => {
 
     const senhaHash = await bcrypt.hash(String(novaSenha), 10);
     if (source === "usuarios") {
+      await Usuario.updatePassword(req, decoded.id, senhaHash, {
+        primeiroAcesso: false,
+      });
+    } else if (source === "legacy-admin") {
       await AdminUsuario.updatePassword(req, decoded.id, senhaHash);
-    } else {
-      await MelPetHostelUsuario.updatePassword(req, decoded.id, senhaHash);
     }
 
     res.json({ status: "sucesso", mensagem: "Senha alterada com sucesso" });
@@ -353,22 +549,113 @@ router.post("/alterar-senha", async (req, res) => {
   }
 });
 
+router.get("/me/cliente", async (req, res) => {
+  try {
+    const decoded = requireAuthenticatedUser(req, res);
+    if (!decoded) return;
+
+    if (decoded.source !== "usuarios") {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Cadastro de cliente indisponivel para este usuario.",
+      });
+    }
+
+    const usuario = await Usuario.findById(req, decoded.id);
+    if (!usuario) {
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Usuario nao encontrado" });
+    }
+
+    let cliente = usuario.cliente || null;
+    if (!cliente) {
+      cliente = await Cliente.create(
+        req,
+        buildReservedClientePayload(usuario.Usuario_Login),
+      );
+      await Usuario.update(req, usuario.Usuario_ID, {
+        login: usuario.Usuario_Login,
+        grupoId: usuario.Grupo_ID,
+        clienteId: cliente.id,
+      });
+    }
+
+    cliente = await attachEnderecosToCliente(req, cliente);
+
+    res.json({
+      status: "sucesso",
+      ...buildClienteProfileResponse(cliente),
+    });
+  } catch (error) {
+    console.error("Error in GET /auth/me/cliente:", error);
+    res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.put("/me/cliente", async (req, res) => {
+  try {
+    const decoded = requireAuthenticatedUser(req, res);
+    if (!decoded) return;
+
+    if (decoded.source !== "usuarios") {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Cadastro de cliente indisponivel para este usuario.",
+      });
+    }
+
+    const usuario = await Usuario.findById(req, decoded.id);
+    if (!usuario) {
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Usuario nao encontrado" });
+    }
+
+    const payload = getClientePayload(req.body || {});
+    const enderecos = getEnderecoPayloads(req.body || {});
+    if (!payload.nome) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Nome e obrigatorio" });
+    }
+    if (!requireValidClientePayload(payload, res)) return;
+    if (!requireValidEnderecoPayloads(enderecos, res)) return;
+    if (!requireCompleteClienteCadastro(payload, enderecos, res)) return;
+
+    let clienteId = usuario.Cliente_ID || null;
+    if (clienteId) {
+      await Cliente.update(req, clienteId, payload);
+    } else {
+      const cliente = await Cliente.create(req, payload);
+      clienteId = cliente.id;
+      await Usuario.update(req, usuario.Usuario_ID, {
+        login: usuario.Usuario_Login,
+        grupoId: usuario.Grupo_ID,
+        clienteId,
+      });
+    }
+
+    await Endereco.replaceForCliente(req, clienteId, enderecos);
+    const cliente = await attachEnderecosToCliente(
+      req,
+      await Cliente.findById(req, clienteId),
+    );
+    res.json({
+      status: "sucesso",
+      mensagem: "Cadastro atualizado",
+      ...buildClienteProfileResponse(cliente),
+    });
+  } catch (error) {
+    console.error("Error in PUT /auth/me/cliente:", error);
+    res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
 router.get("/groups", async (req, res) => {
   try {
     if (!requireAdmin(req, res)) return;
-    const modulo = getModulo(req);
-
-    if (modulo === DEFAULT_MODULE) {
-      return res.json(await MelPetHostelGrupo.list(req));
-    }
-
-    if (modulo === ADMIN_MODULE) {
-      return res.json(await AdminUsuario.listAdminGroups(req));
-    }
-
-    return res
-      .status(400)
-      .json({ status: "erro", mensagem: "Modulo nao suportado" });
+    return res.json(await Grupo.list(req));
   } catch (error) {
     console.error("Error in GET /auth/groups:", error);
     res.status(500).json({ status: "erro", mensagem: error.message });
@@ -379,7 +666,6 @@ router.post("/groups", async (req, res) => {
   try {
     if (!requireAdmin(req, res)) return;
     const nome = clean(req.body?.nome);
-    const modulo = getModulo(req);
 
     if (!nome) {
       return res
@@ -387,22 +673,9 @@ router.post("/groups", async (req, res) => {
         .json({ status: "erro", mensagem: "Nome e obrigatorio" });
     }
 
-    if (modulo === DEFAULT_MODULE) {
-      const group = await MelPetHostelGrupo.create(req, nome);
-      await ensureGroupDirs(group.Grupo_Nome);
-      return res.json({ status: "sucesso", mensagem: "Grupo criado", group });
-    }
-
-    if (modulo === ADMIN_MODULE) {
-      return res.json({
-        status: "sucesso",
-        mensagem: "Use o grupo Administradores ao criar usuarios admin.",
-      });
-    }
-
-    return res
-      .status(400)
-      .json({ status: "erro", mensagem: "Modulo nao suportado" });
+    const group = await Grupo.create(req, nome);
+    await ensureGroupDirs(group.nome);
+    return res.json({ status: "sucesso", mensagem: "Grupo criado", group });
   } catch (error) {
     console.error("Error in POST /auth/groups:", error);
     res.status(500).json({ status: "erro", mensagem: error.message });
@@ -412,19 +685,8 @@ router.post("/groups", async (req, res) => {
 router.get("/users", async (req, res) => {
   try {
     if (!requireAdmin(req, res)) return;
-    const modulo = getModulo(req);
-
-    if (modulo === DEFAULT_MODULE) {
-      return res.json(await MelPetHostelUsuario.list(req));
-    }
-
-    if (modulo === ADMIN_MODULE) {
-      return res.json(await AdminUsuario.listAdmins(req));
-    }
-
-    return res
-      .status(400)
-      .json({ status: "erro", mensagem: "Modulo nao suportado" });
+    const users = await Usuario.list(req);
+    return res.json(await attachEnderecosToUsers(req, users));
   } catch (error) {
     console.error("Error in GET /auth/users:", error);
     res.status(500).json({ status: "erro", mensagem: error.message });
@@ -437,72 +699,77 @@ router.post("/users", async (req, res) => {
     const login = clean(req.body?.login);
     const senhaProvisoria = clean(req.body?.senhaProvisoria);
     const grupo = req.body?.grupo;
-    const modulo = getModulo(req);
+    const ativo = parseDbBoolean(req.body?.ativo, true);
 
-    if (!login || !senhaProvisoria) {
+    if (!login || !senhaProvisoria || !grupo) {
       return res.status(400).json({
         status: "erro",
-        mensagem: "Login e senha provisoria sao obrigatorios",
+        mensagem: "Login, senha provisoria e grupo sao obrigatorios",
       });
     }
 
-    const existingAdmin = await AdminUsuario.findByLogin(req, login);
-    const existingMelPetHostel = await MelPetHostelUsuario.findByLogin(
-      req,
-      login,
-    );
-    if (existingAdmin || existingMelPetHostel) {
+    const existingUser = await Usuario.findByLogin(req, login);
+    const existingLegacyAdmin = await AdminUsuario.findByLogin(req, login);
+    if (existingUser || existingLegacyAdmin) {
       return res
         .status(400)
         .json({ status: "erro", mensagem: "Usuario ja existe" });
     }
 
-    const senhaHash = await bcrypt.hash(senhaProvisoria, 10);
+    const grupoId = await resolveGroupId(req, grupo);
+    if (!grupoId) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Grupo invalido" });
+    }
 
-    if (modulo === DEFAULT_MODULE) {
-      const grupoId = await resolveMelPetHostelGroupId(req, grupo);
-      if (!grupoId) {
-        return res
-          .status(400)
-          .json({ status: "erro", mensagem: "Grupo invalido" });
+    const grupoRec = await Grupo.findById(req, grupoId);
+    const grupoNome = grupoRec && (grupoRec.nome || grupoRec.Nome_Grupo);
+    const isAdministrator = isAdminGroupValue(grupoNome);
+    const clientePayload = getClientePayload(req.body || {});
+    const enderecos = getEnderecoPayloads(req.body || {});
+    let cliente;
+
+    if (isAdministrator) {
+      if (!clientePayload.nome) {
+        return res.status(400).json({
+          status: "erro",
+          mensagem: "Nome do cliente e obrigatorio para administradores",
+        });
+      }
+      if (!requireValidClientePayload(clientePayload, res)) return;
+      if (!requireValidEnderecoPayloads(enderecos, res)) return;
+      if (!requireCompleteClienteCadastro(clientePayload, enderecos, res)) {
+        return;
       }
 
-      const grupoRec = await MelPetHostelGrupo.findById(req, grupoId);
-      const created = await MelPetHostelUsuario.create(req, {
-        login,
-        senhaHash,
-        grupoId,
-        grupoNome: grupoRec && grupoRec.Grupo_Nome,
-      });
-      await ensureUserDir({
-        login,
-        grupoNome: grupoRec && grupoRec.Grupo_Nome,
-      });
-      return res.json({
-        status: "sucesso",
-        mensagem: "Usuario criado",
-        user: created,
-      });
+      cliente = await Cliente.create(req, clientePayload);
+      await Endereco.replaceForCliente(req, cliente.id, enderecos);
+    } else {
+      cliente = await Cliente.create(req, buildReservedClientePayload(login));
     }
 
-    if (modulo === ADMIN_MODULE) {
-      const groupName = clean(grupo) || "Administradores";
-      const created = await AdminUsuario.create(req, {
-        login,
-        senhaHash,
-        grupo: groupName,
-      });
-      await ensureUserDir({ login, grupoNome: groupName, admin: true });
-      return res.json({
-        status: "sucesso",
-        mensagem: "Usuario criado",
-        user: created,
-      });
-    }
+    const senhaHash = await bcrypt.hash(senhaProvisoria, 10);
+    const created = await Usuario.create(req, {
+      login,
+      senhaHash,
+      grupoId,
+      clienteId: cliente.id,
+      primeiroAcesso: isAdministrator ? 0 : 1,
+      ativo,
+    });
 
-    return res
-      .status(400)
-      .json({ status: "erro", mensagem: "Modulo nao suportado" });
+    await ensureUserDir({
+      login,
+      grupoNome,
+      admin: isAdministrator,
+    });
+
+    return res.json({
+      status: "sucesso",
+      mensagem: "Usuario criado",
+      user: await attachEnderecosToUser(req, created),
+    });
   } catch (error) {
     console.error("Error in POST /auth/users:", error);
     res.status(500).json({ status: "erro", mensagem: error.message });
@@ -515,98 +782,112 @@ router.put("/users/:id", async (req, res) => {
     const id = Number(req.params.id);
     const login = clean(req.body?.login);
     const grupo = req.body?.grupo;
-    const modulo = getModulo(req);
+    const hasAtivo = Object.prototype.hasOwnProperty.call(req.body || {}, "ativo");
 
-    if (!id || !login) {
+    if (!id || !login || !grupo) {
       return res.status(400).json({
         status: "erro",
-        mensagem: "ID e login sao obrigatorios",
+        mensagem: "ID, login e grupo sao obrigatorios",
       });
     }
 
-    const existingAdmin = await AdminUsuario.findByLogin(req, login);
-    const existingMelPetHostel = await MelPetHostelUsuario.findByLogin(
-      req,
-      login,
-    );
+    const currentUser = await Usuario.findById(req, id);
+    if (!currentUser) {
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Usuario nao encontrado" });
+    }
 
-    if (
-      existingAdmin &&
-      (modulo !== ADMIN_MODULE || Number(existingAdmin.Usuario_ID) !== id)
-    ) {
+    const loginChanged = clean(currentUser.Usuario_Login) !== login;
+    const existingUser = await Usuario.findByLogin(req, login);
+
+    if (existingUser && Number(existingUser.Usuario_ID) !== id) {
       return res
         .status(400)
         .json({ status: "erro", mensagem: "Usuario ja existe" });
     }
 
-    if (
-      existingMelPetHostel &&
-      (modulo !== DEFAULT_MODULE ||
-        Number(existingMelPetHostel.Usuario_ID) !== id)
-    ) {
-      return res
-        .status(400)
-        .json({ status: "erro", mensagem: "Usuario ja existe" });
-    }
+    if (loginChanged) {
+      const existingLegacyAdmin = await AdminUsuario.findByLogin(req, login);
 
-    if (modulo === DEFAULT_MODULE) {
-      const grupoId = await resolveMelPetHostelGroupId(req, grupo);
-      if (!grupoId) {
+      if (existingLegacyAdmin) {
         return res
           .status(400)
-          .json({ status: "erro", mensagem: "Grupo invalido" });
+          .json({ status: "erro", mensagem: "Usuario ja existe" });
       }
-
-      const grupoRec = await MelPetHostelGrupo.findById(req, grupoId);
-      const result = await MelPetHostelUsuario.update(req, id, {
-        login,
-        grupoId,
-        grupoNome: grupoRec && grupoRec.Grupo_Nome,
-      });
-
-      if (!result || result.affectedRows === 0) {
-        return res
-          .status(404)
-          .json({ status: "erro", mensagem: "Usuario nao encontrado" });
-      }
-
-      await ensureUserDir({
-        login,
-        grupoNome: grupoRec && grupoRec.Grupo_Nome,
-      });
-
-      return res.json({
-        status: "sucesso",
-        mensagem: "Usuario atualizado",
-        user: await MelPetHostelUsuario.findById(req, id),
-      });
     }
 
-    if (modulo === ADMIN_MODULE) {
-      const groupName = clean(grupo) || "Administradores";
-      const result = await AdminUsuario.update(req, id, {
-        login,
-        grupo: groupName,
-      });
-
-      if (!result || result.affectedRows === 0) {
-        return res
-          .status(404)
-          .json({ status: "erro", mensagem: "Usuario nao encontrado" });
-      }
-
-      await ensureUserDir({ login, grupoNome: groupName, admin: true });
-
-      return res.json({
-        status: "sucesso",
-        mensagem: "Usuario atualizado",
-        user: await AdminUsuario.findById(req, id),
-      });
+    const grupoId = await resolveGroupId(req, grupo);
+    if (!grupoId) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Grupo invalido" });
     }
 
-    return res
-      .status(400)
-      .json({ status: "erro", mensagem: "Modulo nao suportado" });
+    const grupoRec = await Grupo.findById(req, grupoId);
+    const grupoNome = grupoRec && (grupoRec.nome || grupoRec.Nome_Grupo);
+    const isAdministrator = isAdminGroupValue(grupoNome);
+    const shouldUpdateCliente = hasClientePayload(req.body || {});
+    const clientePayload = shouldUpdateCliente
+      ? getClientePayload(req.body || {})
+      : null;
+    const enderecos = getEnderecoPayloads(req.body || {});
+    let clienteId = currentUser.Cliente_ID || null;
+
+    if (isAdministrator) {
+      if ((!clientePayload || !clientePayload.nome) && !clienteId) {
+        return res.status(400).json({
+          status: "erro",
+          mensagem: "Nome do cliente e obrigatorio para administradores",
+        });
+      }
+      if (clientePayload && !requireValidClientePayload(clientePayload, res)) {
+        return;
+      }
+      if (!requireValidEnderecoPayloads(enderecos, res)) return;
+      if (
+        clientePayload &&
+        !requireCompleteClienteCadastro(clientePayload, enderecos, res)
+      ) {
+        return;
+      }
+
+      if (clienteId && shouldUpdateCliente) {
+        await Cliente.update(req, clienteId, clientePayload);
+      } else if (!clienteId && clientePayload) {
+        const cliente = await Cliente.create(req, clientePayload);
+        clienteId = cliente.id;
+      }
+
+      if (clienteId) {
+        await Endereco.replaceForCliente(req, clienteId, enderecos);
+      }
+    }
+
+    const result = await Usuario.update(req, id, {
+      login,
+      grupoId,
+      clienteId,
+      ativo: hasAtivo ? parseDbBoolean(req.body?.ativo, true) : undefined,
+    });
+
+    if (!result || result.affectedRows === 0) {
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Usuario nao encontrado" });
+    }
+
+    await ensureUserDir({
+      login,
+      grupoNome,
+      admin: isAdministrator,
+    });
+
+    return res.json({
+      status: "sucesso",
+      mensagem: "Usuario atualizado",
+      user: await attachEnderecosToUser(req, await Usuario.findById(req, id)),
+    });
   } catch (error) {
     console.error("Error in PUT /auth/users/:id:", error);
     res.status(500).json({ status: "erro", mensagem: error.message });
@@ -618,7 +899,7 @@ router.put("/users/:id/password", async (req, res) => {
     if (!requireAdmin(req, res)) return;
     const id = Number(req.params.id);
     const novaSenha = clean(req.body?.novaSenha);
-    const modulo = getModulo(req);
+    const primeiroAcesso = parseDbBoolean(req.body?.primeiroAcesso, false);
 
     if (!id || !novaSenha || novaSenha.length < 6) {
       return res.status(400).json({
@@ -628,13 +909,9 @@ router.put("/users/:id/password", async (req, res) => {
     }
 
     const senhaHash = await bcrypt.hash(novaSenha, 10);
-    let result;
-
-    if (modulo === ADMIN_MODULE) {
-      result = await AdminUsuario.updatePassword(req, id, senhaHash);
-    } else {
-      result = await MelPetHostelUsuario.updatePassword(req, id, senhaHash);
-    }
+    const result = await Usuario.updatePassword(req, id, senhaHash, {
+      primeiroAcesso,
+    });
 
     if (!result || result.affectedRows === 0) {
       return res
@@ -653,7 +930,6 @@ router.delete("/groups/:id", async (req, res) => {
   try {
     if (!requireAdmin(req, res)) return;
     const id = req.params.id;
-    const modulo = getModulo(req);
 
     if (!id) {
       return res
@@ -661,34 +937,17 @@ router.delete("/groups/:id", async (req, res) => {
         .json({ status: "erro", mensagem: "ID e obrigatorio" });
     }
 
-    if (modulo === ADMIN_MODULE) {
-      await AdminUsuario.removeAllAdmins(req);
-      await removeUploadsDirRecursive(
-        path.join(getUploadsRoot(), "Administradores"),
-      );
-      return res.json({ status: "sucesso", mensagem: "Grupo removido" });
-    }
-
-    if (modulo !== DEFAULT_MODULE) {
-      return res
-        .status(400)
-        .json({ status: "erro", mensagem: "Modulo nao suportado" });
-    }
-
-    const group = await MelPetHostelGrupo.findById(req, id);
+    const group = await Grupo.findById(req, id);
     if (!group) {
       return res
         .status(404)
         .json({ status: "erro", mensagem: "Grupo nao encontrado" });
     }
 
-    await MelPetHostelUsuario.removeByGroup(req, {
-      grupoId: id,
-      grupoNome: group.Grupo_Nome,
-    });
-    await MelPetHostelGrupo.remove(req, id);
+    await Usuario.removeByGroup(req, id);
+    await Grupo.remove(req, id);
     await removeUploadsDirRecursive(
-      path.join(getUploadsRoot(), sanitizeSegment(group.Grupo_Nome)),
+      path.join(getUploadsRoot(), sanitizeSegment(group.nome)),
     );
 
     res.json({ status: "sucesso", mensagem: "Grupo removido" });
@@ -702,7 +961,6 @@ router.delete("/users/:id", async (req, res) => {
   try {
     if (!requireAdmin(req, res)) return;
     const id = Number(req.params.id);
-    const modulo = getModulo(req);
 
     if (!id) {
       return res
@@ -710,35 +968,11 @@ router.delete("/users/:id", async (req, res) => {
         .json({ status: "erro", mensagem: "ID e obrigatorio" });
     }
 
-    if (modulo === ADMIN_MODULE) {
-      const user = await AdminUsuario.findById(req, id);
-      await AdminUsuario.remove(req, id);
-      if (user) {
-        await removeUploadsDirRecursive(
-          path.join(
-            getUploadsRoot(),
-            "Administradores",
-            sanitizeSegment(user.Usuario_Login, `usuario-${id}`),
-          ),
-        );
-      }
-      return res.json({ status: "sucesso", mensagem: "Usuario removido" });
-    }
-
-    if (modulo !== DEFAULT_MODULE) {
-      return res
-        .status(400)
-        .json({ status: "erro", mensagem: "Modulo nao suportado" });
-    }
-
-    const user = await MelPetHostelUsuario.findById(req, id);
-    await MelPetHostelUsuario.remove(req, id);
+    const user = await Usuario.findById(req, id);
+    await Usuario.remove(req, id);
 
     if (user) {
-      const grupoNome = await resolveMelPetHostelGroupName(
-        req,
-        user.Grupo_ID || user.Usuario_Grupo,
-      );
+      const grupoNome = user.grupoNome || (await resolveGroupName(req, user.Grupo_ID));
       const safeGroup = sanitizeSegment(grupoNome);
       const safeLogin = sanitizeSegment(user.Usuario_Login, `usuario-${id}`);
       if (safeGroup) {

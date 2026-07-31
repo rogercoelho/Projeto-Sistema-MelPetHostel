@@ -23,6 +23,21 @@ function onlyDigits(value) {
   return String(value || "").replace(/\D/g, "");
 }
 
+function clean(value) {
+  return value === undefined || value === null ? "" : String(value).trim();
+}
+
+function normalizeContractorData(data) {
+  return {
+    ...EMPTY_CONTRACTOR,
+    ...(data || {}),
+  };
+}
+
+function hasImportedContractorData(data) {
+  return Object.values(data || {}).some((value) => clean(value));
+}
+
 function maskCpf(value) {
   const digits = onlyDigits(value).slice(0, 11);
   const p1 = digits.slice(0, 3);
@@ -125,7 +140,13 @@ function ContractSection({ number, title, children }) {
   );
 }
 
-function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
+function ContractModal({
+  isOpen,
+  initialContractorData,
+  onClose,
+  onGovBrSign,
+  onRejectBeforeAccept,
+}) {
   const govBrSignerUrl = "https://assinador.iti.br/assinatura/index.xhtml";
   const [contractorData, setContractorData] = useState(EMPTY_CONTRACTOR);
   const [cepLoading, setCepLoading] = useState(false);
@@ -138,8 +159,19 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const lastCepLookupRef = useRef("");
   const currentCepDigitsRef = useRef("");
+  const contractorFieldsLocked = hasImportedContractorData(
+    initialContractorData,
+  );
   const cepDigits = onlyDigits(contractorData.cep);
-  const addressLocked = cepLoading || cepDigits.length !== 8;
+  const addressLookupLocked = cepLoading || cepDigits.length !== 8;
+  const addressLocked = contractorFieldsLocked || addressLookupLocked;
+  const importedFieldProps = contractorFieldsLocked
+    ? {
+        readOnly: true,
+        "aria-readonly": true,
+        className: "is-readonly",
+      }
+    : {};
   const browserName = getBrowserName();
   const signatureCity = contractorData.cidade?.trim() || "Cidade não informada";
   const signatureDate = formatDateLong(signatureMoment);
@@ -147,7 +179,8 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
 
   useEffect(() => {
     if (isOpen) {
-      setContractorData(EMPTY_CONTRACTOR);
+      const nextContractorData = normalizeContractorData(initialContractorData);
+      setContractorData(nextContractorData);
       setCepLoading(false);
       setCepFeedback("");
       setSignatureMoment(new Date());
@@ -156,9 +189,9 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
       setSaveDialogPending(false);
       setRejectDialogOpen(false);
       lastCepLookupRef.current = "";
-      currentCepDigitsRef.current = "";
+      currentCepDigitsRef.current = onlyDigits(nextContractorData.cep);
     }
-  }, [isOpen]);
+  }, [initialContractorData, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -697,6 +730,7 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
                       onChange={(e) => updateField("nome", e.target.value)}
                       placeholder="Nome completo"
                       required
+                      {...importedFieldProps}
                     />
                   </label>
 
@@ -713,6 +747,7 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
                       inputMode="text"
                       maxLength={12}
                       required
+                      {...importedFieldProps}
                     />
                   </label>
 
@@ -729,6 +764,7 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
                       inputMode="numeric"
                       maxLength={14}
                       required
+                      {...importedFieldProps}
                     />
                   </label>
 
@@ -745,6 +781,7 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
                       inputMode="tel"
                       maxLength={34}
                       required
+                      {...importedFieldProps}
                     />
                   </label>
 
@@ -757,6 +794,7 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
                       onChange={(e) => updateField("email", e.target.value)}
                       placeholder="email@exemplo.com"
                       required
+                      {...importedFieldProps}
                     />
                   </label>
 
@@ -768,11 +806,15 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
                         name="cep"
                         value={contractorData.cep}
                         onChange={(e) => handleCepChange(e.target.value)}
-                        onBlur={(e) => lookupCepAndFill(e.target.value)}
+                        onBlur={(e) =>
+                          !contractorFieldsLocked &&
+                          lookupCepAndFill(e.target.value)
+                        }
                         placeholder="00000-000"
                         inputMode="numeric"
                         maxLength={9}
                         required
+                        {...importedFieldProps}
                       />
                       {(cepLoading || cepFeedback) && (
                         <small className="contract-field-help">
@@ -794,6 +836,7 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
                           }
                           placeholder="Nº"
                           required
+                          {...importedFieldProps}
                         />
                       </label>
 
@@ -808,6 +851,7 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
                             updateField("complemento", e.target.value)
                           }
                           placeholder="Apto, casa, bloco..."
+                          {...importedFieldProps}
                         />
                       </label>
                     </div>
@@ -818,9 +862,17 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
                         type="text"
                         name="endereco"
                         value={contractorData.endereco}
-                        disabled={addressLocked}
-                        aria-disabled={addressLocked}
-                        className={addressLocked ? "is-disabled" : ""}
+                        disabled={addressLookupLocked}
+                        readOnly={contractorFieldsLocked}
+                        aria-disabled={addressLookupLocked}
+                        aria-readonly={contractorFieldsLocked}
+                        className={
+                          addressLocked
+                            ? contractorFieldsLocked
+                              ? "is-readonly"
+                              : "is-disabled"
+                            : ""
+                        }
                         onChange={(e) =>
                           updateField("endereco", e.target.value)
                         }
@@ -835,9 +887,17 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
                         type="text"
                         name="bairro"
                         value={contractorData.bairro}
-                        disabled={addressLocked}
-                        aria-disabled={addressLocked}
-                        className={addressLocked ? "is-disabled" : ""}
+                        disabled={addressLookupLocked}
+                        readOnly={contractorFieldsLocked}
+                        aria-disabled={addressLookupLocked}
+                        aria-readonly={contractorFieldsLocked}
+                        className={
+                          addressLocked
+                            ? contractorFieldsLocked
+                              ? "is-readonly"
+                              : "is-disabled"
+                            : ""
+                        }
                         onChange={(e) => updateField("bairro", e.target.value)}
                         placeholder="Bairro"
                         required
@@ -850,9 +910,17 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
                         type="text"
                         name="cidade"
                         value={contractorData.cidade}
-                        disabled={addressLocked}
-                        aria-disabled={addressLocked}
-                        className={addressLocked ? "is-disabled" : ""}
+                        disabled={addressLookupLocked}
+                        readOnly={contractorFieldsLocked}
+                        aria-disabled={addressLookupLocked}
+                        aria-readonly={contractorFieldsLocked}
+                        className={
+                          addressLocked
+                            ? contractorFieldsLocked
+                              ? "is-readonly"
+                              : "is-disabled"
+                            : ""
+                        }
                         onChange={(e) => updateField("cidade", e.target.value)}
                         placeholder="Cidade"
                         required
@@ -866,9 +934,17 @@ function ContractModal({ isOpen, onClose, onGovBrSign, onRejectBeforeAccept }) {
                         name="estado"
                         maxLength={2}
                         value={contractorData.estado}
-                        disabled={addressLocked}
-                        aria-disabled={addressLocked}
-                        className={addressLocked ? "is-disabled" : ""}
+                        disabled={addressLookupLocked}
+                        readOnly={contractorFieldsLocked}
+                        aria-disabled={addressLookupLocked}
+                        aria-readonly={contractorFieldsLocked}
+                        className={
+                          addressLocked
+                            ? contractorFieldsLocked
+                              ? "is-readonly"
+                              : "is-disabled"
+                            : ""
+                        }
                         onChange={(e) =>
                           updateField(
                             "estado",

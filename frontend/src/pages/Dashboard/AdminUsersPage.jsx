@@ -1,31 +1,75 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../components";
 import api from "../../services/api";
+import {
+  buildAddressesPayload,
+  createAddressList,
+} from "../../utils/addressFields";
+import {
+  applyClientFieldMask,
+  cpfDigits,
+  maskBrazilPhone,
+  maskCpf,
+  maskRg,
+} from "../../utils/brFields";
+import { getClientProfileValidationMessage } from "../../utils/clientProfile";
+import { toISODate } from "../../utils/date";
 import AdminPageShell from "./AdminPageShell";
 import {
+  EMPTY_CLIENT_FORM,
   EMPTY_USER_FORM,
-  MODULES,
+  findGroupByValue,
   getGroupLabel,
   getUserGroupLabel,
   getUserGroupValue,
+  isAdminGroup,
 } from "./adminManagementUtils";
+import AddressFields from "./AddressFields";
+
+function createEmptyUserForm() {
+  return {
+    ...EMPTY_USER_FORM,
+    cliente: { ...EMPTY_CLIENT_FORM },
+  };
+}
+
+function createClienteForm(cliente) {
+  const source = cliente || {};
+
+  return {
+    ...EMPTY_CLIENT_FORM,
+    ...source,
+    cpf: maskCpf(source.cpf),
+    rg: maskRg(source.rg),
+    telefone: maskBrazilPhone(source.telefone),
+    whatsapp: maskBrazilPhone(source.whatsapp),
+    data_nascimento: toISODate(source.data_nascimento),
+    enderecos: createAddressList(source.enderecos),
+    ativo: source.ativo !== false,
+  };
+}
 
 function AdminUsersPage({ onBack }) {
-  const [selectedModulo, setSelectedModulo] = useState("melpethostel");
   const [grupos, setGrupos] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
-  const [usuarioForm, setUsuarioForm] = useState(EMPTY_USER_FORM);
+  const [usuarioForm, setUsuarioForm] = useState(createEmptyUserForm);
   const [editingUser, setEditingUser] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
 
-  async function loadData(modulo = selectedModulo) {
+  const selectedGroup = useMemo(
+    () => findGroupByValue(usuarioForm.grupo, grupos),
+    [grupos, usuarioForm.grupo],
+  );
+  const shouldShowClienteFields = isAdminGroup(selectedGroup);
+
+  async function loadData() {
     setLoading(true);
     try {
       const [groupsData, usersData] = await Promise.all([
-        api.get(`/auth/groups?modulo=${encodeURIComponent(modulo)}`),
-        api.get(`/auth/users?modulo=${encodeURIComponent(modulo)}`),
+        api.get("/auth/groups"),
+        api.get("/auth/users"),
       ]);
       setGrupos(Array.isArray(groupsData) ? groupsData : []);
       setUsuarios(Array.isArray(usersData) ? usersData : []);
@@ -42,13 +86,12 @@ function AdminUsersPage({ onBack }) {
   }
 
   useEffect(() => {
-    loadData(selectedModulo);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModulo]);
+    loadData();
+  }, []);
 
   function resetForm() {
     setEditingUser(null);
-    setUsuarioForm(EMPTY_USER_FORM);
+    setUsuarioForm(createEmptyUserForm());
   }
 
   function startEditUser(user) {
@@ -59,7 +102,54 @@ function AdminUsersPage({ onBack }) {
       login: user.login || "",
       grupo: getUserGroupValue(user, grupos),
       senha: "",
+      ativo: user.ativo !== false,
+      cliente: createClienteForm(user.cliente),
     });
+  }
+
+  function updateUserField(field, value) {
+    setUsuarioForm((state) => ({
+      ...state,
+      [field]: value,
+    }));
+  }
+
+  function updateClienteField(field, value) {
+    setUsuarioForm((state) => ({
+      ...state,
+      cliente: {
+        ...state.cliente,
+        [field]: value,
+      },
+    }));
+  }
+
+  function updateClienteAddresses(enderecos) {
+    setUsuarioForm((state) => ({
+      ...state,
+      cliente: {
+        ...state.cliente,
+        enderecos,
+      },
+    }));
+  }
+
+  function updateMaskedClienteField(field, event) {
+    updateClienteField(field, applyClientFieldMask(field, event));
+  }
+
+  function buildClientePayload() {
+    return {
+      ...usuarioForm.cliente,
+      nome: usuarioForm.cliente.nome.trim(),
+      cpf: cpfDigits(usuarioForm.cliente.cpf),
+      rg: usuarioForm.cliente.rg.trim(),
+      telefone: usuarioForm.cliente.telefone.trim(),
+      whatsapp: usuarioForm.cliente.whatsapp.trim(),
+      email: usuarioForm.cliente.email.trim(),
+      observacoes: usuarioForm.cliente.observacoes.trim(),
+      enderecos: buildAddressesPayload(usuarioForm.cliente.enderecos),
+    };
   }
 
   async function saveUser(event) {
@@ -77,19 +167,31 @@ function AdminUsersPage({ onBack }) {
       return;
     }
 
+    if (shouldShowClienteFields) {
+      const validationMessage = getClientProfileValidationMessage(
+        usuarioForm.cliente,
+      );
+      if (validationMessage) {
+        setMessage({ type: "erro", text: validationMessage });
+        return;
+      }
+    }
+
+    const payload = {
+      login,
+      grupo,
+      ativo: usuarioForm.ativo,
+      cliente: shouldShowClienteFields ? buildClientePayload() : undefined,
+    };
+
     try {
       if (editingUser) {
-        await api.put(
-          `/auth/users/${editingUser.id}?modulo=${encodeURIComponent(selectedModulo)}`,
-          { login, grupo },
-        );
+        await api.put(`/auth/users/${editingUser.id}`, payload);
         setMessage({ type: "sucesso", text: "Usuario atualizado." });
       } else {
         await api.post("/auth/users", {
-          login,
-          grupo,
+          ...payload,
           senhaProvisoria: usuarioForm.senha,
-          modulo: selectedModulo,
         });
         setMessage({ type: "sucesso", text: "Usuario criado." });
       }
@@ -106,9 +208,7 @@ function AdminUsersPage({ onBack }) {
 
   async function deleteUser(user) {
     try {
-      await api.delete(
-        `/auth/users/${user.id}?modulo=${encodeURIComponent(selectedModulo)}`,
-      );
+      await api.delete(`/auth/users/${user.id}`);
       setConfirmDeleteId(null);
       setMessage({ type: "sucesso", text: "Usuario excluido." });
       await loadData();
@@ -123,7 +223,7 @@ function AdminUsersPage({ onBack }) {
   return (
     <AdminPageShell
       title="Criacao e edicao de usuarios"
-      description="Crie novos logins, edite o grupo de acesso e exclua usuarios quando necessario."
+      description="Crie logins, vincule grupos e mantenha os dados cadastrais de administradores."
       onBack={onBack}
     >
       <section className="admin-page-layout">
@@ -134,33 +234,11 @@ function AdminUsersPage({ onBack }) {
           </div>
 
           <label>
-            Modulo
-            <select
-              value={selectedModulo}
-              onChange={(event) => {
-                setSelectedModulo(event.target.value);
-                resetForm();
-              }}
-            >
-              {MODULES.map((modulo) => (
-                <option key={modulo.value} value={modulo.value}>
-                  {modulo.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
             Login
             <input
               type="text"
               value={usuarioForm.login}
-              onChange={(event) =>
-                setUsuarioForm((state) => ({
-                  ...state,
-                  login: event.target.value,
-                }))
-              }
+              onChange={(event) => updateUserField("login", event.target.value)}
               placeholder="Login do usuario"
             />
           </label>
@@ -169,12 +247,7 @@ function AdminUsersPage({ onBack }) {
             Grupo
             <select
               value={usuarioForm.grupo}
-              onChange={(event) =>
-                setUsuarioForm((state) => ({
-                  ...state,
-                  grupo: event.target.value,
-                }))
-              }
+              onChange={(event) => updateUserField("grupo", event.target.value)}
             >
               <option value="">-- Selecionar Grupo --</option>
               {grupos.map((grupo) => (
@@ -191,15 +264,141 @@ function AdminUsersPage({ onBack }) {
               <input
                 type="text"
                 value={usuarioForm.senha}
-                onChange={(event) =>
-                  setUsuarioForm((state) => ({
-                    ...state,
-                    senha: event.target.value,
-                  }))
-                }
+                onChange={(event) => updateUserField("senha", event.target.value)}
                 placeholder="Senha provisoria"
               />
             </label>
+          ) : null}
+
+          <label className="admin-page-checkbox">
+            <input
+              type="checkbox"
+              checked={usuarioForm.ativo}
+              onChange={(event) => updateUserField("ativo", event.target.checked)}
+            />
+            Usuario ativo
+          </label>
+
+          {shouldShowClienteFields ? (
+            <fieldset className="admin-page-fieldset">
+              <legend>Dados cadastrais</legend>
+              <div className="admin-page-form-grid">
+                <label>
+                  Nome
+                  <input
+                    type="text"
+                    value={usuarioForm.cliente.nome}
+                    onChange={(event) =>
+                      updateClienteField("nome", event.target.value)
+                    }
+                    placeholder="Nome completo"
+                    required
+                  />
+                </label>
+                <label>
+                  CPF
+                  <input
+                    type="text"
+                    value={usuarioForm.cliente.cpf}
+                    onChange={(event) =>
+                      updateMaskedClienteField("cpf", event)
+                    }
+                    inputMode="numeric"
+                    maxLength={14}
+                    placeholder="000.000.000-00"
+                    required
+                  />
+                </label>
+                <label>
+                  RG
+                  <input
+                    type="text"
+                    value={usuarioForm.cliente.rg}
+                    onChange={(event) =>
+                      updateMaskedClienteField("rg", event)
+                    }
+                    maxLength={15}
+                    placeholder="00.000.000-0"
+                    required
+                  />
+                </label>
+                <label>
+                  Data de nascimento
+                  <input
+                    type="date"
+                    value={usuarioForm.cliente.data_nascimento}
+                    onChange={(event) =>
+                      updateClienteField("data_nascimento", event.target.value)
+                    }
+                    required
+                  />
+                </label>
+                <label>
+                  Telefone
+                  <input
+                    type="tel"
+                    value={usuarioForm.cliente.telefone}
+                    onChange={(event) =>
+                      updateMaskedClienteField("telefone", event)
+                    }
+                    inputMode="tel"
+                    maxLength={15}
+                    placeholder="(00) 00000-0000"
+                    required
+                  />
+                </label>
+                <label>
+                  WhatsApp
+                  <input
+                    type="tel"
+                    value={usuarioForm.cliente.whatsapp}
+                    onChange={(event) =>
+                      updateMaskedClienteField("whatsapp", event)
+                    }
+                    inputMode="tel"
+                    maxLength={15}
+                    placeholder="(00) 00000-0000"
+                    required
+                  />
+                </label>
+                <label>
+                  Email
+                  <input
+                    type="email"
+                    value={usuarioForm.cliente.email}
+                    onChange={(event) =>
+                      updateClienteField("email", event.target.value)
+                    }
+                    placeholder="email@exemplo.com"
+                    required
+                  />
+                </label>
+                <label className="admin-page-checkbox admin-page-checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={usuarioForm.cliente.ativo}
+                    onChange={(event) =>
+                      updateClienteField("ativo", event.target.checked)
+                    }
+                  />
+                  Cliente ativo
+                </label>
+              </div>
+              <label>
+                Observacoes
+                <textarea
+                  value={usuarioForm.cliente.observacoes}
+                  onChange={(event) =>
+                    updateClienteField("observacoes", event.target.value)
+                  }
+                  placeholder="Observacoes"
+                />
+              </label>
+              <AddressFields
+                addresses={usuarioForm.cliente.enderecos}
+                onChange={updateClienteAddresses}
+              />
+            </fieldset>
           ) : null}
 
           <div className="admin-page-actions">
@@ -214,7 +413,9 @@ function AdminUsersPage({ onBack }) {
           </div>
 
           {message ? (
-            <p className={`admin-page-message ${message.type}`}>{message.text}</p>
+            <p className={`admin-page-message ${message.type}`}>
+              {message.text}
+            </p>
           ) : null}
         </form>
 
@@ -233,22 +434,45 @@ function AdminUsersPage({ onBack }) {
                   <div>
                     <strong>{user.login}</strong>
                     <span>{getUserGroupLabel(user, grupos)}</span>
+                    {user.cliente?.nome ? (
+                      <span>Cliente: {user.cliente.nome}</span>
+                    ) : null}
+                    <span>{user.ativo === false ? "Inativo" : "Ativo"}</span>
                   </div>
                   <div className="admin-page-row-actions">
-                    <Button type="button" size="sm" onClick={() => startEditUser(user)}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => startEditUser(user)}
+                    >
                       Editar
                     </Button>
                     {confirmDeleteId === user.id ? (
                       <>
-                        <Button type="button" variant="danger" size="sm" onClick={() => deleteUser(user)}>
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          onClick={() => deleteUser(user)}
+                        >
                           Confirmar
                         </Button>
-                        <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmDeleteId(null)}>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setConfirmDeleteId(null)}
+                        >
                           Cancelar
                         </Button>
                       </>
                     ) : (
-                      <Button type="button" variant="outline" size="sm" onClick={() => setConfirmDeleteId(user.id)}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setConfirmDeleteId(user.id)}
+                      >
                         Excluir
                       </Button>
                     )}
@@ -266,4 +490,3 @@ function AdminUsersPage({ onBack }) {
 }
 
 export default AdminUsersPage;
-
