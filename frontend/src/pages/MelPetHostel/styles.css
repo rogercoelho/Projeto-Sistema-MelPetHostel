@@ -227,6 +227,77 @@
   padding-left: 18px;
 }
 
+.melpet-vaccine-type-row {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.melpet-vaccine-admin-stack {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.melpet-vaccine-admin-stack .admin-page-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.melpet-vaccine-admin-stack .admin-page-checkbox input {
+  margin: 0;
+}
+
+.melpet-vaccine-type-inputs {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.melpet-vaccine-type-inputs .btn {
+  width: 100%;
+}
+
+.melpet-vaccine-type-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.melpet-vaccine-type-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.18);
+  border-radius: 8px;
+  background: var(--cor-branco);
+  color: var(--cor-marrom);
+  font-weight: 800;
+  padding: 8px 10px;
+}
+
+.melpet-vaccine-type-list button {
+  border: 0;
+  background: transparent;
+  color: #b91c1c;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.melpet-vaccine-config-type-lines {
+  display: grid;
+  gap: 3px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--cor-marrom-claro);
+}
+
+.melpet-vaccine-config-type-lines li {
+  overflow-wrap: anywhere;
+}
+
 .pet-registration-form {
   display: flex;
   flex-direction: column;
@@ -895,6 +966,17 @@
   .melpet-client-search-form {
     grid-template-columns: minmax(0, 1fr) minmax(180px, 240px) auto;
     align-items: end;
+  }
+
+  .melpet-vaccine-type-inputs {
+    grid-template-columns: minmax(0, 1.4fr) minmax(150px, 0.8fr) auto;
+    align-items: end;
+  }
+
+  .melpet-vaccine-type-inputs .btn {
+    width: auto;
+    min-height: 42px;
+    white-space: nowrap;
   }
 
   .pet-main-actions .btn {

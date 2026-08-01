@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import {
   Button,
   MenuItem,
@@ -16,6 +16,7 @@ import AdminPasswordsPage from "./AdminPasswordsPage";
 import AdminUsersPage from "./AdminUsersPage";
 import ChangePasswordModal from "./ChangePasswordModal";
 import ClientProfileModal from "./ClientProfileModal";
+import ClientProfilePage from "./ClientProfilePage";
 import SessionTimerBadge from "./SessionTimerBadge";
 import TelegramStatusPage from "./TelegramStatusPage";
 import TelegramTestPage from "./TelegramTestPage";
@@ -42,6 +43,9 @@ function Dashboard() {
   const [contractPromptRequest, setContractPromptRequest] = useState(0);
   const [clientProfileModalOpen, setClientProfileModalOpen] = useState(false);
   const [clientProfileInitial, setClientProfileInitial] = useState(null);
+  const [clientProfilePageLoading, setClientProfilePageLoading] =
+    useState(false);
+  const [clientProfilePageError, setClientProfilePageError] = useState("");
   const [clientProfileStatus, setClientProfileStatus] = useState({
     loaded: false,
     pendente: false,
@@ -72,10 +76,34 @@ function Dashboard() {
     setView("mel");
   }
 
+  async function openClientProfilePage() {
+    setOpenDashboardSection("");
+    setView("client-profile");
+    setClientProfilePageLoading(true);
+    setClientProfilePageError("");
+    try {
+      await loadClientProfile(false);
+    } catch (error) {
+      setClientProfilePageError(
+        error?.message || "Não foi possível carregar seus dados cadastrais.",
+      );
+    } finally {
+      setClientProfilePageLoading(false);
+    }
+  }
+
   function openMelPetPlans() {
     setMelPetRegistrationOnly(false);
     setMelComplianceGate(false);
     setMelInitialAdminMenu("controlePlanos");
+    setOpenDashboardSection("");
+    setView("mel");
+  }
+
+  function openMelPetPetsAdmin() {
+    setMelPetRegistrationOnly(false);
+    setMelComplianceGate(false);
+    setMelInitialAdminMenu("cadastroPets");
     setOpenDashboardSection("");
     setView("mel");
   }
@@ -86,7 +114,10 @@ function Dashboard() {
           label: "Cadastro de Clientes",
           onAction: openMelPetClientAdmin,
         },
-        "Cadastro de Pets",
+        {
+          label: "Cadastro de Pets",
+          onAction: openMelPetPetsAdmin,
+        },
         {
           label: "Controle de Planos",
           onAction: openMelPetPlans,
@@ -94,16 +125,21 @@ function Dashboard() {
         "Presenca, hospedagem e rotina do pet",
       ]
     : [
+        ...(melPetRegistrationOnly
+          ? []
+          : [
+              {
+                label: "Meus Dados Cadastrais",
+                onAction: openClientProfilePage,
+              },
+            ]),
         {
-          label: "Cadastro de Clientes",
+          label: "Cadastro de Pets",
           onAction: openMelPetRegistration,
         },
         ...(melPetRegistrationOnly
           ? []
-          : [
-              "Cadastro de Pets",
-              "Presenca, hospedagem e rotina do pet",
-            ]),
+          : ["Presenca, hospedagem e rotina do pet"]),
       ];
 
   const dashboardSections = [
@@ -253,9 +289,10 @@ function Dashboard() {
           return;
         }
 
-        const petsData = await api.get("/melpethostel/pets");
-        const pets = Array.isArray(petsData?.pets) ? petsData.pets : [];
-        if (!pets.length) {
+        const petOnboarding = await api.get(
+          "/melpethostel/pets/onboarding-status",
+        );
+        if (!petOnboarding?.complete) {
           setMelComplianceGate(true);
           setMelPetRegistrationOnly(true);
           setView("mel");
@@ -459,7 +496,7 @@ function Dashboard() {
       {moduleGateLoading ? (
         <MenuTemplate>
           <MenuPanel>
-            <p>Verificando contrato do usuário...</p>
+            <p>Verificando fluxo obrigatório do usuário...</p>
           </MenuPanel>
         </MenuTemplate>
       ) : view === "home" ? (
@@ -513,6 +550,14 @@ function Dashboard() {
         />
       ) : view === "admin-users" ? (
         <AdminUsersPage onBack={() => setView("home")} />
+      ) : view === "client-profile" ? (
+        <ClientProfilePage
+          cliente={clientProfileInitial}
+          loading={clientProfilePageLoading}
+          error={clientProfilePageError}
+          onBack={() => setView("home")}
+          onReload={openClientProfilePage}
+        />
       ) : view === "admin-groups" ? (
         <AdminGroupsPage onBack={() => setView("home")} />
       ) : view === "admin-passwords" ? (

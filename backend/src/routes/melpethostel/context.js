@@ -19,6 +19,9 @@ const TABLE_NAMES = Object.freeze({
   documentosTipo: "Documentos_Tipo",
   pets: "Pets",
   petFichas: "Pet_Fichas",
+  petCarteirasVacinacao: "Pet_Carteiras_Vacinacao",
+  petVacinasConfig: "Pet_Vacinas_Config",
+  petVacinasRespostas: "Pet_Vacinas_Respostas",
 });
 
 const DEFAULT_DOCUMENT_TYPES = Object.freeze([

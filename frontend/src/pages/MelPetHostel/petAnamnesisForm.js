@@ -1,4 +1,4 @@
-export const YES_NO_OPTIONS = ["Sim", "Não"];
+﻿export const YES_NO_OPTIONS = ["Sim", "Não"];
 export const YES_NO_UNKNOWN_OPTIONS = ["Sim", "Não", "Não sei"];
 
 const veracityText =
@@ -524,3 +524,6 @@ export function findMissingRequiredField(formData) {
 
   return "";
 }
+
+
+

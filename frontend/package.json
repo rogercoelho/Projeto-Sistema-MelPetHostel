@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint src --ext .js,.jsx",
+    "lint": "npm run check:mojibake && eslint src --ext .js,.jsx",
+    "check:mojibake": "powershell -ExecutionPolicy Bypass -File ../scripts/check_mojibake.ps1",
     "preview": "vite preview"
   },
   "dependencies": {

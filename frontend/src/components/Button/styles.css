@@ -6,6 +6,7 @@
   padding: 10px 16px;
   border: none;
   border-radius: var(--radius-md);
+  font-family: inherit;
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;

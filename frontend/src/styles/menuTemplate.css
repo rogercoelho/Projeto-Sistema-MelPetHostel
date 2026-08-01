@@ -68,6 +68,7 @@
   background: transparent;
   color: var(--cor-marrom);
   cursor: default;
+  font: inherit;
   text-align: left;
 }
 

@@ -6,6 +6,7 @@ const pool = mysql.createPool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
+  charset: "utf8mb4",
   timezone: process.env.DB_TIMEZONE || "Z",
   connectTimeout: process.env.DB_CONNECT_TIMEOUT
     ? Number(process.env.DB_CONNECT_TIMEOUT)

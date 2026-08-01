@@ -29,6 +29,87 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+CREATE TABLE IF NOT EXISTS `Pet_Vacinas_Config` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `descricao` VARCHAR(191) NOT NULL,
+  `tipos` TEXT NOT NULL,
+  `obrigatorio` TINYINT(1) NOT NULL DEFAULT 0,
+  `ativo` TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_pet_vacinas_config_ativo` (`ativo`),
+  INDEX `idx_pet_vacinas_config_obrigatorio` (`obrigatorio`),
+  INDEX `idx_pet_vacinas_config_descricao` (`descricao`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SET @pet_vacinas_config_has_obrigatorio = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'Pet_Vacinas_Config'
+     AND COLUMN_NAME = 'obrigatorio'
+);
+
+SET @sql = IF(
+  @pet_vacinas_config_has_obrigatorio > 0,
+  'SELECT ''Pet_Vacinas_Config.obrigatorio ja existe'' AS status',
+  'ALTER TABLE `Pet_Vacinas_Config` ADD COLUMN `obrigatorio` TINYINT(1) NOT NULL DEFAULT 0 AFTER `tipos`'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @pet_vacinas_config_has_duracao = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'Pet_Vacinas_Config'
+     AND COLUMN_NAME = 'duracao'
+);
+
+SET @sql = IF(
+  @pet_vacinas_config_has_duracao > 0,
+  'ALTER TABLE `Pet_Vacinas_Config` DROP COLUMN `duracao`',
+  'SELECT ''Pet_Vacinas_Config.duracao nao existe'' AS status'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @pet_vacinas_config_has_tipos = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'Pet_Vacinas_Config'
+     AND COLUMN_NAME = 'tipos'
+);
+
+SET @sql = IF(
+  @pet_vacinas_config_has_tipos > 0,
+  'SELECT ''Pet_Vacinas_Config.tipos ja existe'' AS status',
+  'ALTER TABLE `Pet_Vacinas_Config` ADD COLUMN `tipos` TEXT NOT NULL AFTER `descricao`'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @pet_vacinas_config_has_tipos_json = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'Pet_Vacinas_Config'
+     AND COLUMN_NAME = 'tipos_json'
+);
+
+SET @sql = IF(
+  @pet_vacinas_config_has_tipos_json > 0,
+  'ALTER TABLE `Pet_Vacinas_Config` DROP COLUMN `tipos_json`',
+  'SELECT ''Pet_Vacinas_Config.tipos_json nao existe'' AS status'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 SET @clientes_table = (
   SELECT TABLE_NAME
     FROM INFORMATION_SCHEMA.TABLES
@@ -144,5 +225,69 @@ CREATE TABLE IF NOT EXISTS `Pet_Fichas` (
   INDEX `idx_pet_fichas_pet` (`pet_id`),
   CONSTRAINT `fk_pet_fichas_pet` FOREIGN KEY (`pet_id`)
     REFERENCES `Pets` (`id`)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SET @sql = CONCAT(
+  'CREATE TABLE IF NOT EXISTS `Pet_Carteiras_Vacinacao` (',
+  '`id` INT AUTO_INCREMENT PRIMARY KEY,',
+  '`pet_id` INT NOT NULL,',
+  '`cliente_id` ', @cliente_id_type, ' NOT NULL,',
+  '`lado` VARCHAR(20) NOT NULL DEFAULT ''frente'',',
+  '`nome_arquivo` VARCHAR(255) NOT NULL,',
+  '`file_path` VARCHAR(1024) NOT NULL,',
+  '`conferido` TINYINT(1) NOT NULL DEFAULT 0,',
+  '`conferido_at` DATETIME NULL DEFAULT NULL,',
+  '`conferido_por` VARCHAR(191) NULL DEFAULT NULL,',
+  '`status` VARCHAR(50) NOT NULL DEFAULT ''pendente'',',
+  '`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,',
+  '`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,',
+  'INDEX `idx_pet_carteiras_pet` (`pet_id`),',
+  'INDEX `idx_pet_carteiras_cliente` (`cliente_id`),',
+  'INDEX `idx_pet_carteiras_lado` (`pet_id`, `lado`),',
+  'INDEX `idx_pet_carteiras_status` (`conferido`, `status`),',
+  'CONSTRAINT `fk_pet_carteiras_pet` FOREIGN KEY (`pet_id`) REFERENCES `Pets` (`id`) ON DELETE CASCADE,',
+  'CONSTRAINT `fk_pet_carteiras_cliente` FOREIGN KEY (`cliente_id`) REFERENCES ',
+  @clientes_table_q,
+  ' (`id`) ON DELETE CASCADE',
+  ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @pet_carteiras_has_lado = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'Pet_Carteiras_Vacinacao'
+     AND COLUMN_NAME = 'lado'
+);
+
+SET @sql = IF(
+  @pet_carteiras_has_lado > 0,
+  'SELECT ''Pet_Carteiras_Vacinacao.lado ja existe'' AS status',
+  'ALTER TABLE `Pet_Carteiras_Vacinacao` ADD COLUMN `lado` VARCHAR(20) NOT NULL DEFAULT ''frente'' AFTER `cliente_id`'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+CREATE TABLE IF NOT EXISTS `Pet_Vacinas_Respostas` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `pet_id` INT NOT NULL,
+  `cliente_id` INT NOT NULL,
+  `config_id` INT NOT NULL,
+  `valor` VARCHAR(191) NOT NULL,
+  `data_aplicacao` DATE NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uq_pet_vacina_resposta` (`pet_id`, `config_id`),
+  INDEX `idx_pet_vacinas_respostas_cliente` (`cliente_id`),
+  CONSTRAINT `fk_pet_vacinas_respostas_pet` FOREIGN KEY (`pet_id`)
+    REFERENCES `Pets` (`id`)
+    ON DELETE CASCADE,
+  CONSTRAINT `fk_pet_vacinas_respostas_config` FOREIGN KEY (`config_id`)
+    REFERENCES `Pet_Vacinas_Config` (`id`)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

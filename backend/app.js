@@ -122,6 +122,15 @@ app.use(
 //app.options("/*", cors());
 app.use(express.json());
 
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    res.charset = "utf-8";
+    return originalJson(body);
+  };
+  next();
+});
+
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
