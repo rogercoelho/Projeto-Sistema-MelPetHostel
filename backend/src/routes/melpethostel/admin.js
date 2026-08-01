@@ -2,11 +2,184 @@ const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcryptjs");
 const {
+  TABLE_NAMES,
+  dbFor,
+  qcol,
+  qtable,
+  resolveTableName,
   Grupo,
   Usuario,
   fs,
   path,
 } = require("./context");
+
+function clean(value) {
+  return value === undefined || value === null ? "" : String(value).trim();
+}
+
+function isNumeric(value) {
+  return /^\d+$/.test(clean(value));
+}
+
+function normalizeCliente(row) {
+  return {
+    id: row.id,
+    nome: row.nome || "",
+    cpf: row.cpf || "",
+    rg: row.rg || "",
+    data_nascimento: row.data_nascimento || null,
+    telefone: row.telefone || "",
+    whatsapp: row.whatsapp || "",
+    email: row.email || "",
+    observacoes: row.observacoes || "",
+    ativo: row.ativo === undefined || row.ativo === null ? true : row.ativo == 1,
+    criado_em: row.criado_em || null,
+    atualizado_em: row.atualizado_em || null,
+  };
+}
+
+function getClienteOrderBy(value) {
+  const options = {
+    codigo_asc: "c.id ASC",
+    codigo_desc: "c.id DESC",
+    nome_asc: "c.nome ASC, c.id ASC",
+    nome_desc: "c.nome DESC, c.id ASC",
+  };
+  return options[value] || options.codigo_asc;
+}
+
+async function listEnderecosByClienteIds(req, clienteIds) {
+  if (!clienteIds.length) return new Map();
+  const tableName = await resolveTableName(req, "Enderecos");
+  if (!tableName) return new Map();
+
+  const placeholders = clienteIds.map(() => "?").join(", ");
+  const [rows] = await dbFor(req).query(
+    `
+      SELECT *
+      FROM ${qtable(tableName)}
+      WHERE ${qcol("cliente_id")} IN (${placeholders})
+      ORDER BY ${qcol("principal")} DESC, ${qcol("id")} ASC
+    `,
+    clienteIds,
+  );
+
+  const byCliente = new Map();
+  for (const row of rows || []) {
+    const list = byCliente.get(row.cliente_id) || [];
+    list.push(row);
+    byCliente.set(row.cliente_id, list);
+  }
+  return byCliente;
+}
+
+async function listPetsByClienteIds(req, clienteIds) {
+  if (!clienteIds.length) return new Map();
+  const tableName = await resolveTableName(req, TABLE_NAMES.pets);
+  if (!tableName) return new Map();
+
+  const placeholders = clienteIds.map(() => "?").join(", ");
+  const [rows] = await dbFor(req).query(
+    `
+      SELECT id, cliente_id, nome, raca, idade, peso_aproximado, ativo
+      FROM ${qtable(tableName)}
+      WHERE ${qcol("cliente_id")} IN (${placeholders})
+      ORDER BY ${qcol("nome")} ASC, ${qcol("id")} ASC
+    `,
+    clienteIds,
+  );
+
+  const byCliente = new Map();
+  for (const row of rows || []) {
+    const list = byCliente.get(row.cliente_id) || [];
+    list.push({
+      id: row.id,
+      nome: row.nome || "",
+      raca: row.raca || "",
+      idade: row.idade || "",
+      pesoAproximado: row.peso_aproximado || "",
+      ativo: row.ativo === undefined || row.ativo === null ? true : row.ativo == 1,
+    });
+    byCliente.set(row.cliente_id, list);
+  }
+  return byCliente;
+}
+
+async function listAdminClienteIds(req, clienteIds) {
+  if (!clienteIds.length) return new Set();
+  const usuariosTable = await resolveTableName(req, "usuarios");
+  const gruposTable = await resolveTableName(req, "Grupos");
+  if (!usuariosTable || !gruposTable) return new Set();
+
+  const placeholders = clienteIds.map(() => "?").join(", ");
+  const [rows] = await dbFor(req).query(
+    `
+      SELECT DISTINCT u.${qcol("cliente_id")} AS clienteId
+      FROM ${qtable(usuariosTable)} u
+      INNER JOIN ${qtable(gruposTable)} g ON g.${qcol("id")} = u.${qcol("grupo_id")}
+      WHERE u.${qcol("cliente_id")} IN (${placeholders})
+        AND LOWER(g.${qcol("Nome_Grupo")}) LIKE '%admin%'
+    `,
+    clienteIds,
+  );
+
+  return new Set((rows || []).map((row) => row.clienteId).filter(Boolean));
+}
+
+router.get("/clientes", async (req, res) => {
+  try {
+    const tableName = await resolveTableName(req, TABLE_NAMES.clientes);
+    if (!tableName) {
+      return res
+        .status(500)
+        .json({ status: "erro", mensagem: "Tabela Clientes nao encontrada." });
+    }
+
+    const busca = clean(req.query.busca);
+    const ordenar = clean(req.query.ordenar);
+    const where = [];
+    const values = [];
+
+    if (busca) {
+      if (isNumeric(busca)) {
+        where.push("(c.id = ? OR c.nome LIKE ?)");
+        values.push(Number(busca), `%${busca}%`);
+      } else {
+        where.push("c.nome LIKE ?");
+        values.push(`%${busca}%`);
+      }
+    }
+
+    const [rows] = await dbFor(req).query(
+      `
+        SELECT c.*
+        FROM ${qtable(tableName)} c
+        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+        ORDER BY ${getClienteOrderBy(ordenar)}
+      `,
+      values,
+    );
+
+    const clientes = (rows || []).map(normalizeCliente);
+    const clienteIds = clientes.map((cliente) => cliente.id).filter(Boolean);
+    const enderecosByCliente = await listEnderecosByClienteIds(req, clienteIds);
+    const petsByCliente = await listPetsByClienteIds(req, clienteIds);
+    const adminClienteIds = await listAdminClienteIds(req, clienteIds);
+
+    return res.json({
+      status: "sucesso",
+      clientes: clientes.map((cliente) => ({
+        ...cliente,
+        admin: adminClienteIds.has(cliente.id),
+        enderecos: enderecosByCliente.get(cliente.id) || [],
+        pets: petsByCliente.get(cliente.id) || [],
+      })),
+    });
+  } catch (error) {
+    console.error("Error in GET /melpethostel/clientes:", error);
+    res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
 
 router.get("/groups", async (req, res) => {
   try {

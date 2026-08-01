@@ -38,6 +38,7 @@ function Dashboard() {
   const [forcePasswordModalOpen, setForcePasswordModalOpen] = useState(false);
   const [melComplianceGate, setMelComplianceGate] = useState(false);
   const [melPetRegistrationOnly, setMelPetRegistrationOnly] = useState(false);
+  const [melInitialAdminMenu, setMelInitialAdminMenu] = useState("");
   const [contractPromptRequest, setContractPromptRequest] = useState(0);
   const [clientProfileModalOpen, setClientProfileModalOpen] = useState(false);
   const [clientProfileInitial, setClientProfileInitial] = useState(null);
@@ -55,12 +56,55 @@ function Dashboard() {
     : ["melpethostel"];
   const hasMelPetHostelAccess = allowedModules.includes("melpethostel");
 
-  function openMelPetRegistration() {
-    setMelPetRegistrationOnly(true);
+  function openMelPetClientAdmin() {
+    setMelPetRegistrationOnly(false);
     setMelComplianceGate(false);
+    setMelInitialAdminMenu("");
     setOpenDashboardSection("");
     setView("mel");
   }
+
+  function openMelPetRegistration() {
+    setMelPetRegistrationOnly(true);
+    setMelComplianceGate(false);
+    setMelInitialAdminMenu("");
+    setOpenDashboardSection("");
+    setView("mel");
+  }
+
+  function openMelPetPlans() {
+    setMelPetRegistrationOnly(false);
+    setMelComplianceGate(false);
+    setMelInitialAdminMenu("controlePlanos");
+    setOpenDashboardSection("");
+    setView("mel");
+  }
+
+  const melPetHostelItems = isAdmin
+    ? [
+        {
+          label: "Cadastro de Clientes",
+          onAction: openMelPetClientAdmin,
+        },
+        "Cadastro de Pets",
+        {
+          label: "Controle de Planos",
+          onAction: openMelPetPlans,
+        },
+        "Presenca, hospedagem e rotina do pet",
+      ]
+    : [
+        {
+          label: "Cadastro de Clientes",
+          onAction: openMelPetRegistration,
+        },
+        ...(melPetRegistrationOnly
+          ? []
+          : [
+              "Cadastro de Pets",
+              "Presenca, hospedagem e rotina do pet",
+            ]),
+      ];
 
   const dashboardSections = [
     hasMelPetHostelAccess
@@ -68,18 +112,7 @@ function Dashboard() {
           id: "melpethostel",
           title: "Mel Pet Hostel",
           summary: "Acesse o sistema operacional do pet hotel.",
-          items: [
-            {
-              label: "Cadastro de Clientes",
-              onAction: openMelPetRegistration,
-            },
-            ...(melPetRegistrationOnly
-              ? []
-              : [
-                  "Contrato, documentos e anamnese",
-                  "Presenca, hospedagem e rotina do pet",
-                ]),
-          ],
+          items: melPetHostelItems,
         }
       : null,
     isAdmin
@@ -133,6 +166,7 @@ function Dashboard() {
     setModuleGateLoading(false);
     setMelComplianceGate(false);
     setMelPetRegistrationOnly(false);
+    setMelInitialAdminMenu("");
   }, [usuario?.id, usuario?.login]);
 
   useEffect(() => {
@@ -455,14 +489,22 @@ function Dashboard() {
       ) : view === "mel" ? (
         <MelPetHostel
           onBack={() => {
-            setMelComplianceGate(melPetRegistrationOnly);
+            if (isAdmin) {
+              setMelComplianceGate(false);
+              setMelPetRegistrationOnly(false);
+            } else {
+              setMelComplianceGate(melPetRegistrationOnly);
+              setMelPetRegistrationOnly(false);
+            }
+            setMelInitialAdminMenu("");
             setView("home");
           }}
           clientProfile={clientProfileInitial}
           clientProfileReady={clientProfileStatus.loaded}
           clientProfilePending={clientProfileStatus.pendente}
           enforceContractGate={melComplianceGate}
-          petRegistrationOnly={melPetRegistrationOnly}
+          initialAdminMenu={melInitialAdminMenu}
+          petRegistrationOnly={!isAdmin && melPetRegistrationOnly}
           contractPromptRequest={contractPromptRequest}
           onPetRegistered={() => {
             setMelPetRegistrationOnly(false);

@@ -12,6 +12,7 @@ import {
 import { useToast } from "../../components/Toast/ToastContext";
 import { useAuth } from "../../contexts/AuthContext";
 import api, { API_URL } from "../../services/api";
+import { maskCpf } from "../../utils/brFields";
 import { buildContractorDataFromCliente } from "../../utils/clientProfile";
 import PetRegistrationForm from "./PetRegistrationForm";
 import "./styles.css";
@@ -95,6 +96,7 @@ export default function MelPetHostel({
   clientProfileReady = true,
   clientProfilePending = false,
   enforceContractGate = false,
+  initialAdminMenu = "",
   petRegistrationOnly = false,
   contractPromptRequest = 0,
   onPetRegistered,
@@ -132,7 +134,14 @@ export default function MelPetHostel({
   const [loadingPets, setLoadingPets] = useState(false);
   const [petFormMode, setPetFormMode] = useState("list");
   const [selectedPet, setSelectedPet] = useState(null);
-  const [activeMenu, setActiveMenu] = useState("");
+  const [activeMenu, setActiveMenu] = useState(initialAdminMenu);
+  const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [clientSearchOrder, setClientSearchOrder] = useState("codigo_asc");
+  const [clientSearchResults, setClientSearchResults] = useState([]);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [loadingClientSearch, setLoadingClientSearch] = useState(false);
+  const [clientSearchSubmitted, setClientSearchSubmitted] = useState(false);
+  const [clientSearchError, setClientSearchError] = useState("");
   const [pendingUsers, setPendingUsers] = useState([]);
   const [loadingPendingUsers, setLoadingPendingUsers] = useState(false);
   const [pendingUsersError, setPendingUsersError] = useState("");
@@ -159,6 +168,12 @@ export default function MelPetHostel({
       (usuario.perfil && String(usuario.perfil).toLowerCase() === "admin") ||
       (usuarioGrupo && String(usuarioGrupo).toLowerCase().includes("admin"))),
   );
+
+  useEffect(() => {
+    if (isAdmin) {
+      setActiveMenu(initialAdminMenu || "");
+    }
+  }, [initialAdminMenu, isAdmin]);
 
   const shouldEnforceContractGate = Boolean(!isAdmin && enforceContractGate);
   const contratoValido = Boolean(contractStatus?.contratoValido);
@@ -496,6 +511,50 @@ export default function MelPetHostel({
     return `${base}${raw.startsWith("/") ? raw : `/${raw}`}`;
   }
 
+  async function loadClientSearch(event) {
+    event?.preventDefault();
+    setClientSearchSubmitted(true);
+    setLoadingClientSearch(true);
+    setClientSearchError("");
+
+    try {
+      const params = [`ordenar=${encodeURIComponent(clientSearchOrder)}`];
+      const trimmedSearch = clientSearchTerm.trim();
+      if (trimmedSearch) {
+        params.push(`busca=${encodeURIComponent(trimmedSearch)}`);
+      }
+
+      const data = await api.get(`/melpethostel/clientes?${params.join("&")}`);
+      const clientes = Array.isArray(data?.clientes) ? data.clientes : [];
+      setClientSearchResults(clientes);
+      setSelectedClient((current) => {
+        if (!current) return null;
+        return clientes.find((cliente) => cliente.id === current.id) || null;
+      });
+    } catch (error) {
+      setClientSearchResults([]);
+      setSelectedClient(null);
+      setClientSearchError(error?.message || "Erro ao pesquisar clientes.");
+    } finally {
+      setLoadingClientSearch(false);
+    }
+  }
+
+  function formatAddress(endereco = {}) {
+    return [
+      endereco.logradouro,
+      endereco.numero,
+      endereco.complemento,
+      endereco.bairro,
+      endereco.cidade,
+      endereco.uf || endereco.estado,
+      endereco.cep,
+    ]
+      .map((part) => String(part || "").trim())
+      .filter(Boolean)
+      .join(", ");
+  }
+
   useEffect(() => {
     if (isAdmin || !shouldEnforceContractGate) {
       setLoadingStatus(false);
@@ -514,6 +573,13 @@ export default function MelPetHostel({
     if (activeMenu !== "conferirDocumentos") return;
     loadPendingValidationUsers();
   }, [isAdmin, activeMenu]);
+
+  useEffect(() => {
+    if (!isAdmin || activeMenu !== "pesquisarClientes") return;
+    if (!clientSearchSubmitted) return;
+    loadClientSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientSearchOrder]);
 
   useEffect(() => {
     if (isAdmin) return;
@@ -838,6 +904,153 @@ export default function MelPetHostel({
     },
   ];
 
+  const clientSearchContent = (
+    <section className="melpet-client-search">
+      <form className="melpet-client-search-form" onSubmit={loadClientSearch}>
+        <label>
+          Pesquisar cliente
+          <input
+            type="search"
+            value={clientSearchTerm}
+            onChange={(event) => setClientSearchTerm(event.target.value)}
+            placeholder="Código ou nome do cliente"
+          />
+        </label>
+
+        <label>
+          Ordenar por
+          <select
+            value={clientSearchOrder}
+            onChange={(event) => setClientSearchOrder(event.target.value)}
+          >
+            <option value="codigo_asc">Código crescente</option>
+            <option value="codigo_desc">Código decrescente</option>
+            <option value="nome_asc">Nome A-Z</option>
+            <option value="nome_desc">Nome Z-A</option>
+          </select>
+        </label>
+
+        <Button type="submit" disabled={loadingClientSearch}>
+          {loadingClientSearch ? "Pesquisando..." : "Pesquisar"}
+        </Button>
+      </form>
+
+      {clientSearchError ? (
+        <p className="melpet-error">{clientSearchError}</p>
+      ) : null}
+
+      <div className="melpet-client-search-grid">
+        <div className="melpet-client-list">
+          {loadingClientSearch ? (
+            <p>Carregando clientes...</p>
+          ) : clientSearchResults.length ? (
+            clientSearchResults.map((cliente) => (
+              <button
+                type="button"
+                key={cliente.id}
+                className={
+                  selectedClient?.id === cliente.id
+                    ? "melpet-client-list-item is-selected"
+                    : "melpet-client-list-item"
+                }
+                onClick={() =>
+                  setSelectedClient((current) =>
+                    current?.id === cliente.id ? null : cliente,
+                  )
+                }
+              >
+                <strong>{cliente.id}</strong>
+                <span>
+                  {cliente.nome}
+                  {cliente.admin ? (
+                    <em className="melpet-client-admin-badge">admin</em>
+                  ) : null}
+                </span>
+              </button>
+            ))
+          ) : clientSearchSubmitted ? (
+            <p>Nenhum cliente encontrado.</p>
+          ) : (
+            <p>Informe um código ou nome, ou clique em pesquisar para listar todos.</p>
+          )}
+        </div>
+
+        {selectedClient ? (
+          <article className="melpet-client-details">
+            <h3>
+              {selectedClient.nome}
+              {selectedClient.admin ? (
+                <em className="melpet-client-admin-badge">admin</em>
+              ) : null}
+            </h3>
+            <dl>
+              <div>
+                <dt>Código</dt>
+                <dd>{selectedClient.id}</dd>
+              </div>
+              <div>
+                <dt>CPF</dt>
+                <dd>{selectedClient.cpf ? maskCpf(selectedClient.cpf) : "-"}</dd>
+              </div>
+              <div>
+                <dt>RG</dt>
+                <dd>{selectedClient.rg || "-"}</dd>
+              </div>
+              <div>
+                <dt>Data de nascimento</dt>
+                <dd>{selectedClient.data_nascimento || "-"}</dd>
+              </div>
+              <div>
+                <dt>Telefone</dt>
+                <dd>{selectedClient.telefone || "-"}</dd>
+              </div>
+              <div>
+                <dt>WhatsApp</dt>
+                <dd>{selectedClient.whatsapp || "-"}</dd>
+              </div>
+              <div>
+                <dt>Email</dt>
+                <dd>{selectedClient.email || "-"}</dd>
+              </div>
+              <div>
+                <dt>Observações</dt>
+                <dd>{selectedClient.observacoes || "-"}</dd>
+              </div>
+            </dl>
+
+            <div className="melpet-client-detail-block">
+              <h4>Endereços</h4>
+              {selectedClient.enderecos?.length ? (
+                <ul>
+                  {selectedClient.enderecos.map((endereco) => (
+                    <li key={endereco.id || formatAddress(endereco)}>
+                      {formatAddress(endereco)}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>Nenhum endereço cadastrado.</p>
+              )}
+            </div>
+
+            <div className="melpet-client-detail-block">
+              <h4>Pets</h4>
+              {selectedClient.pets?.length ? (
+                <ul>
+                  {selectedClient.pets.map((pet) => (
+                    <li key={pet.id}>{pet.nome}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>Nenhum pet cadastrado.</p>
+              )}
+            </div>
+          </article>
+        ) : null}
+      </div>
+    </section>
+  );
+
   const adminMenuPanels = [
     {
       id: "admin-melpethostel",
@@ -860,11 +1073,20 @@ export default function MelPetHostel({
           },
         },
         {
-          id: "controle-planos",
-          title: "Controle de Planos",
-          summary: "Gerenciar planos e ajustes do módulo.",
-          isOpen: activeMenu === "controlePlanos",
-          onAction: () => setActiveMenu("controlePlanos"),
+          id: "pesquisar-clientes",
+          title: "Pesquisar Cliente",
+          summary:
+            "Pesquise por código ou nome e confira cadastro, endereço e pets.",
+          isOpen: activeMenu === "pesquisarClientes",
+          onAction: () => {
+            setActiveMenu((prev) =>
+              prev === "pesquisarClientes" ? "" : "pesquisarClientes",
+            );
+            setSelectedPendingUser(null);
+            setSelectedUserFiles([]);
+            setSelectedUserFilesError("");
+          },
+          content: clientSearchContent,
         },
       ],
       after: (

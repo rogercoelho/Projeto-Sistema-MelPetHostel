@@ -87,6 +87,146 @@
   line-height: 1.45;
 }
 
+.melpet-client-search {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.melpet-client-search-form {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.melpet-client-search-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--cor-marrom);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.melpet-client-search-form input,
+.melpet-client-search-form select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.28);
+  border-radius: 8px;
+  background: var(--cor-branco);
+  color: #111827;
+  font: inherit;
+  padding: 10px 11px;
+}
+
+.melpet-client-search-grid {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.melpet-client-list {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.melpet-client-list-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--spacing-sm);
+  align-items: center;
+  width: 100%;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.16);
+  border-radius: 8px;
+  background: var(--cor-branco);
+  color: var(--cor-marrom);
+  cursor: pointer;
+  padding: var(--spacing-sm);
+  text-align: left;
+}
+
+.melpet-client-list-item strong {
+  display: inline-grid;
+  min-width: 42px;
+  min-height: 34px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--cor-areia-claro);
+}
+
+.melpet-client-list-item span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 800;
+}
+
+.melpet-client-admin-badge {
+  display: inline-block;
+  margin-left: 8px;
+  color: #b91c1c;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: lowercase;
+}
+
+.melpet-client-list-item.is-selected,
+.melpet-client-list-item:hover {
+  border-color: var(--cor-marrom);
+  background: rgba(var(--cor-marrom-rgb), 0.06);
+}
+
+.melpet-client-details {
+  display: grid;
+  gap: var(--spacing-md);
+  min-width: 0;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.16);
+  border-radius: 8px;
+  background: var(--cor-branco);
+  padding: var(--spacing-md);
+}
+
+.melpet-client-details h3,
+.melpet-client-details h4,
+.melpet-client-details p {
+  margin: 0;
+}
+
+.melpet-client-details h3,
+.melpet-client-details h4,
+.melpet-client-details dt {
+  color: var(--cor-marrom);
+}
+
+.melpet-client-details dl {
+  display: grid;
+  gap: var(--spacing-sm);
+  margin: 0;
+}
+
+.melpet-client-details dl div {
+  display: grid;
+  gap: 2px;
+}
+
+.melpet-client-details dt {
+  font-weight: 800;
+}
+
+.melpet-client-details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.melpet-client-detail-block {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.melpet-client-detail-block ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .pet-registration-form {
   display: flex;
   flex-direction: column;
@@ -752,6 +892,11 @@
     min-width: 150px;
   }
 
+  .melpet-client-search-form {
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 240px) auto;
+    align-items: end;
+  }
+
   .pet-main-actions .btn {
     width: auto;
   }
@@ -802,6 +947,11 @@
   .melpet-panel {
     padding: 18px;
     max-width: 860px;
+  }
+
+  .melpet-client-search-grid {
+    grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+    align-items: start;
   }
 
   .pet-form-body {
