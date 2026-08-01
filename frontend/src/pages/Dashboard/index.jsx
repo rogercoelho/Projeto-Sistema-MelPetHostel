@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Button } from "../../components";
+import {
+  Button,
+  MenuItem,
+  MenuList,
+  MenuPanel,
+  MenuTemplate,
+} from "../../components";
 import { useToast } from "../../components/Toast/ToastContext";
 import { useAuth } from "../../contexts/AuthContext";
 import api from "../../services/api";
@@ -26,11 +32,12 @@ function Dashboard() {
   const { showToast } = useToast();
   const userModuleGateCheckedRef = useRef(false);
   const [view, setView] = useState("home");
+  const [openDashboardSection, setOpenDashboardSection] = useState("");
   const [moduleGateLoading, setModuleGateLoading] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [forcePasswordModalOpen, setForcePasswordModalOpen] = useState(false);
-  const [openAdminSection, setOpenAdminSection] = useState("melpethostel");
   const [melComplianceGate, setMelComplianceGate] = useState(false);
+  const [melPetRegistrationOnly, setMelPetRegistrationOnly] = useState(false);
   const [contractPromptRequest, setContractPromptRequest] = useState(0);
   const [clientProfileModalOpen, setClientProfileModalOpen] = useState(false);
   const [clientProfileInitial, setClientProfileInitial] = useState(null);
@@ -49,7 +56,9 @@ function Dashboard() {
   const hasMelPetHostelAccess = allowedModules.includes("melpethostel");
 
   function openMelPetRegistration() {
+    setMelPetRegistrationOnly(true);
     setMelComplianceGate(false);
+    setOpenDashboardSection("");
     setView("mel");
   }
 
@@ -61,11 +70,15 @@ function Dashboard() {
           summary: "Acesse o sistema operacional do pet hotel.",
           items: [
             {
-              label: "Cadastro de tutores e pets.",
+              label: "Cadastro de Clientes",
               onAction: openMelPetRegistration,
             },
-            "Contrato, documentos e anamnese",
-            "Presenca, hospedagem e rotina do pet",
+            ...(melPetRegistrationOnly
+              ? []
+              : [
+                  "Contrato, documentos e anamnese",
+                  "Presenca, hospedagem e rotina do pet",
+                ]),
           ],
         }
       : null,
@@ -77,15 +90,15 @@ function Dashboard() {
           items: [
             {
               label: "Criacao e edicao de usuarios",
-              onAction: () => setView("admin-users"),
+              onAction: () => openView("admin-users"),
             },
             {
               label: "Vinculo de grupos e permissoes",
-              onAction: () => setView("admin-groups"),
+              onAction: () => openView("admin-groups"),
             },
             {
               label: "Alteracao de senha administrativa",
-              onAction: () => setView("admin-passwords"),
+              onAction: () => openView("admin-passwords"),
             },
           ],
         }
@@ -98,15 +111,15 @@ function Dashboard() {
           items: [
             {
               label: "Token salvo no banco de dados",
-              onAction: () => setView("telegram-token"),
+              onAction: () => openView("telegram-token"),
             },
             {
               label: "Ativacao ou desativacao do bot",
-              onAction: () => setView("telegram-status"),
+              onAction: () => openView("telegram-status"),
             },
             {
               label: "Envio de mensagem de teste",
-              onAction: () => setView("telegram-test"),
+              onAction: () => openView("telegram-test"),
             },
           ],
         }
@@ -116,8 +129,10 @@ function Dashboard() {
   useEffect(() => {
     userModuleGateCheckedRef.current = false;
     setView("home");
+    setOpenDashboardSection("");
     setModuleGateLoading(false);
     setMelComplianceGate(false);
+    setMelPetRegistrationOnly(false);
   }, [usuario?.id, usuario?.login]);
 
   useEffect(() => {
@@ -201,6 +216,15 @@ function Dashboard() {
           setMelComplianceGate(true);
           setView("mel");
           setContractPromptRequest((current) => current + 1);
+          return;
+        }
+
+        const petsData = await api.get("/melpethostel/pets");
+        const pets = Array.isArray(petsData?.pets) ? petsData.pets : [];
+        if (!pets.length) {
+          setMelComplianceGate(true);
+          setMelPetRegistrationOnly(true);
+          setView("mel");
         }
       } catch (error) {
         console.debug("Status do contrato nao carregado:", error?.message);
@@ -233,7 +257,9 @@ function Dashboard() {
   }
 
   function updateClientProfileStatus(data) {
-    const pendente = Boolean(data?.pendente || data?.cadastroCompleto === false);
+    const pendente = Boolean(
+      data?.pendente || data?.cadastroCompleto === false,
+    );
     setClientProfileInitial(data?.cliente || null);
     setClientProfileStatus({
       loaded: true,
@@ -292,10 +318,70 @@ function Dashboard() {
   }
 
   const handleUserKeyDown = (event) => {
-    if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+    if (
+      event.key === "Enter" ||
+      event.key === " " ||
+      event.key === "Spacebar"
+    ) {
       setPasswordModalOpen(true);
     }
   };
+
+  function openView(nextView) {
+    setOpenDashboardSection("");
+    setView(nextView);
+  }
+
+  function renderDashboardItem(item) {
+    if (typeof item === "string") {
+      return <MenuItem key={item} title={item} />;
+    }
+
+    return (
+      <MenuItem
+        key={item.label}
+        onAction={item.onAction}
+        summary={item.description}
+        title={item.label}
+      />
+    );
+  }
+
+  function renderAdminDashboardSections() {
+    return (
+      <MenuTemplate
+        panels={[
+          {
+            id: "admin-home",
+            title: "Painel Administrativo",
+            summary: "Acesse os menus administrativos do sistema.",
+            ariaLabel: "Menus administrativos",
+            items: dashboardSections.map((section) => ({
+              id: section.id,
+              title: section.title,
+              summary: section.summary,
+              isOpen: openDashboardSection === section.id,
+              onAction: () =>
+                setOpenDashboardSection((current) =>
+                  current === section.id ? "" : section.id,
+                ),
+              content: (
+                <MenuList ariaLabel={section.title}>
+                  {section.items.map(renderDashboardItem)}
+                  {section.actionLabel ? (
+                    <MenuItem
+                      onAction={section.onAction}
+                      title={section.actionLabel}
+                    />
+                  ) : null}
+                </MenuList>
+              ),
+            })),
+          },
+        ]}
+      />
+    );
+  }
 
   return (
     <div className="dashboard">
@@ -321,7 +407,9 @@ function Dashboard() {
             </span>
 
             {isAdmin ? (
-              <span className="user-badge">{usuarioGrupo || "Administrador"}</span>
+              <span className="user-badge">
+                {usuarioGrupo || "Administrador"}
+              </span>
             ) : (
               <span className="user-badge">{usuarioGrupo}</span>
             )}
@@ -335,80 +423,51 @@ function Dashboard() {
       </header>
 
       {moduleGateLoading ? (
-        <main className="dashboard-content">
-          <section className="admin-home-panel">
+        <MenuTemplate>
+          <MenuPanel>
             <p>Verificando contrato do usuário...</p>
-          </section>
-        </main>
+          </MenuPanel>
+        </MenuTemplate>
       ) : view === "home" ? (
-        <main className="dashboard-content">
-          <section className="admin-home-panel">
-            <div className="admin-accordion" aria-label="Modulos administrativos">
-              {dashboardSections.map((section) => {
-                const isOpen = openAdminSection === section.id;
-
-                return (
-                  <section
-                    className={`admin-accordion-section ${isOpen ? "is-open" : ""}`}
-                    key={section.id}
-                  >
-                    <button
-                      className="admin-accordion-trigger"
-                      type="button"
-                      aria-expanded={isOpen}
-                      onClick={() =>
-                        setOpenAdminSection((current) =>
-                          current === section.id ? "" : section.id,
-                        )
-                      }
-                    >
-                      <span>
-                        <strong>{section.title}</strong>
-                        <small>{section.summary}</small>
-                      </span>
-                    </button>
-
-                    {isOpen ? (
-                      <div className="admin-accordion-content">
-                        <ul>
-                          {section.items.map((item) => (
-                            <li key={item.label || item}>
-                              {typeof item === "string" ? (
-                                <span className="admin-static-item">{item}</span>
-                              ) : (
-                                <button type="button" onClick={item.onAction}>
-                                  <strong>{item.label}</strong>
-                                  {item.description ? <span>{item.description}</span> : null}
-                                </button>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-
-                        {section.actionLabel ? (
-                          <Button type="button" onClick={section.onAction}>
-                            {section.actionLabel}
-                          </Button>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </section>
-                );
-              })}
-            </div>
-          </section>
-        </main>
+        isAdmin ? (
+          renderAdminDashboardSections()
+        ) : (
+          <MenuTemplate>
+            {dashboardSections.map((section) => (
+              <MenuPanel
+                key={section.id}
+                summary={section.summary}
+                title={section.title}
+              >
+                <MenuList ariaLabel={section.title}>
+                  {section.items.map(renderDashboardItem)}
+                  {section.actionLabel ? (
+                    <MenuItem
+                      onAction={section.onAction}
+                      title={section.actionLabel}
+                    />
+                  ) : null}
+                </MenuList>
+              </MenuPanel>
+            ))}
+          </MenuTemplate>
+        )
       ) : view === "mel" ? (
         <MelPetHostel
           onBack={() => {
-            setMelComplianceGate(false);
+            setMelComplianceGate(melPetRegistrationOnly);
             setView("home");
           }}
           clientProfile={clientProfileInitial}
           clientProfileReady={clientProfileStatus.loaded}
           clientProfilePending={clientProfileStatus.pendente}
           enforceContractGate={melComplianceGate}
+          petRegistrationOnly={melPetRegistrationOnly}
           contractPromptRequest={contractPromptRequest}
+          onPetRegistered={() => {
+            setMelPetRegistrationOnly(false);
+            setMelComplianceGate(false);
+          }}
         />
       ) : view === "admin-users" ? (
         <AdminUsersPage onBack={() => setView("home")} />
@@ -436,9 +495,9 @@ function Dashboard() {
         onClose={logout}
         onSubmit={changeFirstAccessPassword}
         title="Primeiro acesso - alterar senha"
-        currentLabel="Senha provisoria atual"
+        currentLabel="Senha provisória atual"
         closeOnBackdropClick={false}
-        description="Detectamos que esta e sua primeira entrada no sistema. Altere sua senha para continuar. Fechar este modal encerra a sessao."
+        description="Detectamos que esta é sua primeira entrada no sistema. Altere sua senha para continuar. Fechar esta janela irá deslogar o usuário."
       />
 
       <ClientProfileModal
@@ -447,7 +506,6 @@ function Dashboard() {
         onSubmit={saveClientProfile}
         initialCliente={clientProfileInitial}
       />
-
     </div>
   );
 }

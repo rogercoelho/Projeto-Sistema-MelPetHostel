@@ -232,10 +232,13 @@ app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
 
   const status = err.status || err.statusCode || 500;
+  const isPetsEndpoint =
+    req.method === "POST" && req.path === "/melpethostel/pets";
   const payload = {
     status: "erro",
     mensagem:
       err.publicMessage ||
+      (isPetsEndpoint && (err.sqlMessage || err.message)) ||
       (status >= 500 ? "Erro interno do servidor." : err.message),
   };
 

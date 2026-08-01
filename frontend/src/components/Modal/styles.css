@@ -42,6 +42,7 @@
 
 .modal-container {
   background-color: var(--cor-branco);
+  border: 2px solid #000;
   border-radius: var(--radius-lg);
   width: 100%;
   /* use most of the viewport on small screens, limit on large screens */
@@ -68,7 +69,8 @@
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--cor-areia);
+  border-bottom: 1px solid #000;
+  background: var(--cor-areia-claro);
 }
 
 .modal-header h2 {

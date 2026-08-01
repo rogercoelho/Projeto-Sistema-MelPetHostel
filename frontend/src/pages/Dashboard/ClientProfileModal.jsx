@@ -28,7 +28,9 @@ const EMPTY_FORM = {
 };
 
 function isReservedName(value) {
-  return String(value || "").toLowerCase().startsWith("cadastro pendente");
+  return String(value || "")
+    .toLowerCase()
+    .startsWith("cadastro pendente");
 }
 
 function createForm(cliente) {
@@ -115,9 +117,7 @@ export default function ClientProfileModal({
       containerStyle={{ width: "min(96%, 760px)" }}
     >
       <form className="client-profile-form" onSubmit={handleSubmit}>
-        <p>
-          Complete seu cadastro para continuar usando o sistema.
-        </p>
+        <p>Complete seu cadastro para continuar usando o sistema.</p>
 
         <div className="client-profile-grid">
           <Input
@@ -191,11 +191,13 @@ export default function ClientProfileModal({
         </div>
 
         <label className="client-profile-notes">
-          Observacoes
+          Observações
           <textarea
             value={form.observacoes}
-            onChange={(event) => updateField("observacoes", event.target.value)}
-            placeholder="Observacoes"
+            onChange={(event) =>
+              updateField("observacoes", event.target.value)
+            }
+            placeholder="Observações importantes que o usuário pode acrescentar."
           />
         </label>
 

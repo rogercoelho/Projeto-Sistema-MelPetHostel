@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, ContractModal, Modal, PdfViewer } from "../../components";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Button,
+  ContractModal,
+  MenuItem,
+  MenuList,
+  MenuPanel,
+  MenuTemplate,
+  Modal,
+  PdfViewer,
+} from "../../components";
 import { useToast } from "../../components/Toast/ToastContext";
 import { useAuth } from "../../contexts/AuthContext";
 import api, { API_URL } from "../../services/api";
@@ -10,13 +19,13 @@ import "./styles.css";
 const SUPPORT_DOC_FIELDS = [
   {
     key: "identificacao",
-    label: "Documento de identificacao",
+    label: "Documento de identificação",
     tipoNome: "Documento de Identificacao",
     required: true,
   },
   {
     key: "comprovante",
-    label: "Comprovante de endereco",
+    label: "Comprovante de Endereço",
     tipoNome: "Comprovante de Endereco",
     required: true,
   },
@@ -48,13 +57,47 @@ function getSupportDocKeyFromTypeName(value) {
   return "";
 }
 
+function formatPetAge(value) {
+  const age = String(value || "").trim();
+  if (!age) return "";
+  return /\bano(s)?\b/i.test(age) ? age : `${age} anos`;
+}
+
+function formatPetWeight(value) {
+  const weight = String(value || "").trim();
+  if (!weight) return "";
+  return /\bkg\b/i.test(weight) ? weight : `${weight} kg`;
+}
+
+function getPetSummary(pet) {
+  return [
+    pet?.raca,
+    formatPetAge(pet?.idade),
+    formatPetWeight(pet?.pesoAproximado),
+  ]
+    .filter(Boolean)
+    .join(" - ");
+}
+
+function getPetFormInitialData(pet) {
+  return {
+    ...(pet?.ficha || {}),
+    nomePet: pet?.ficha?.nomePet || pet?.nome || "",
+    raca: pet?.ficha?.raca || pet?.raca || "",
+    idade: pet?.ficha?.idade || pet?.idade || "",
+    pesoAproximado: pet?.ficha?.pesoAproximado || pet?.pesoAproximado || "",
+  };
+}
+
 export default function MelPetHostel({
   onBack,
   clientProfile,
   clientProfileReady = true,
   clientProfilePending = false,
   enforceContractGate = false,
+  petRegistrationOnly = false,
   contractPromptRequest = 0,
+  onPetRegistered,
 }) {
   const { usuario, logout } = useAuth();
   const { showToast } = useToast();
@@ -87,7 +130,8 @@ export default function MelPetHostel({
   const [uploadPanelOpen, setUploadPanelOpen] = useState(true);
   const [registeredPets, setRegisteredPets] = useState([]);
   const [loadingPets, setLoadingPets] = useState(false);
-  const [openMenu, setOpenMenu] = useState(null);
+  const [petFormMode, setPetFormMode] = useState("list");
+  const [selectedPet, setSelectedPet] = useState(null);
   const [activeMenu, setActiveMenu] = useState("");
   const [pendingUsers, setPendingUsers] = useState([]);
   const [loadingPendingUsers, setLoadingPendingUsers] = useState(false);
@@ -118,12 +162,31 @@ export default function MelPetHostel({
 
   const shouldEnforceContractGate = Boolean(!isAdmin && enforceContractGate);
   const contratoValido = Boolean(contractStatus?.contratoValido);
+  const petCadastroObrigatorio = Boolean(
+    !isAdmin && contratoValido && !loadingPets && registeredPets.length === 0,
+  );
   const acessoDiretoMenu =
-    isAdmin || !shouldEnforceContractGate || contratoValido;
+    isAdmin ||
+    !shouldEnforceContractGate ||
+    (contratoValido && !petCadastroObrigatorio);
+  const shouldRenderPetRegistrationDashboard = Boolean(
+    !isAdmin &&
+    petRegistrationOnly &&
+    !loadingStatus &&
+    !statusError &&
+    (acessoDiretoMenu || petCadastroObrigatorio),
+  );
+  const shouldRenderUserPetRegistrationDashboard = Boolean(
+    !petRegistrationOnly &&
+    !isAdmin &&
+    !loadingStatus &&
+    !statusError &&
+    (acessoDiretoMenu || petCadastroObrigatorio),
+  );
   const contratoDetectado = Boolean(
     shouldEnforceContractGate &&
-      contractStatus?.possuiContratoDb &&
-      contractStatus?.arquivoExiste,
+    contractStatus?.possuiContratoDb &&
+    contractStatus?.arquivoExiste,
   );
   const profileGateActive = Boolean(
     shouldEnforceContractGate && (!clientProfileReady || clientProfilePending),
@@ -132,11 +195,11 @@ export default function MelPetHostel({
     contratoDetectado || uploading || profileGateActive;
   const shouldShowSupportDocsCard = Boolean(
     !isAdmin &&
-      shouldEnforceContractGate &&
-      !profileGateActive &&
-      !loadingStatus &&
-      !statusError &&
-      !contratoValido,
+    shouldEnforceContractGate &&
+    !profileGateActive &&
+    !loadingStatus &&
+    !statusError &&
+    !contratoValido,
   );
 
   const requiredDocKeys = SUPPORT_DOC_FIELDS.filter((d) => d.required).map(
@@ -172,13 +235,13 @@ export default function MelPetHostel({
   );
   const canOpenContractPrompt = Boolean(
     !isAdmin &&
-      shouldEnforceContractGate &&
-      clientProfileReady &&
-      !clientProfilePending &&
-      !loadingStatus &&
-      !statusError &&
-      !contratoDetectado &&
-      !contratoValido,
+    shouldEnforceContractGate &&
+    clientProfileReady &&
+    !clientProfilePending &&
+    !loadingStatus &&
+    !statusError &&
+    !contratoDetectado &&
+    !contratoValido,
   );
 
   useEffect(() => {
@@ -235,7 +298,7 @@ export default function MelPetHostel({
       setDocumentTypeIds(nextIds);
     } catch (error) {
       console.error("Erro ao carregar tipos de documentos:", error);
-      showToast("Não foi possível carregar os tipos de documentos.", "error");
+      showToast("NÃ£o foi possÃ­vel carregar os tipos de documentos.", "error");
     }
   }
 
@@ -279,10 +342,10 @@ export default function MelPetHostel({
       const users = Array.isArray(data?.usuarios) ? data.usuarios : [];
       setPendingUsers(users);
     } catch (error) {
-      console.error("Erro ao carregar usuários pendentes:", error);
+      console.error("Erro ao carregar usuÃ¡rios pendentes:", error);
       setPendingUsers([]);
       setPendingUsersError(
-        error?.message || "Não foi possível carregar os usuários pendentes.",
+        error?.message || "NÃ£o foi possÃ­vel carregar os usuÃ¡rios pendentes.",
       );
     } finally {
       setLoadingPendingUsers(false);
@@ -308,10 +371,10 @@ export default function MelPetHostel({
         }));
       }
     } catch (error) {
-      console.error("Erro ao carregar documentos do usuário:", error);
+      console.error("Erro ao carregar documentos do usuÃ¡rio:", error);
       setSelectedUserFiles([]);
       setSelectedUserFilesError(
-        error?.message || "Não foi possível carregar os documentos.",
+        error?.message || "NÃ£o foi possÃ­vel carregar os documentos.",
       );
     } finally {
       setLoadingSelectedUserFiles(false);
@@ -370,12 +433,12 @@ export default function MelPetHostel({
       ? Number(file?.contratoId)
       : Number(file?.documentoId);
     if (!Number.isInteger(targetId) || targetId <= 0) {
-      showToast("Este item não pode ser conferido.", "error");
+      showToast("Este item nÃ£o pode ser conferido.", "error");
       return;
     }
 
     if (file?.conferido) {
-      showToast("Documento já está conferido.", "info");
+      showToast("Documento jÃ¡ estÃ¡ conferido.", "info");
       return;
     }
 
@@ -419,7 +482,7 @@ export default function MelPetHostel({
       }
     } catch (error) {
       console.error("Erro ao conferir documento:", error);
-      showToast(error?.message || "Não foi possível conferir.", "error");
+      showToast(error?.message || "NÃ£o foi possÃ­vel conferir.", "error");
     } finally {
       setConferindoItemKey("");
     }
@@ -440,19 +503,9 @@ export default function MelPetHostel({
       return;
     }
 
-    (async () => {
-      try {
-        await api.post("/melpethostel/acesso", {});
-      } catch (err) {
-        console.debug("Could not notify module access:", err?.message || err);
-      } finally {
-        if (shouldEnforceContractGate) {
-          loadContractStatus();
-          loadDocumentTypes();
-          loadDocumentStatus();
-        }
-      }
-    })();
+    loadContractStatus();
+    loadDocumentTypes();
+    loadDocumentStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, shouldEnforceContractGate]);
 
@@ -478,7 +531,8 @@ export default function MelPetHostel({
         console.error("Erro ao carregar pets cadastrados:", error);
         if (!ignore) {
           showToast(
-            error?.message || "Não foi possível carregar os pets cadastrados.",
+            error?.message ||
+              "NÃ£o foi possÃ­vel carregar os pets cadastrados.",
             "error",
           );
         }
@@ -581,7 +635,7 @@ export default function MelPetHostel({
     } catch (error) {
       console.error("Erro ao enviar contrato assinado:", error);
       showToast(
-        error?.message || "Não foi possível enviar o contrato.",
+        error?.message || "NÃ£o foi possÃ­vel enviar o contrato.",
         "error",
       );
     } finally {
@@ -601,19 +655,41 @@ export default function MelPetHostel({
     const data = await api.post("/melpethostel/pets", payload);
     const pet = data?.pet;
     const createdAt = pet?.cadastradoEm || new Date().toISOString();
-    setRegisteredPets((current) => [
-      {
-        id: pet?.id || `${createdAt}-${payload.nomePet}`,
-        nome: pet?.nome || payload.nomePet,
-        raca: pet?.raca || payload.raca,
-        idade: pet?.idade || payload.idade,
-        pesoAproximado: pet?.pesoAproximado || payload.pesoAproximado,
-        cadastradoEm: createdAt,
-        ficha: payload,
-      },
-      ...current,
-    ]);
+    const createdPet = {
+      id: pet?.id || `${createdAt}-${payload.nomePet}`,
+      nome: pet?.nome || payload.nomePet,
+      raca: pet?.raca || payload.raca,
+      idade: pet?.idade || payload.idade,
+      pesoAproximado: pet?.pesoAproximado || payload.pesoAproximado,
+      cadastradoEm: createdAt,
+      ficha: pet?.ficha || payload,
+    };
+    setRegisteredPets((current) => [createdPet, ...current]);
+    setSelectedPet(null);
+    setPetFormMode("list");
+    onPetRegistered?.();
     showToast("Ficha do pet cadastrada com sucesso.", "success");
+  }
+
+  function handleOpenNewPetForm() {
+    setSelectedPet(null);
+    setPetFormMode((current) => (current === "new" ? "list" : "new"));
+  }
+
+  function handleOpenPetDetails(pet) {
+    const isSamePet = selectedPet?.id === pet.id && petFormMode === "view";
+    setSelectedPet(isSamePet ? null : pet);
+    setPetFormMode(isSamePet ? "list" : "view");
+  }
+
+  function handleClosePetForm() {
+    setSelectedPet(null);
+    setPetFormMode(petCadastroObrigatorio ? "new" : "list");
+  }
+
+  function handleBackToMainMenu() {
+    handleClosePetForm();
+    onBack?.();
   }
 
   async function handleUploadSupportDoc(key) {
@@ -678,7 +754,7 @@ export default function MelPetHostel({
     } catch (error) {
       console.error("Erro ao enviar documento complementar:", error);
       showToast(
-        error?.message || "Não foi possível enviar o documento.",
+        error?.message || "NÃ£o foi possÃ­vel enviar o documento.",
         "error",
       );
     } finally {
@@ -704,93 +780,141 @@ export default function MelPetHostel({
     openSupportFilePicker(key);
   }
 
+  const petRegistrationPanels = [
+    {
+      id: "pet-registration",
+      title: "Mel Pet Hostel",
+      summary: "Acesse o sistema operacional do pet hotel.",
+      ariaLabel: "Cadastro de pets",
+      before: petCadastroObrigatorio ? (
+        <p className="pet-registration-required-message">
+          Agora chegou o momento de cadastrar o seu Pet. Você precisa ter pelo
+          menos um Pet cadastrado para usar o sistema.
+        </p>
+      ) : null,
+      items: [
+        {
+          id: "new-pet",
+          title: "Cadastrar novo pet",
+          isOpen: petFormMode === "new" || petCadastroObrigatorio,
+          onAction: handleOpenNewPetForm,
+          content: (
+            <PetRegistrationForm onSubmit={handlePetRegistrationSubmit} />
+          ),
+        },
+        ...(loadingPets
+          ? [
+              {
+                id: "loading-pets",
+                title: "Carregando pets cadastrados...",
+                disabled: true,
+              },
+            ]
+          : registeredPets.map((pet) => ({
+              id: pet.id,
+              title: pet.nome,
+              summary: getPetSummary(pet),
+              isOpen: petFormMode === "view" && selectedPet?.id === pet.id,
+              onAction: () => handleOpenPetDetails(pet),
+              content: (
+                <PetRegistrationForm
+                  initialData={getPetFormInitialData(pet)}
+                  readOnly
+                />
+              ),
+            }))),
+      ],
+      after: (
+        <div className="pet-main-actions">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleBackToMainMenu}
+          >
+            Voltar
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  const adminMenuPanels = [
+    {
+      id: "admin-melpethostel",
+      title: "Mel Pet Hostel",
+      summary: "Acesse as ferramentas administrativas do pet hotel.",
+      ariaLabel: "Menu da Mel Pet Hostel",
+      items: [
+        {
+          id: "conferir-documentos",
+          title: "Aprovar Documentos",
+          summary: "Conferir e aprovar documentos enviados.",
+          isOpen: activeMenu === "conferirDocumentos",
+          onAction: () => {
+            setActiveMenu((prev) =>
+              prev === "conferirDocumentos" ? "" : "conferirDocumentos",
+            );
+            setSelectedPendingUser(null);
+            setSelectedUserFiles([]);
+            setSelectedUserFilesError("");
+          },
+        },
+        {
+          id: "controle-planos",
+          title: "Controle de Planos",
+          summary: "Gerenciar planos e ajustes do módulo.",
+          isOpen: activeMenu === "controlePlanos",
+          onAction: () => setActiveMenu("controlePlanos"),
+        },
+      ],
+      after: (
+        <div className="pet-main-actions">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleBackToMainMenu}
+          >
+            Voltar
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  if (
+    shouldRenderPetRegistrationDashboard ||
+    shouldRenderUserPetRegistrationDashboard
+  ) {
+    return <MenuTemplate panels={petRegistrationPanels} />;
+  }
+
   return (
-    <div className="page-page melpet-shell">
-      {isAdmin || !acessoDiretoMenu ? (
-        <header className="page-header melpet-header melpet-title-card">
-          <h1>Sistema Mel Pet Hostel</h1>
-        </header>
-      ) : null}
-
-      <main className="page-content melpet-content">
+    <>
+      <MenuTemplate
+        panels={
+          !loadingStatus &&
+          !statusError &&
+          isAdmin &&
+          (acessoDiretoMenu || petCadastroObrigatorio)
+            ? adminMenuPanels
+            : []
+        }
+      >
         {loadingStatus ? (
-          <section className="melpet-panel">
+          <MenuPanel>
             <p>Verificando contrato do usuário...</p>
-          </section>
+          </MenuPanel>
         ) : statusError ? (
-          <section className="melpet-panel">
+          <MenuPanel>
             <p className="melpet-error">{statusError}</p>
-          </section>
-        ) : acessoDiretoMenu ? (
+          </MenuPanel>
+        ) : acessoDiretoMenu || petCadastroObrigatorio ? (
           <>
-            {isAdmin ? (
-              <section className="melpet-menu-surface">
-                <h2>Menu da Mel Pet Hostel</h2>
-
-                <div className="melpet-menu">
-                  <>
-                    <div className="menu-row">
-                      <button
-                        className="menu-button"
-                        type="button"
-                        onClick={() => {
-                          setActiveMenu((prev) =>
-                            prev === "conferirDocumentos"
-                              ? ""
-                              : "conferirDocumentos",
-                          );
-                          setOpenMenu(null);
-                          setSelectedPendingUser(null);
-                          setSelectedUserFiles([]);
-                          setSelectedUserFilesError("");
-                        }}
-                      >
-                        <span>Conferir Documentos</span>
-                      </button>
-                    </div>
-
-                    <div className="menu-row">
-                      <button
-                        className="menu-button"
-                        onClick={() =>
-                          setOpenMenu((prev) =>
-                            prev === "controlePlanos" ? null : "controlePlanos",
-                          )
-                        }
-                        aria-expanded={openMenu === "controlePlanos"}
-                      >
-                        <span>Controle de Planos</span>
-                        <span
-                          className={`chev ${openMenu === "controlePlanos" ? "open" : ""}`}
-                        >
-                          ▾
-                        </span>
-                      </button>
-                    </div>
-
-                    <div
-                      className={`menu-panel ${openMenu === "controlePlanos" ? "open" : ""}`}
-                    >
-                      <div className="menu-panel-inner">
-                        <button
-                          type="button"
-                          className="menu-item"
-                          onClick={() => setActiveMenu("controlePlanos")}
-                        >
-                          Acessar
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                </div>
-              </section>
-            ) : null}
-
             {isAdmin && activeMenu === "conferirDocumentos" ? (
-              <section className="melpet-menu-content">
+              <section className="melpet-section-content">
                 <div className="melpet-outer-card melpet-validate-card">
                   <div className="melpet-outer-card-header">
-                    <h3>Conferir Documentos</h3>
+                    <h3>Aprovar Documentos</h3>
                   </div>
 
                   <div className="melpet-categories-card">
@@ -831,7 +955,7 @@ export default function MelPetHostel({
                   <div className="melpet-outer-card melpet-user-docs-container">
                     <div className="melpet-outer-card-header">
                       <h3>
-                        Documentos de {selectedPendingUser?.nome || "usuário"}
+                        Documentos de {selectedPendingUser?.nome || "usuÃ¡rio"}
                       </h3>
                     </div>
 
@@ -853,7 +977,7 @@ export default function MelPetHostel({
                                   <th>Nome do documento</th>
                                   <th>Tipo de documento</th>
                                   <th>Visualizar</th>
-                                  <th>Conferir</th>
+                                  <th>Aprovar</th>
                                   <th>Reprovar</th>
                                 </tr>
                               </thead>
@@ -919,10 +1043,10 @@ export default function MelPetHostel({
                                                 }
                                               >
                                                 {isConferindo
-                                                  ? "Conferindo..."
+                                                  ? "Aprovando..."
                                                   : isConferido
-                                                    ? "Conferido"
-                                                    : "Conferir"}
+                                                    ? "Aprovado"
+                                                    : "Aprovar"}
                                               </button>
                                             </td>
                                             <td>
@@ -931,7 +1055,7 @@ export default function MelPetHostel({
                                                 className="melpet-review-btn melpet-review-btn--reject"
                                                 onClick={() =>
                                                   showToast(
-                                                    "Reprovação ainda não integrada.",
+                                                    "ReprovaÃ§Ã£o ainda nÃ£o integrada.",
                                                     "info",
                                                   )
                                                 }
@@ -971,267 +1095,217 @@ export default function MelPetHostel({
                 ) : null}
               </section>
             ) : isAdmin && activeMenu === "controlePlanos" ? (
-              <section className="melpet-menu-content">
+              <section className="melpet-section-content">
                 <p>
                   Área de controle de planos. Aqui você poderá gerenciar planos
                   e ajustes do módulo.
                 </p>
               </section>
-            ) : !isAdmin ? (
-              <section className="melpet-menu-content pet-registration-area">
-                <div className="pet-registration-container">
-                  <PetRegistrationForm
-                    onBack={onBack}
-                    onSubmit={handlePetRegistrationSubmit}
-                  />
-                </div>
-
-                <div className="pet-registration-list">
-                  {loadingPets ? (
-                    <p className="pet-registration-empty">
-                      Carregando pets cadastrados...
-                    </p>
-                  ) : registeredPets.length ? (
-                    registeredPets.map((pet) => (
-                      <article className="pet-registration-item" key={pet.id}>
-                        <div>
-                          <h4>{pet.nome}</h4>
-                          <p>
-                            {pet.raca} | {pet.idade} | {pet.pesoAproximado}
-                          </p>
-                        </div>
-                        <span>
-                          {new Intl.DateTimeFormat("pt-BR").format(
-                            new Date(pet.cadastradoEm),
-                          )}
-                        </span>
-                      </article>
-                    ))
-                  ) : (
-                    <p className="pet-registration-empty">
-                      Nenhum pet cadastrado ainda.
-                    </p>
-                  )}
-                </div>
-              </section>
             ) : null}
           </>
         ) : (
-          <section className="admin-home-panel melpet-upload-home">
-            <div
-              className="admin-accordion melpet-upload-accordion"
-              aria-label="Contrato e documentos obrigatorios"
+          <MenuPanel
+            className="melpet-upload-home"
+            summary={uploadPanelSummary}
+            title="Mel Pet Hostel"
+          >
+            <MenuList
+              ariaLabel="Contrato e documentos obrigatórios"
+              className="melpet-upload-accordion"
             >
-              <section
-                className={`admin-accordion-section ${
-                  uploadPanelOpen ? "is-open" : ""
-                }`}
+              <MenuItem
+                contentClassName="melpet-upload-content"
+                isOpen={uploadPanelOpen}
+                onAction={() => setUploadPanelOpen((current) => !current)}
+                title="Contrato e Documentos Obrigatórios"
               >
-                <button
-                  className="admin-accordion-trigger"
-                  type="button"
-                  aria-expanded={uploadPanelOpen}
-                  onClick={() => setUploadPanelOpen((current) => !current)}
-                >
-                  <span>
-                    <strong>Contrato e Documentos Obrigatorios</strong>
-                    <small>{uploadPanelSummary}</small>
-                  </span>
-                </button>
+                <ul className="melpet-upload-doc-list">
+                  <li
+                    className={`melpet-upload-doc-item ${
+                      contratoDetectado ? "is-done" : "is-pending"
+                    }`}
+                  >
+                    <div className="melpet-upload-doc-main">
+                      <div className="melpet-upload-doc-copy">
+                        <strong>Contrato assinado</strong>
+                        <span
+                          className={
+                            contratoDetectado
+                              ? "melpet-doc-status melpet-doc-status--done"
+                              : "melpet-doc-status melpet-doc-status--pending"
+                          }
+                        >
+                          {contratoDetectado
+                            ? "Enviado para conferência"
+                            : "Pendente"}
+                        </span>
+                      </div>
 
-                {uploadPanelOpen ? (
-                  <div className="admin-accordion-content melpet-upload-content">
-                    <ul className="melpet-upload-doc-list">
-                      <li
-                        className={`melpet-upload-doc-item ${
-                          contratoDetectado ? "is-done" : "is-pending"
-                        }`}
-                      >
-                        <div className="melpet-upload-doc-main">
-                          <div className="melpet-upload-doc-copy">
-                            <strong>Contrato assinado</strong>
-                            <span
-                              className={
-                                contratoDetectado
-                                  ? "melpet-doc-status melpet-doc-status--done"
-                                  : "melpet-doc-status melpet-doc-status--pending"
-                              }
+                      {!contratoDetectado ? (
+                        <div className="melpet-contract-actions">
+                          <Button
+                            type="button"
+                            onClick={handleContractPrimaryAction}
+                            disabled={actionButtonsDisabled}
+                          >
+                            {uploading
+                              ? "Enviando..."
+                              : selectedFile
+                                ? "Enviar"
+                                : "Upload do contrato"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => setContractModalOpen(true)}
+                            disabled={actionButtonsDisabled}
+                          >
+                            Preencher Contrato
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      className="melpet-file-input-hidden"
+                      onChange={handleFileSelected}
+                    />
+
+                    {selectedFile ? (
+                      <div className="melpet-selected-file-block">
+                        <p className="melpet-selected-file-name">
+                          <span className="melpet-selected-file-value">
+                            {selectedFile.name}
+                            <button
+                              type="button"
+                              className="melpet-clear-file-btn"
+                              onClick={() => setSelectedFile(null)}
+                              aria-label="Excluir seleção de arquivo"
+                              title="Excluir seleção"
+                              disabled={actionButtonsDisabled}
                             >
-                              {contratoDetectado
-                                ? "Enviado para conferencia"
-                                : "Pendente"}
-                            </span>
-                          </div>
+                              X
+                            </button>
+                          </span>
+                        </p>
+                      </div>
+                    ) : null}
+                  </li>
 
-                          {!contratoDetectado ? (
-                            <div className="melpet-contract-actions">
+                  {shouldShowSupportDocsCard
+                    ? SUPPORT_DOC_FIELDS.map((field) => {
+                        const selectedSupportFile =
+                          selectedSupportFiles[field.key];
+                        const isUploadingThis =
+                          uploadingSupportKey === field.key;
+                        const isConcluded =
+                          documentStatusByKey[field.key]?.existsDb &&
+                          documentStatusByKey[field.key]?.existsDisk;
+                        const identifiedCount =
+                          documentStatusByKey[field.key]?.identifiedCount || 0;
+                        const supportActionDisabled =
+                          Boolean(uploadingSupportKey) ||
+                          (field.required && isConcluded);
+                        return (
+                          <li
+                            key={field.key}
+                            className={`melpet-upload-doc-item ${
+                              isConcluded ? "is-done" : "is-pending"
+                            }`}
+                          >
+                            <div className="melpet-upload-doc-main">
+                              <div className="melpet-upload-doc-copy">
+                                <strong>{field.label}</strong>
+                                {field.required ? (
+                                  <span
+                                    className={
+                                      isConcluded
+                                        ? "melpet-doc-status melpet-doc-status--done"
+                                        : "melpet-doc-status melpet-doc-status--pending"
+                                    }
+                                  >
+                                    {isConcluded
+                                      ? "Enviado para conferência"
+                                      : "Pendente"}
+                                  </span>
+                                ) : (
+                                  <span>
+                                    {identifiedCount} identificado
+                                    {identifiedCount === 1 ? "" : "s"}
+                                  </span>
+                                )}
+                              </div>
                               <Button
                                 type="button"
-                                onClick={handleContractPrimaryAction}
-                                disabled={actionButtonsDisabled}
+                                onClick={() =>
+                                  handleSupportPrimaryAction(field.key)
+                                }
+                                disabled={supportActionDisabled}
                               >
-                                {uploading
+                                {isUploadingThis
                                   ? "Enviando..."
-                                  : selectedFile
+                                  : selectedSupportFile
                                     ? "Enviar"
-                                    : "Upload do contrato"}
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                onClick={() => setContractModalOpen(true)}
-                                disabled={actionButtonsDisabled}
-                              >
-                                Preencher Contrato
+                                    : "Upload"}
                               </Button>
                             </div>
-                          ) : null}
-                        </div>
 
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="application/pdf,.pdf"
-                          className="melpet-file-input-hidden"
-                          onChange={handleFileSelected}
-                        />
+                            <input
+                              ref={(el) => {
+                                supportFileRefs.current[field.key] = el;
+                              }}
+                              type="file"
+                              accept="application/pdf,.pdf"
+                              className="melpet-file-input-hidden"
+                              onChange={(event) =>
+                                handleSupportFileSelected(field.key, event)
+                              }
+                            />
 
-                        {selectedFile ? (
-                          <div className="melpet-selected-file-block">
-                            <p className="melpet-selected-file-name">
-                              <span className="melpet-selected-file-value">
-                                {selectedFile.name}
-                                <button
-                                  type="button"
-                                  className="melpet-clear-file-btn"
-                                  onClick={() => setSelectedFile(null)}
-                                  aria-label="Excluir selecao de arquivo"
-                                  title="Excluir selecao"
-                                  disabled={actionButtonsDisabled}
-                                >
-                                  X
-                                </button>
-                              </span>
-                            </p>
-                          </div>
-                        ) : null}
-                      </li>
+                            {selectedSupportFile ? (
+                              <div className="melpet-selected-file-block">
+                                <p className="melpet-selected-file-name">
+                                  <span className="melpet-selected-file-value">
+                                    {selectedSupportFile.name}
+                                    <button
+                                      type="button"
+                                      className="melpet-clear-file-btn"
+                                      onClick={() =>
+                                        setSelectedSupportFiles((prev) => ({
+                                          ...prev,
+                                          [field.key]: null,
+                                        }))
+                                      }
+                                      aria-label="Excluir seleção de arquivo"
+                                      title="Excluir seleção"
+                                      disabled={supportActionDisabled}
+                                    >
+                                      X
+                                    </button>
+                                  </span>
+                                </p>
+                              </div>
+                            ) : null}
+                          </li>
+                        );
+                      })
+                    : null}
+                </ul>
 
-                      {shouldShowSupportDocsCard
-                        ? SUPPORT_DOC_FIELDS.map((field) => {
-                            const selectedSupportFile =
-                              selectedSupportFiles[field.key];
-                            const isUploadingThis =
-                              uploadingSupportKey === field.key;
-                            const isConcluded =
-                              documentStatusByKey[field.key]?.existsDb &&
-                              documentStatusByKey[field.key]?.existsDisk;
-                            const identifiedCount =
-                              documentStatusByKey[field.key]
-                                ?.identifiedCount || 0;
-                            const supportActionDisabled =
-                              Boolean(uploadingSupportKey) ||
-                              (field.required && isConcluded);
-                            return (
-                              <li
-                                key={field.key}
-                                className={`melpet-upload-doc-item ${
-                                  isConcluded ? "is-done" : "is-pending"
-                                }`}
-                              >
-                                <div className="melpet-upload-doc-main">
-                                  <div className="melpet-upload-doc-copy">
-                                    <strong>{field.label}</strong>
-                                    {field.required ? (
-                                      <span
-                                        className={
-                                          isConcluded
-                                            ? "melpet-doc-status melpet-doc-status--done"
-                                            : "melpet-doc-status melpet-doc-status--pending"
-                                        }
-                                      >
-                                        {isConcluded
-                                          ? "Concluido"
-                                          : "Pendente"}
-                                      </span>
-                                    ) : (
-                                      <span>
-                                        {identifiedCount} identificado
-                                        {identifiedCount === 1 ? "" : "s"}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <Button
-                                    type="button"
-                                    onClick={() =>
-                                      handleSupportPrimaryAction(field.key)
-                                    }
-                                    disabled={supportActionDisabled}
-                                  >
-                                    {isUploadingThis
-                                      ? "Enviando..."
-                                      : selectedSupportFile
-                                        ? "Enviar"
-                                        : "Upload"}
-                                  </Button>
-                                </div>
-
-                                <input
-                                  ref={(el) => {
-                                    supportFileRefs.current[field.key] = el;
-                                  }}
-                                  type="file"
-                                  accept="application/pdf,.pdf"
-                                  className="melpet-file-input-hidden"
-                                  onChange={(event) =>
-                                    handleSupportFileSelected(field.key, event)
-                                  }
-                                />
-
-                                {selectedSupportFile ? (
-                                  <div className="melpet-selected-file-block">
-                                    <p className="melpet-selected-file-name">
-                                      <span className="melpet-selected-file-value">
-                                        {selectedSupportFile.name}
-                                        <button
-                                          type="button"
-                                          className="melpet-clear-file-btn"
-                                          onClick={() =>
-                                            setSelectedSupportFiles((prev) => ({
-                                              ...prev,
-                                              [field.key]: null,
-                                            }))
-                                          }
-                                          aria-label="Excluir selecao de arquivo"
-                                          title="Excluir selecao"
-                                          disabled={supportActionDisabled}
-                                        >
-                                          X
-                                        </button>
-                                      </span>
-                                    </p>
-                                  </div>
-                                ) : null}
-                              </li>
-                            );
-                          })
-                        : null}
-                    </ul>
-
-                    {firstStepComplete ? (
-                      <p className="melpet-first-step-message">
-                        A sua primeira etapa esta concluida. Por favor aguarde
-                        a validacao dos documentos para liberar o acesso ao
-                        sistema.
-                      </p>
-                    ) : null}
-                  </div>
+                {firstStepComplete ? (
+                  <p className="melpet-first-step-message">
+                    A sua primeira etapa está concluída. Por favor aguarde a
+                    validação dos documentos para liberar o acesso ao sistema.
+                  </p>
                 ) : null}
-              </section>
-            </div>
-          </section>
+              </MenuItem>
+            </MenuList>
+          </MenuPanel>
         )}
-      </main>
+      </MenuTemplate>
 
       <ContractModal
         isOpen={contractModalOpen}
@@ -1255,6 +1329,6 @@ export default function MelPetHostel({
           <PdfViewer src={documentPreviewSrc} title={documentPreviewTitle} />
         </div>
       </Modal>
-    </div>
+    </>
   );
 }

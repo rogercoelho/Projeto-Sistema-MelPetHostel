@@ -1,0 +1,117 @@
+.menu-template {
+  display: grid;
+  gap: var(--spacing-md);
+  width: 100%;
+  max-width: 960px;
+  box-sizing: border-box;
+  margin: var(--spacing-md) auto;
+  padding: var(--spacing-md);
+  border-radius: 8px;
+  background: var(--cor-branco);
+  box-shadow: var(--shadow-md);
+}
+
+.menu-template-panel {
+  overflow: hidden;
+  border: 1px solid var(--cor-marrom);
+  border-radius: 8px;
+  background: var(--cor-branco);
+}
+
+.menu-template-header {
+  padding: var(--spacing-md);
+  background: var(--cor-branco);
+  border-bottom: 1px solid rgba(var(--cor-marrom-rgb), 0.14);
+}
+
+.menu-template-header h2 {
+  margin: 0;
+  color: var(--cor-marrom);
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.menu-template-header p {
+  margin: 4px 0 0;
+  color: var(--cor-marrom-claro);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.menu-template-body {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--cor-areia-claro);
+}
+
+.menu-template-list {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.menu-template-item {
+  overflow: hidden;
+  border: 0;
+  border-left: 4px solid var(--cor-marrom);
+  border-radius: 8px;
+  background: var(--cor-branco);
+}
+
+.menu-template-item-button {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  padding: var(--spacing-md);
+  border: 0;
+  background: transparent;
+  color: var(--cor-marrom);
+  cursor: default;
+  text-align: left;
+}
+
+button.menu-template-item-button {
+  cursor: pointer;
+}
+
+button.menu-template-item-button:hover:not(:disabled) {
+  background: rgba(var(--cor-marrom-rgb), 0.06);
+}
+
+button.menu-template-item-button:disabled {
+  cursor: default;
+}
+
+.menu-template-item-button strong,
+.menu-template-item-button span {
+  display: block;
+}
+
+.menu-template-item-button strong {
+  color: var(--cor-marrom);
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.menu-template-item-button span {
+  margin-top: 3px;
+  color: var(--cor-marrom-claro);
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.menu-template-item-content {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border-top: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  background: var(--cor-areia-claro);
+}
+
+@media (min-width: 768px) {
+  .menu-template {
+    padding: var(--spacing-lg);
+  }
+}

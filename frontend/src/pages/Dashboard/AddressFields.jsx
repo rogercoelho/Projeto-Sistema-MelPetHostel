@@ -46,18 +46,22 @@ export default function AddressFields({ addresses, onChange }) {
       const found = await fetchAddressByCep(cep);
       const latestRows = rowsRef.current;
       const current = latestRows[index] || {};
-      updateAddress(index, {
-        ...found,
-        numero: current.numero || "",
-        complemento: current.complemento || found.complemento || "",
-        principal: current.principal,
-        ativo: current.ativo !== false,
-      }, latestRows);
+      updateAddress(
+        index,
+        {
+          ...found,
+          numero: current.numero || "",
+          complemento: current.complemento || found.complemento || "",
+          principal: current.principal,
+          ativo: current.ativo !== false,
+        },
+        latestRows,
+      );
       setCepStatusByIndex((state) => ({ ...state, [index]: "" }));
     } catch (error) {
       setCepStatusByIndex((state) => ({
         ...state,
-        [index]: error.message || "CEP nao encontrado.",
+        [index]: error.message || "CEP não encontrado.",
       }));
     }
   }
@@ -76,9 +80,9 @@ export default function AddressFields({ addresses, onChange }) {
   return (
     <div className="address-fields">
       <div className="address-fields-header">
-        <span>Enderecos</span>
+        <span>Endereços</span>
         <Button type="button" variant="outline" size="sm" onClick={addAddress}>
-          Adicionar endereco
+          Adicionar endereço
         </Button>
       </div>
 
@@ -86,7 +90,7 @@ export default function AddressFields({ addresses, onChange }) {
         {rows.map((address, index) => (
           <fieldset className="address-fieldset" key={address.id || index}>
             <div className="address-fieldset-header">
-              <strong>Endereco {index + 1}</strong>
+              <strong>Endereço {index + 1}</strong>
               <div className="address-fieldset-actions">
                 <label className="address-primary-toggle">
                   <input
@@ -136,14 +140,14 @@ export default function AddressFields({ addresses, onChange }) {
                 />
               </label>
               <label>
-                Numero
+                Número
                 <input
                   type="text"
                   value={address.numero}
                   onChange={(event) =>
                     updateAddress(index, { numero: event.target.value })
                   }
-                  placeholder="Numero"
+                  placeholder="Número"
                 />
               </label>
               <label>

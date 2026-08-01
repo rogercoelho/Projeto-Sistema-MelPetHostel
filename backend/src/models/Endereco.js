@@ -240,9 +240,21 @@ async function replaceForCliente(req, clienteId, addresses = []) {
   return listByCliente(req, clienteId);
 }
 
+async function removeByCliente(req, clienteId) {
+  if (!(await ensureTable(req))) return { affectedRows: 0 };
+
+  const [result] = await dbFor(req).query(
+    `DELETE FROM ${TABLE} WHERE cliente_id = ?`,
+    [clienteId],
+  );
+
+  return result;
+}
+
 module.exports = {
   TABLE,
   getListValidationMessage,
   listByCliente,
+  removeByCliente,
   replaceForCliente,
 };

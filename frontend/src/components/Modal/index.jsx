@@ -9,6 +9,7 @@ function Modal({
   contentStyle,
   hideHeader = false,
   closeOnBackdropClick = true,
+  showCloseButton = true,
   ...rest
 }) {
   if (!isOpen) return null;
@@ -31,9 +32,11 @@ function Modal({
         {!hideHeader && (
           <div className="modal-header">
             <h2 id="modal-title">{title}</h2>
-            <button type="button" className="modal-close" onClick={onClose}>
-              ×
-            </button>
+            {showCloseButton ? (
+              <button type="button" className="modal-close" onClick={onClose}>
+                ×
+              </button>
+            ) : null}
           </div>
         )}
         <div className="modal-content" style={contentStyle}>

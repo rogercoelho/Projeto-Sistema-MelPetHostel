@@ -12,7 +12,7 @@ function explainError(error) {
     case "EAI_AGAIN":
       return "Host nao encontrado. Confira DB_HOST.";
     case "ER_ACCESS_DENIED_ERROR":
-      return "Usuario/senha incorretos ou usuario sem permissao no banco. No cPanel, adicione o usuario ao banco com All Privileges.";
+      return "Usuário/senha incorretos ou usuário sem permissão no banco. No cPanel, adicione o usuario ao banco com All Privileges.";
     case "ER_BAD_DB_ERROR":
       return "Banco nao existe ou o nome em DB_NAME esta diferente do nome criado no cPanel.";
     default:

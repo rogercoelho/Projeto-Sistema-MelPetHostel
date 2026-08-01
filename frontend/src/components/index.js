@@ -5,3 +5,9 @@ export { default as Alert } from "./Alert";
 export { default as Modal } from "./Modal";
 export { default as ContractModal } from "./ContractModal";
 export { default as PdfViewer } from "./PdfViewer";
+export {
+  MenuItem,
+  MenuList,
+  MenuPanel,
+  MenuTemplate,
+} from "./MenuTemplate";

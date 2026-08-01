@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../../components";
 import {
   PET_ANAMNESIS_SECTIONS,
@@ -30,7 +30,7 @@ function FieldLabel({ field, htmlFor }) {
   );
 }
 
-function TextField({ field, value, onChange }) {
+function TextField({ field, value, onChange, readOnly = false }) {
   const fieldId = `pet-${field.name}`;
 
   if (field.type === "textarea") {
@@ -44,6 +44,7 @@ function TextField({ field, value, onChange }) {
           rows={field.rows || 3}
           placeholder={field.placeholder}
           required={field.required}
+          readOnly={readOnly}
           onChange={(event) => onChange(field.name, event.target.value)}
         />
       </div>
@@ -60,13 +61,20 @@ function TextField({ field, value, onChange }) {
         value={value || ""}
         placeholder={field.placeholder}
         required={field.required}
+        readOnly={readOnly}
         onChange={(event) => onChange(field.name, event.target.value)}
       />
     </div>
   );
 }
 
-function ChoiceField({ field, value, onChange, onToggleOption }) {
+function ChoiceField({
+  field,
+  value,
+  onChange,
+  onToggleOption,
+  readOnly = false,
+}) {
   const selectedValues = Array.isArray(value) ? value : [];
   const isCheckboxGroup = field.type === "checkboxGroup";
 
@@ -96,6 +104,7 @@ function ChoiceField({ field, value, onChange, onToggleOption }) {
                 value={option}
                 checked={checked}
                 required={field.required && !isCheckboxGroup}
+                disabled={readOnly}
                 onChange={() => {
                   if (isCheckboxGroup) {
                     onToggleOption(field.name, option);
@@ -114,7 +123,7 @@ function ChoiceField({ field, value, onChange, onToggleOption }) {
   );
 }
 
-function ConfirmationField({ field, value, onChange }) {
+function ConfirmationField({ field, value, onChange, readOnly = false }) {
   return (
     <div className={`${fieldClassName(field)} pet-form-field--confirmation`}>
       <label className={`pet-confirmation ${value ? "is-selected" : ""}`}>
@@ -123,6 +132,7 @@ function ConfirmationField({ field, value, onChange }) {
           name={field.name}
           checked={Boolean(value)}
           required={field.required}
+          disabled={readOnly}
           onChange={(event) => onChange(field.name, event.target.checked)}
         />
         <span>
@@ -134,7 +144,13 @@ function ConfirmationField({ field, value, onChange }) {
   );
 }
 
-function PetFormField({ field, value, onChange, onToggleOption }) {
+function PetFormField({
+  field,
+  value,
+  onChange,
+  onToggleOption,
+  readOnly = false,
+}) {
   if (field.type === "radio" || field.type === "checkboxGroup") {
     return (
       <ChoiceField
@@ -142,22 +158,43 @@ function PetFormField({ field, value, onChange, onToggleOption }) {
         value={value}
         onChange={onChange}
         onToggleOption={onToggleOption}
+        readOnly={readOnly}
       />
     );
   }
 
   if (field.type === "checkbox") {
     return (
-      <ConfirmationField field={field} value={value} onChange={onChange} />
+      <ConfirmationField
+        field={field}
+        value={value}
+        onChange={onChange}
+        readOnly={readOnly}
+      />
     );
   }
 
-  return <TextField field={field} value={value} onChange={onChange} />;
+  return (
+    <TextField
+      field={field}
+      value={value}
+      onChange={onChange}
+      readOnly={readOnly}
+    />
+  );
 }
 
-export default function PetRegistrationForm({ onBack, onSubmit }) {
+export default function PetRegistrationForm({
+  initialData = null,
+  onSubmit,
+  readOnly = false,
+}) {
   const [formData, setFormData] = useState(getEmptyPetAnamnesisForm);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setFormData({ ...getEmptyPetAnamnesisForm(), ...(initialData || {}) });
+  }, [initialData]);
 
   function clearFieldValidity(name) {
     const field = document.querySelector(`[name="${name}"]`);
@@ -212,6 +249,7 @@ export default function PetRegistrationForm({ onBack, onSubmit }) {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (readOnly) return;
 
     const form = event.currentTarget;
     if (!form.checkValidity()) {
@@ -272,6 +310,7 @@ export default function PetRegistrationForm({ onBack, onSubmit }) {
                   value={formData[field.name]}
                   onChange={updateField}
                   onToggleOption={toggleCheckboxGroupOption}
+                  readOnly={readOnly}
                 />
               ))}
             </div>
@@ -280,27 +319,21 @@ export default function PetRegistrationForm({ onBack, onSubmit }) {
       </div>
 
       <div className="pet-form-actions">
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={resetForm}
-          disabled={saving}
-        >
-          Limpar
-        </Button>
-        {onBack ? (
+        {!readOnly ? (
           <Button
             type="button"
-            variant="outline"
-            onClick={onBack}
+            variant="secondary"
+            onClick={resetForm}
             disabled={saving}
           >
-            Voltar
+            Limpar
           </Button>
         ) : null}
-        <Button type="submit" disabled={saving}>
-          {saving ? "Salvando..." : "Salvar ficha"}
-        </Button>
+        {!readOnly ? (
+          <Button type="submit" disabled={saving}>
+            {saving ? "Salvando..." : "Salvar ficha"}
+          </Button>
+        ) : null}
       </div>
     </form>
   );

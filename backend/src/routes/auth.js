@@ -10,12 +10,17 @@ const {
 } = require("../utils/clientProfile");
 const { sanitizePart } = require("../utils/uploadsUtils");
 const {
+  notifyMelPetHostelLoginAccess,
+} = require("../utils/moduleAccessNotification");
+const {
   AdminUsuario,
   Cliente,
   Endereco,
   Grupo,
   Usuario,
 } = require("../models");
+const dbFor = require("../utils/dbFor");
+const { tableExists } = require("../models/schema");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -49,8 +54,8 @@ function isAdminUser(req) {
 
   return Boolean(
     user.admin ||
-      user.isAdmin ||
-      values.some((value) => isAdminGroupValue(value)),
+    user.isAdmin ||
+    values.some((value) => isAdminGroupValue(value)),
   );
 }
 
@@ -82,6 +87,85 @@ async function removeUploadsDirRecursive(dirPath) {
     await fs.rm(dirPath, { recursive: true, force: true });
   } catch (err) {
     console.warn("Warning removing uploads directory:", err?.message || err);
+  }
+}
+
+function qident(name) {
+  return `\`${String(name || "").replace(/`/g, "")}\``;
+}
+
+async function deleteFromExistingTable(req, tableName, whereClause, values) {
+  if (!(await tableExists(req, tableName))) return { affectedRows: 0 };
+  const [result] = await dbFor(req).query(
+    `DELETE FROM ${qident(tableName)} WHERE ${whereClause}`,
+    values,
+  );
+  return result;
+}
+
+async function deletePetFichasByCliente(req, clienteId) {
+  if (
+    !clienteId ||
+    !(await tableExists(req, "Pet_Fichas")) ||
+    !(await tableExists(req, "Pets"))
+  ) {
+    return { affectedRows: 0 };
+  }
+
+  const [result] = await dbFor(req).query(
+    `
+      DELETE pf
+      FROM ${qident("Pet_Fichas")} pf
+      INNER JOIN ${qident("Pets")} p ON p.id = pf.pet_id
+      WHERE p.cliente_id = ?
+    `,
+    [clienteId],
+  );
+  return result;
+}
+
+async function removeMelPetHostelUserData(req, user, clienteId) {
+  const usuarioId = user?.Usuario_ID || user?.id || null;
+  const login = user?.Usuario_Login || user?.login || null;
+
+  if (usuarioId) {
+    await deleteFromExistingTable(req, "Documentos", "Usuario_ID = ?", [
+      usuarioId,
+    ]);
+  }
+
+  if (login) {
+    await deleteFromExistingTable(req, "Contratos", "Usuario_Login = ?", [
+      login,
+    ]);
+    await deleteFromExistingTable(req, "TelegramUsers", "app_user_login = ?", [
+      login,
+    ]);
+  }
+
+  if (clienteId) {
+    await deletePetFichasByCliente(req, clienteId);
+    await deleteFromExistingTable(req, "Pets", "cliente_id = ?", [clienteId]);
+  }
+}
+
+async function removeUserUploadDirs(req, user, id) {
+  if (!user) return;
+
+  const grupoNome = user.grupoNome || (await resolveGroupName(req, user.Grupo_ID));
+  const safeGroup = sanitizeSegment(grupoNome);
+  const safeLogin = sanitizeSegment(user.Usuario_Login, `usuario-${id}`);
+  if (!safeLogin) return;
+
+  const uploadsRoot = getUploadsRoot();
+  const candidates = new Set();
+  if (safeGroup) candidates.add(path.join(uploadsRoot, safeGroup, safeLogin));
+  if (isAdminGroupValue(grupoNome)) {
+    candidates.add(path.join(uploadsRoot, "Administradores", safeLogin));
+  }
+
+  for (const dirPath of candidates) {
+    await removeUploadsDirRecursive(dirPath);
   }
 }
 
@@ -155,9 +239,8 @@ function parseDbBoolean(value, fallback = true) {
 }
 
 function getClientePayload(body = {}) {
-  const source = body.cliente && typeof body.cliente === "object"
-    ? body.cliente
-    : body;
+  const source =
+    body.cliente && typeof body.cliente === "object" ? body.cliente : body;
 
   return {
     nome: clean(source.nome),
@@ -173,9 +256,8 @@ function getClientePayload(body = {}) {
 }
 
 function getEnderecoPayloads(body = {}) {
-  const source = body.cliente && typeof body.cliente === "object"
-    ? body.cliente
-    : body;
+  const source =
+    body.cliente && typeof body.cliente === "object" ? body.cliente : body;
 
   return Array.isArray(source.enderecos) ? source.enderecos : [];
 }
@@ -250,18 +332,20 @@ async function attachEnderecosToUser(req, user) {
 }
 
 async function attachEnderecosToUsers(req, users) {
-  return Promise.all((users || []).map((user) => attachEnderecosToUser(req, user)));
+  return Promise.all(
+    (users || []).map((user) => attachEnderecosToUser(req, user)),
+  );
 }
 
 function userNeedsFirstAccess(row) {
   if (!row) return false;
   return Boolean(
     row.Primeiro_Acesso == 1 ||
-      row.primeiro_acesso == 1 ||
-      row.primeiroAcesso == 1 ||
-      row.PrimeiroAcesso == 1 ||
-      row.senha_provisoria == 1 ||
-      row.senhaProvisoria == 1,
+    row.primeiro_acesso == 1 ||
+    row.primeiroAcesso == 1 ||
+    row.PrimeiroAcesso == 1 ||
+    row.senha_provisoria == 1 ||
+    row.senhaProvisoria == 1,
   );
 }
 
@@ -286,7 +370,7 @@ function getPasswordHash(row) {
 function buildReservedClientePayload(login) {
   return {
     nome: `Cadastro pendente - ${clean(login) || "usuario"}`,
-    observacoes: "Cadastro reservado para preenchimento no primeiro acesso.",
+    observacoes: null,
     ativo: true,
   };
 }
@@ -336,13 +420,13 @@ router.post("/login", async (req, res) => {
     if (!match) {
       return res
         .status(401)
-        .json({ status: "erro", mensagem: "Usuario ou senha invalidos" });
+        .json({ status: "erro", mensagem: "Usuário ou senha inválidos" });
     }
 
     if (match.ativo === false || match.ativo === 0) {
       return res
         .status(403)
-        .json({ status: "erro", mensagem: "Usuario inativo" });
+        .json({ status: "erro", mensagem: "Usuário inativo" });
     }
 
     const passwordHash = getPasswordHash(match);
@@ -357,7 +441,7 @@ router.post("/login", async (req, res) => {
     if (!senhaValida) {
       return res
         .status(401)
-        .json({ status: "erro", mensagem: "Usuario ou senha invalidos" });
+        .json({ status: "erro", mensagem: "Usuário ou senha inválidos" });
     }
 
     const grupo =
@@ -391,8 +475,20 @@ router.post("/login", async (req, res) => {
       );
       cadastro = getClienteCadastroStatus(match.cliente, enderecos);
     }
-    const payload = createTokenPayload({ row: match, source, grupo, grupoNome });
+    const payload = createTokenPayload({
+      row: match,
+      source,
+      grupo,
+      grupoNome,
+    });
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "1h" });
+
+    notifyMelPetHostelLoginAccess(req, match.Usuario_Login).catch((error) => {
+      console.error(
+        "Erro ao enviar aviso de login no Telegram:",
+        error?.message || error,
+      );
+    });
 
     res.json({
       status: "sucesso",
@@ -482,7 +578,7 @@ router.post("/alterar-senha", async (req, res) => {
     if (novaSenha !== confirmarSenha) {
       return res.status(400).json({
         status: "erro",
-        mensagem: "As senhas nao coincidem",
+        mensagem: "As senhas não coincidem",
       });
     }
 
@@ -704,7 +800,7 @@ router.post("/users", async (req, res) => {
     if (!login || !senhaProvisoria || !grupo) {
       return res.status(400).json({
         status: "erro",
-        mensagem: "Login, senha provisoria e grupo sao obrigatorios",
+        mensagem: "Login, senha provisória e grupo são obrigatórios",
       });
     }
 
@@ -782,7 +878,10 @@ router.put("/users/:id", async (req, res) => {
     const id = Number(req.params.id);
     const login = clean(req.body?.login);
     const grupo = req.body?.grupo;
-    const hasAtivo = Object.prototype.hasOwnProperty.call(req.body || {}, "ativo");
+    const hasAtivo = Object.prototype.hasOwnProperty.call(
+      req.body || {},
+      "ativo",
+    );
 
     if (!id || !login || !grupo) {
       return res.status(400).json({
@@ -969,18 +1068,23 @@ router.delete("/users/:id", async (req, res) => {
     }
 
     const user = await Usuario.findById(req, id);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Usuario nao encontrado" });
+    }
+
+    const clienteId = user?.Cliente_ID || user?.clienteId || null;
+
+    await removeMelPetHostelUserData(req, user, clienteId);
     await Usuario.remove(req, id);
 
-    if (user) {
-      const grupoNome = user.grupoNome || (await resolveGroupName(req, user.Grupo_ID));
-      const safeGroup = sanitizeSegment(grupoNome);
-      const safeLogin = sanitizeSegment(user.Usuario_Login, `usuario-${id}`);
-      if (safeGroup) {
-        await removeUploadsDirRecursive(
-          path.join(getUploadsRoot(), safeGroup, safeLogin),
-        );
-      }
+    if (clienteId) {
+      await Endereco.removeByCliente(req, clienteId);
+      await Cliente.remove(req, clienteId);
     }
+
+    await removeUserUploadDirs(req, user, id);
 
     res.json({ status: "sucesso", mensagem: "Usuario removido" });
   } catch (error) {

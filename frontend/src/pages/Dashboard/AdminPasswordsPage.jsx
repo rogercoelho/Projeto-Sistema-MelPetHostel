@@ -125,14 +125,19 @@ function AdminPasswordsPage({ onBack }) {
               ))}
             </div>
           ) : (
-            <p>Nenhum usuario cadastrado.</p>
+            <p>Nenhum usuário cadastrado.</p>
           )}
         </section>
 
-        <form className="admin-page-panel admin-page-form" onSubmit={savePassword}>
+        <form
+          className="admin-page-panel admin-page-form"
+          onSubmit={savePassword}
+        >
           <div className="admin-page-panel-title">
             <span>Senha</span>
-            <h3>{selectedUser ? selectedUser.login : "Nenhum usuario selecionado"}</h3>
+            <h3>
+              {selectedUser ? selectedUser.login : "Nenhum usuario selecionado"}
+            </h3>
           </div>
 
           <label>

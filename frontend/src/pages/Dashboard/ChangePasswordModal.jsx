@@ -32,7 +32,7 @@ export default function ChangePasswordModal({
     setMessage("");
 
     if (novaSenha !== confirmarSenha) {
-      setMessage("As senhas nao coincidem");
+      setMessage("As senhas não coincidem");
       setMessageType("error");
       return;
     }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "../../components";
+import { Button, Modal } from "../../components";
 import api from "../../services/api";
 import {
   buildAddressesPayload,
@@ -54,6 +54,7 @@ function AdminUsersPage({ onBack }) {
   const [usuarios, setUsuarios] = useState([]);
   const [usuarioForm, setUsuarioForm] = useState(createEmptyUserForm);
   const [editingUser, setEditingUser] = useState(null);
+  const [deleteWarningUser, setDeleteWarningUser] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
@@ -96,6 +97,7 @@ function AdminUsersPage({ onBack }) {
 
   function startEditUser(user) {
     setMessage(null);
+    setDeleteWarningUser(null);
     setConfirmDeleteId(null);
     setEditingUser(user);
     setUsuarioForm({
@@ -163,7 +165,7 @@ function AdminUsersPage({ onBack }) {
     }
 
     if (!editingUser && !usuarioForm.senha) {
-      setMessage({ type: "erro", text: "Senha provisoria e obrigatoria." });
+      setMessage({ type: "erro", text: "Senha provisória é obrigatória." });
       return;
     }
 
@@ -209,6 +211,7 @@ function AdminUsersPage({ onBack }) {
   async function deleteUser(user) {
     try {
       await api.delete(`/auth/users/${user.id}`);
+      setDeleteWarningUser(null);
       setConfirmDeleteId(null);
       setMessage({ type: "sucesso", text: "Usuario excluido." });
       await loadData();
@@ -218,6 +221,22 @@ function AdminUsersPage({ onBack }) {
         text: error.message || "Erro ao excluir usuario.",
       });
     }
+  }
+
+  function startDeleteUser(user) {
+    setMessage(null);
+    setDeleteWarningUser(user);
+    setConfirmDeleteId(null);
+  }
+
+  function acknowledgeDeleteWarning(user) {
+    setDeleteWarningUser(null);
+    setConfirmDeleteId(user.id);
+  }
+
+  function cancelDeleteUser() {
+    setDeleteWarningUser(null);
+    setConfirmDeleteId(null);
   }
 
   return (
@@ -264,8 +283,10 @@ function AdminUsersPage({ onBack }) {
               <input
                 type="text"
                 value={usuarioForm.senha}
-                onChange={(event) => updateUserField("senha", event.target.value)}
-                placeholder="Senha provisoria"
+                onChange={(event) =>
+                  updateUserField("senha", event.target.value)
+                }
+                placeholder="Senha provisória"
               />
             </label>
           ) : null}
@@ -274,14 +295,16 @@ function AdminUsersPage({ onBack }) {
             <input
               type="checkbox"
               checked={usuarioForm.ativo}
-              onChange={(event) => updateUserField("ativo", event.target.checked)}
+              onChange={(event) =>
+                updateUserField("ativo", event.target.checked)
+              }
             />
             Usuario ativo
           </label>
 
           {shouldShowClienteFields ? (
             <fieldset className="admin-page-fieldset">
-              <legend>Dados cadastrais</legend>
+              <legend>Dados Cadastrais</legend>
               <div className="admin-page-form-grid">
                 <label>
                   Nome
@@ -300,9 +323,7 @@ function AdminUsersPage({ onBack }) {
                   <input
                     type="text"
                     value={usuarioForm.cliente.cpf}
-                    onChange={(event) =>
-                      updateMaskedClienteField("cpf", event)
-                    }
+                    onChange={(event) => updateMaskedClienteField("cpf", event)}
                     inputMode="numeric"
                     maxLength={14}
                     placeholder="000.000.000-00"
@@ -314,9 +335,7 @@ function AdminUsersPage({ onBack }) {
                   <input
                     type="text"
                     value={usuarioForm.cliente.rg}
-                    onChange={(event) =>
-                      updateMaskedClienteField("rg", event)
-                    }
+                    onChange={(event) => updateMaskedClienteField("rg", event)}
                     maxLength={15}
                     placeholder="00.000.000-0"
                     required
@@ -461,7 +480,26 @@ function AdminUsersPage({ onBack }) {
                           type="button"
                           variant="secondary"
                           size="sm"
-                          onClick={() => setConfirmDeleteId(null)}
+                          onClick={cancelDeleteUser}
+                        >
+                          Cancelar
+                        </Button>
+                      </>
+                    ) : deleteWarningUser?.id === user.id ? (
+                      <>
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          onClick={() => acknowledgeDeleteWarning(user)}
+                        >
+                          OK
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={cancelDeleteUser}
                         >
                           Cancelar
                         </Button>
@@ -471,7 +509,7 @@ function AdminUsersPage({ onBack }) {
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => setConfirmDeleteId(user.id)}
+                        onClick={() => startDeleteUser(user)}
                       >
                         Excluir
                       </Button>
@@ -485,6 +523,34 @@ function AdminUsersPage({ onBack }) {
           )}
         </section>
       </section>
+
+      <Modal
+        isOpen={Boolean(deleteWarningUser)}
+        onClose={cancelDeleteUser}
+        title="Atenção"
+        closeOnBackdropClick={false}
+        showCloseButton={false}
+        containerStyle={{ width: "min(94%, 520px)" }}
+      >
+        <div className="admin-page-delete-modal">
+          <p>
+            Atenção!! Ao clicar em CONFIRMAR, você irá excluir a pasta, os
+            documentos e os registros do banco de dados para esse usuário{" "}
+            <strong>{deleteWarningUser?.login}</strong>. Use apenas para
+            corrigir um problema de criação de usuário.
+          </p>
+
+          <div className="modal-actions">
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => acknowledgeDeleteWarning(deleteWarningUser)}
+            >
+              OK
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </AdminPageShell>
   );
 }

@@ -47,21 +47,15 @@
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
-.melpet-menu-surface {
+.melpet-section-surface {
   width: 100%;
   box-sizing: border-box;
 }
 
-.melpet-menu-content {
+.melpet-section-content {
   width: 100%;
   box-sizing: border-box;
   margin-top: 8px;
-}
-
-.pet-registration-area {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
 
 .pet-registration-container {
@@ -71,40 +65,26 @@
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
-.pet-registration-list {
-  display: grid;
-  gap: 10px;
+.pet-main-actions {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0;
 }
 
-.pet-registration-item,
-.pet-registration-empty {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  background: #ffffff;
-  padding: 12px;
+.pet-main-actions .btn {
+  width: 100%;
 }
 
-.pet-registration-item {
-  display: grid;
-  gap: 8px;
-}
-
-.pet-registration-item h4 {
-  margin: 0 0 4px;
-  color: var(--cor-marrom);
-  font-size: 1rem;
-}
-
-.pet-registration-item p,
-.pet-registration-empty {
+.pet-registration-required-message {
   margin: 0;
-  color: var(--cor-azul-cinza);
-}
-
-.pet-registration-item span {
-  color: #173f85;
-  font-size: 0.82rem;
+  padding: 12px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.95rem;
   font-weight: 800;
+  line-height: 1.45;
 }
 
 .pet-registration-form {
@@ -528,7 +508,7 @@
   }
 
   .melpet-docs-table tbody td:nth-child(4)::before {
-    content: "Conferir: ";
+    content: "Aprovar: ";
   }
 
   .melpet-docs-table tbody td:nth-child(5)::before {
@@ -558,16 +538,6 @@
   font-weight: 800;
   line-height: 1.55;
   box-shadow: 0 4px 12px rgba(180, 83, 9, 0.12);
-}
-
-.melpet-upload-home {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 12px;
-}
-
-.melpet-upload-accordion {
-  width: 100%;
 }
 
 .melpet-upload-content {
@@ -705,13 +675,17 @@
 .melpet-first-step-message {
   margin: 2px 0 0;
   padding: 12px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid #fecaca;
   border-radius: 8px;
-  background: #eff6ff;
-  color: #1e3a8a;
+  background: #fef2f2;
+  color: #b91c1c;
   font-size: 0.94rem;
   font-weight: 700;
   line-height: 1.45;
+}
+
+.melpet-upload-content .melpet-first-step-message {
+  color: #b91c1c;
 }
 
 .melpet-doc-status {
@@ -724,61 +698,6 @@
 
 .melpet-doc-status--done {
   color: #1d4ed8;
-}
-
-.melpet-menu {
-  width: 100%;
-  margin-top: 12px;
-}
-
-.melpet-menu .menu-row {
-  display: flex;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-sm);
-}
-
-.melpet-menu .menu-button {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  border: 1px solid rgba(77, 50, 39, 0.12);
-  background: transparent;
-  border-radius: var(--radius-sm);
-  color: var(--cor-marrom);
-}
-
-.melpet-menu .chev.open {
-  transform: rotate(180deg);
-}
-
-.melpet-menu .menu-panel {
-  overflow: hidden;
-  max-height: 0;
-  opacity: 0;
-  transition:
-    max-height 280ms ease,
-    opacity 220ms ease;
-}
-
-.melpet-menu .menu-panel.open {
-  max-height: 200px;
-  opacity: 1;
-}
-
-.melpet-menu .menu-panel-inner {
-  padding: var(--spacing-sm) 0;
-}
-
-.melpet-menu .menu-item {
-  width: 100%;
-  padding: 10px 12px;
-  text-align: left;
-  background: var(--cor-areia-claro);
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  color: var(--cor-marrom-claro);
 }
 
 @media (min-width: 640px) {
@@ -833,9 +752,8 @@
     min-width: 150px;
   }
 
-  .pet-registration-item {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
+  .pet-main-actions .btn {
+    width: auto;
   }
 
   .pet-form-body {

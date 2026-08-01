@@ -134,10 +134,21 @@ async function update(req, id, input) {
   return result;
 }
 
+async function remove(req, id) {
+  if (!(await ensureTable(req))) return { affectedRows: 0 };
+
+  const [result] = await dbFor(req).query(`DELETE FROM ${TABLE} WHERE id = ?`, [
+    id,
+  ]);
+
+  return result;
+}
+
 module.exports = {
   TABLE,
   buildPayload,
   create,
   findById,
+  remove,
   update,
 };
