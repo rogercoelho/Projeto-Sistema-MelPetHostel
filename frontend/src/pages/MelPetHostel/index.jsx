@@ -184,6 +184,7 @@ export default function MelPetHostel({
   clientProfilePending = false,
   enforceContractGate = false,
   initialAdminMenu = "",
+  userMenu = "",
   petRegistrationOnly = false,
   contractPromptRequest = 0,
   onPetRegistered,
@@ -238,6 +239,10 @@ export default function MelPetHostel({
   });
   const [uploadingPetVaccineSide, setUploadingPetVaccineSide] = useState("");
   const [savingPetVaccines, setSavingPetVaccines] = useState(false);
+  const [hostingMenuOpen, setHostingMenuOpen] = useState(false);
+  const [hostingPetIds, setHostingPetIds] = useState([]);
+  const [hostingPetPeriods, setHostingPetPeriods] = useState({});
+  const [sendingHostingRequest, setSendingHostingRequest] = useState(false);
   const [activeMenu, setActiveMenu] = useState(
     initialAdminMenu === "cadastroPets" ? "" : initialAdminMenu,
   );
@@ -822,9 +827,7 @@ export default function MelPetHostel({
         setPlanos((current) =>
           editingPlanoId
             ? current.map((item) =>
-                Number(item.id) === Number(editingPlanoId)
-                  ? data.plano
-                  : item,
+                Number(item.id) === Number(editingPlanoId) ? data.plano : item,
               )
             : [...current, data.plano],
         );
@@ -860,7 +863,9 @@ export default function MelPetHostel({
       categoriaDe: plano.categoriaDe || "",
       categoriaAte: plano.categoriaAte || "",
       unidade: plano.unidade || "Kg",
-      valor: maskCurrencyInput(String(Math.round(Number(plano.valor || 0) * 100))),
+      valor: maskCurrencyInput(
+        String(Math.round(Number(plano.valor || 0) * 100)),
+      ),
     });
   }
 
@@ -881,6 +886,148 @@ export default function MelPetHostel({
       ...current,
       [tipo]: !current[tipo],
     }));
+  }
+
+  function parsePlanNumber(value) {
+    const match = String(value || "")
+      .replace(",", ".")
+      .match(/\d+(?:\.\d+)?/);
+    return match ? Number(match[0]) : null;
+  }
+
+  function getHostingDaysBetween(entrada, saida) {
+    if (!entrada || !saida) return 0;
+    const start = new Date(`${entrada}T00:00:00`);
+    const end = new Date(`${saida}T00:00:00`);
+    const diff = end.getTime() - start.getTime();
+    if (!Number.isFinite(diff) || diff <= 0) return 0;
+    return Math.ceil(diff / 86400000);
+  }
+
+  function getPetPlanValue(pet, tipo) {
+    const plansForType = planos.filter((plano) => plano.tipo === tipo);
+    if (!plansForType.length) return null;
+
+    const matchedPlan = plansForType.find((plano) => {
+      const unidade = normalizeText(plano.unidade || "");
+      const petValue = unidade.includes("ano")
+        ? parsePlanNumber(pet?.idade)
+        : parsePlanNumber(pet?.pesoAproximado);
+      const min = parsePlanNumber(plano.categoriaDe);
+      const max = parsePlanNumber(plano.categoriaAte);
+      if (petValue === null || min === null || max === null) return false;
+      return petValue >= min && petValue <= max;
+    });
+
+    return matchedPlan || null;
+  }
+
+  function toggleHostingPet(petId) {
+    setHostingPetIds((current) => {
+      if (current.includes(petId)) {
+        setHostingPetPeriods((periods) => {
+          const next = { ...periods };
+          delete next[petId];
+          return next;
+        });
+        return current.filter((id) => id !== petId);
+      }
+
+      setHostingPetPeriods((periods) => ({
+        ...periods,
+        [petId]: {
+          tipo: "",
+          entrada: "",
+          saida: "",
+        },
+      }));
+      return [...current, petId];
+    });
+  }
+
+  function updateHostingPetPeriod(petId, field, value) {
+    setHostingPetPeriods((current) => ({
+      ...current,
+      [petId]: {
+        ...(current[petId] || {}),
+        [field]: value,
+      },
+    }));
+  }
+
+  function clearHostingRequest() {
+    setHostingPetIds([]);
+    setHostingPetPeriods({});
+  }
+
+  async function sendHostingRequest() {
+    if (!hostingItems.length) {
+      showToast("Selecione pelo menos um pet aprovado.", "error");
+      return;
+    }
+    const itemWithoutType = hostingItems.find((item) => !item.tipo);
+    if (itemWithoutType) {
+      showToast(
+        `Selecione o tipo de hospedagem para ${itemWithoutType.pet.nome}.`,
+        "error",
+      );
+      return;
+    }
+    const itemWithoutPeriod = hostingItems.find((item) => !item.days);
+    if (itemWithoutPeriod) {
+      showToast(
+        `Informe entrada e saída válidas para ${itemWithoutPeriod.pet.nome}.`,
+        "error",
+      );
+      return;
+    }
+    const itemWithoutPlan = hostingItems.find((item) => !item.plano);
+    if (itemWithoutPlan) {
+      showToast(
+        `Não existe plano compatível para ${itemWithoutPlan.pet.nome}.`,
+        "error",
+      );
+      return;
+    }
+
+    setSendingHostingRequest(true);
+    try {
+      const tiposSelecionados = Array.from(
+        new Set(hostingItems.map((item) => item.tipo).filter(Boolean)),
+      );
+      await api.post("/melpethostel/hospedagens/solicitacoes", {
+        tipo:
+          tiposSelecionados.length === 1 ? tiposSelecionados[0] : "Múltiplos",
+        dataEntrada: hostingItems.map((item) => item.entrada).sort()[0],
+        dataSaida: hostingItems
+          .map((item) => item.saida)
+          .sort()
+          .at(-1),
+        dias: Math.max(...hostingItems.map((item) => item.days)),
+        total: hostingTotal,
+        itens: hostingItems.map((item) => ({
+          petId: item.pet.id,
+          petNome: item.pet.nome,
+          planoId: item.plano.id,
+          tipo: item.tipo,
+          dataEntrada: item.entrada,
+          dataSaida: item.saida,
+          dias: item.days,
+          valorDiaria: item.dailyValue,
+          valorTotal: item.total,
+        })),
+      });
+      showToast("Solicitação de hospedagem enviada.", "success");
+      clearHostingRequest();
+      setHostingMenuOpen(false);
+    } catch (error) {
+      showToast(
+        error?.message || "Não foi possível enviar a solicitação.",
+        "error",
+      );
+    } finally {
+      setSendingHostingRequest(false);
+    }
   }
 
   async function loadVaccineConfigItems() {
@@ -1111,6 +1258,11 @@ export default function MelPetHostel({
     if (activeMenu !== "controlePlanos") return;
     loadPlanos();
   }, [isAdmin, activeMenu]);
+
+  useEffect(() => {
+    if (isAdmin || userMenu !== "hospedagem") return;
+    loadPlanos();
+  }, [isAdmin, userMenu]);
 
   useEffect(() => {
     if (!isAdmin || activeMenu !== "pesquisarClientes") return;
@@ -1379,8 +1531,7 @@ export default function MelPetHostel({
 
   async function openVaccineCardInfo(pet) {
     const status = getPetVaccineStatus(pet);
-    const targetMode =
-      status.tone === "approved" ? "vaccine" : "vaccineUpload";
+    const targetMode = status.tone === "approved" ? "vaccine" : "vaccineUpload";
     const isSamePet = selectedPet?.id === pet.id && petFormMode === targetMode;
     if (isSamePet) {
       closeVaccineCardInfo();
@@ -1527,10 +1678,10 @@ export default function MelPetHostel({
                 ? {
                     ...item,
                     carteiras: [
-                      ...((Array.isArray(item.carteiras)
+                      ...(Array.isArray(item.carteiras)
                         ? item.carteiras
                         : []
-                      ).filter((carteira) => carteira.lado !== side)),
+                      ).filter((carteira) => carteira.lado !== side),
                       data.carteira,
                     ],
                   }
@@ -1542,10 +1693,10 @@ export default function MelPetHostel({
               ? {
                   ...current,
                   carteiras: [
-                    ...((Array.isArray(current.carteiras)
+                    ...(Array.isArray(current.carteiras)
                       ? current.carteiras
                       : []
-                    ).filter((carteira) => carteira.lado !== side)),
+                    ).filter((carteira) => carteira.lado !== side),
                     data.carteira,
                   ],
                 }
@@ -1881,162 +2032,389 @@ export default function MelPetHostel({
     if (!petDocsPet) return null;
 
     return (
-    <section className="melpet-pet-documents">
-      <p className="pet-registration-required-message">
-        Agora é o momento de você nos enviar os documentos{" "}
-        {getPetGenderText(petDocsPet)} {petDocsPet.nome}!
-      </p>
+      <section className="melpet-pet-documents">
+        <p className="pet-registration-required-message">
+          Agora é o momento de você nos enviar os documentos{" "}
+          {getPetGenderText(petDocsPet)} {petDocsPet.nome}!
+        </p>
 
-      <ul className="melpet-upload-doc-list">
-        {[
-          ["frente", "Carteirinha de vacinação Frente"],
-          ["verso", "Carteirinha de vacinação Verso"],
-        ].map(([side, label]) => {
-          const selectedPetFile = petVaccineFiles[side];
-          const isUploadingThis = uploadingPetVaccineSide === side;
-          const isConcluded = Boolean(uploadedPetVaccineSides[side]);
-          const actionDisabled =
-            Boolean(uploadingPetVaccineSide) || isConcluded;
+        <ul className="melpet-upload-doc-list">
+          {[
+            ["frente", "Carteirinha de vacinação Frente"],
+            ["verso", "Carteirinha de vacinação Verso"],
+          ].map(([side, label]) => {
+            const selectedPetFile = petVaccineFiles[side];
+            const isUploadingThis = uploadingPetVaccineSide === side;
+            const isConcluded = Boolean(uploadedPetVaccineSides[side]);
+            const actionDisabled =
+              Boolean(uploadingPetVaccineSide) || isConcluded;
 
-          return (
-            <li
-              className={`melpet-upload-doc-item ${
-                isConcluded ? "is-done" : "is-pending"
-              }`}
-              key={side}
-            >
-              <div className="melpet-upload-doc-main">
-                <div className="melpet-upload-doc-copy">
-                  <strong>{label}</strong>
-                  <span
-                    className={
-                      isConcluded
-                        ? "melpet-doc-status melpet-doc-status--done"
-                        : "melpet-doc-status melpet-doc-status--pending"
-                    }
-                  >
-                    {isConcluded ? "Enviado para conferência" : "Pendente"}
-                  </span>
-                </div>
-                <Button
-                  type="button"
-                  onClick={() => handlePetVaccinePrimaryAction(side)}
-                  disabled={actionDisabled}
-                >
-                  {isUploadingThis
-                    ? "Enviando..."
-                    : selectedPetFile
-                      ? "Enviar"
-                      : "Upload"}
-                </Button>
-              </div>
-
-              <input
-                ref={(el) => {
-                  petVaccineFileRefs.current[side] = el;
-                }}
-                type="file"
-                accept="application/pdf,.pdf"
-                className="melpet-file-input-hidden"
-                onChange={(event) => handlePetVaccineFile(side, event)}
-              />
-
-              {selectedPetFile ? (
-                <div className="melpet-selected-file-block">
-                  <p className="melpet-selected-file-name">
-                    <span className="melpet-selected-file-value">
-                      {selectedPetFile.name}
-                      <button
-                        type="button"
-                        className="melpet-clear-file-btn"
-                        onClick={() => clearPetVaccineFile(side)}
-                        aria-label="Excluir seleção de arquivo"
-                        title="Excluir seleção"
-                        disabled={actionDisabled}
-                      >
-                        X
-                      </button>
+            return (
+              <li
+                className={`melpet-upload-doc-item ${
+                  isConcluded ? "is-done" : "is-pending"
+                }`}
+                key={side}
+              >
+                <div className="melpet-upload-doc-main">
+                  <div className="melpet-upload-doc-copy">
+                    <strong>{label}</strong>
+                    <span
+                      className={
+                        isConcluded
+                          ? "melpet-doc-status melpet-doc-status--done"
+                          : "melpet-doc-status melpet-doc-status--pending"
+                      }
+                    >
+                      {isConcluded ? "Enviado para conferência" : "Pendente"}
                     </span>
-                  </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => handlePetVaccinePrimaryAction(side)}
+                    disabled={actionDisabled}
+                  >
+                    {isUploadingThis
+                      ? "Enviando..."
+                      : selectedPetFile
+                        ? "Enviar"
+                        : "Upload"}
+                  </Button>
                 </div>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
 
-      <div className="melpet-pet-vaccine-fields">
-        {petVaccineConfigs.map((config) => {
-          const tipos = normalizeVaccineTypes(config.tipos, config.duracao);
-          const response = petVaccineResponses[config.id] || {};
-          const selectedValue = getSingleVaccineResponseValue(response.valor);
-          const required =
-            config.obrigatorio ||
-            String(config.descricao || "")
-              .toLowerCase()
-              .includes("escudo protetor");
-
-          return (
-            <fieldset className="pet-form-section" key={config.id}>
-              <legend>
-                {config.descricao}
-                {required ? " *" : ""}
-              </legend>
-              {(tipos.length ? tipos : [{ descricao: config.descricao }]).map(
-                (tipo) => {
-                  const normalizedType = normalizeVaccineType(tipo);
-                  const value = normalizedType.descricao || config.descricao;
-                  return (
-                    <label className="pet-confirmation" key={value}>
-                      <input
-                        type="checkbox"
-                        checked={selectedValue === value}
-                        onChange={(event) =>
-                          updatePetVaccineResponse(
-                            config.id,
-                            "valor",
-                            event.target.checked ? value : "",
-                          )
-                        }
-                      />
-                      <span>{getVaccineTypeLabel(normalizedType)}</span>
-                    </label>
-                  );
-                },
-              )}
-              <label className="pet-form-field">
-                Data da aplicação
                 <input
-                  type="date"
-                  value={response.dataAplicacao || ""}
-                  onChange={(event) =>
-                    updatePetVaccineResponse(
-                      config.id,
-                      "dataAplicacao",
-                      event.target.value,
-                    )
-                  }
+                  ref={(el) => {
+                    petVaccineFileRefs.current[side] = el;
+                  }}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="melpet-file-input-hidden"
+                  onChange={(event) => handlePetVaccineFile(side, event)}
                 />
-              </label>
-            </fieldset>
-          );
-        })}
-      </div>
 
-      {petVaccineConfigs.length ? (
-        <Button
-          type="button"
-          disabled={savingPetVaccines}
-          onClick={savePetVaccineResponses}
-        >
-          {savingPetVaccines ? "Salvando..." : "Salvar vacinas e outros"}
-        </Button>
-      ) : null}
-    </section>
+                {selectedPetFile ? (
+                  <div className="melpet-selected-file-block">
+                    <p className="melpet-selected-file-name">
+                      <span className="melpet-selected-file-value">
+                        {selectedPetFile.name}
+                        <button
+                          type="button"
+                          className="melpet-clear-file-btn"
+                          onClick={() => clearPetVaccineFile(side)}
+                          aria-label="Excluir seleção de arquivo"
+                          title="Excluir seleção"
+                          disabled={actionDisabled}
+                        >
+                          X
+                        </button>
+                      </span>
+                    </p>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+
+        <div className="melpet-pet-vaccine-fields">
+          {petVaccineConfigs.map((config) => {
+            const tipos = normalizeVaccineTypes(config.tipos, config.duracao);
+            const response = petVaccineResponses[config.id] || {};
+            const selectedValue = getSingleVaccineResponseValue(response.valor);
+            const required =
+              config.obrigatorio ||
+              String(config.descricao || "")
+                .toLowerCase()
+                .includes("escudo protetor");
+
+            return (
+              <fieldset className="pet-form-section" key={config.id}>
+                <legend>
+                  {config.descricao}
+                  {required ? " *" : ""}
+                </legend>
+                {(tipos.length ? tipos : [{ descricao: config.descricao }]).map(
+                  (tipo) => {
+                    const normalizedType = normalizeVaccineType(tipo);
+                    const value = normalizedType.descricao || config.descricao;
+                    return (
+                      <label className="pet-confirmation" key={value}>
+                        <input
+                          type="checkbox"
+                          checked={selectedValue === value}
+                          onChange={(event) =>
+                            updatePetVaccineResponse(
+                              config.id,
+                              "valor",
+                              event.target.checked ? value : "",
+                            )
+                          }
+                        />
+                        <span>{getVaccineTypeLabel(normalizedType)}</span>
+                      </label>
+                    );
+                  },
+                )}
+                <label className="pet-form-field">
+                  Data da aplicação
+                  <input
+                    type="date"
+                    value={response.dataAplicacao || ""}
+                    onChange={(event) =>
+                      updatePetVaccineResponse(
+                        config.id,
+                        "dataAplicacao",
+                        event.target.value,
+                      )
+                    }
+                  />
+                </label>
+              </fieldset>
+            );
+          })}
+        </div>
+
+        {petVaccineConfigs.length ? (
+          <Button
+            type="button"
+            disabled={savingPetVaccines}
+            onClick={savePetVaccineResponses}
+          >
+            {savingPetVaccines ? "Salvando..." : "Salvar vacinas e outros"}
+          </Button>
+        ) : null}
+      </section>
     );
   }
 
   const userPetRegistrationPanels = petRegistrationPanels;
+
+  const hostingTipos = Array.from(
+    new Set(planos.map((plano) => plano.tipo).filter(Boolean)),
+  );
+  const hostingSelectedPets = registeredPets.filter((pet) =>
+    hostingPetIds.includes(pet.id),
+  );
+  const hostingItems = hostingSelectedPets.map((pet) => {
+    const period = hostingPetPeriods[pet.id] || {};
+    const tipo = period.tipo || "";
+    const plano = tipo ? getPetPlanValue(pet, tipo) : null;
+    const dailyValue = plano ? Number(plano.valor) : 0;
+    const entrada = period.entrada || "";
+    const saida = period.saida || "";
+    const days = getHostingDaysBetween(entrada, saida);
+    return {
+      pet,
+      tipo,
+      plano,
+      entrada,
+      saida,
+      days,
+      dailyValue,
+      total: dailyValue * days,
+    };
+  });
+  const hostingTotal = hostingItems.reduce((sum, item) => sum + item.total, 0);
+
+  const hostingRequestContent = (
+    <div className="melpet-hosting-stack">
+      <section className="melpet-hosting-request">
+        <div className="melpet-hosting-guidance">
+          Você pode incluir Pets diferentes com períodos diferentes na mesma
+          solicitação. Para períodos diferentes do mesmo Pet, faça solicitações
+          de hospedagem separadas.
+        </div>
+
+        <section className="melpet-hosting-pets">
+          <h3>Selecione o Pet que deseja hospedar</h3>
+          <div className="melpet-hosting-pet-list">
+            {registeredPets.length ? (
+              registeredPets.map((pet) => {
+                const status = getPetVaccineStatus(pet);
+                const approved = status.tone === "approved";
+                const selected = hostingPetIds.includes(pet.id);
+                const period = hostingPetPeriods[pet.id] || {};
+                const plano = period.tipo
+                  ? getPetPlanValue(pet, period.tipo)
+                  : null;
+                return (
+                  <div
+                    className={`melpet-hosting-pet-card ${
+                      selected ? "is-selected" : ""
+                    }`}
+                    key={pet.id}
+                  >
+                    <button
+                      type="button"
+                      className="melpet-hosting-pet-select"
+                      disabled={!approved}
+                      onClick={() => toggleHostingPet(pet.id)}
+                    >
+                      <span>
+                        <strong>{pet.nome}</strong>
+                        <small>{getPetSummary(pet)}</small>
+                      </span>
+                      <em
+                        className={
+                          approved
+                            ? "melpet-hosting-status is-approved"
+                            : "melpet-hosting-status is-blocked"
+                        }
+                      >
+                        {approved ? "Aprovado" : "Pendente"}
+                      </em>
+                      {selected && period.tipo ? (
+                        <small>
+                          {plano
+                            ? `${formatCurrency(plano.valor)} / dia`
+                            : "Sem plano para a faixa"}
+                        </small>
+                      ) : null}
+                    </button>
+
+                    {selected ? (
+                      <div className="melpet-hosting-pet-period">
+                        <label>
+                          Tipo de hospedagem
+                          <select
+                            value={period.tipo || ""}
+                            onChange={(event) =>
+                              updateHostingPetPeriod(
+                                pet.id,
+                                "tipo",
+                                event.target.value,
+                              )
+                            }
+                          >
+                            <option value="">Selecione</option>
+                            {hostingTipos.map((tipo) => (
+                              <option key={tipo} value={tipo}>
+                                {tipo}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Entrada
+                          <input
+                            type="date"
+                            value={period.entrada || ""}
+                            onChange={(event) =>
+                              updateHostingPetPeriod(
+                                pet.id,
+                                "entrada",
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </label>
+                        <label>
+                          Saída
+                          <input
+                            type="date"
+                            value={period.saida || ""}
+                            onChange={(event) =>
+                              updateHostingPetPeriod(
+                                pet.id,
+                                "saida",
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
+            ) : (
+              <p>Nenhum pet cadastrado.</p>
+            )}
+          </div>
+        </section>
+
+        <div className="melpet-hosting-actions melpet-hosting-actions--top">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={sendingHostingRequest}
+            onClick={clearHostingRequest}
+          >
+            Limpar
+          </Button>
+        </div>
+      </section>
+
+      <section className="melpet-hosting-summary">
+        <h3>Resumo</h3>
+        {hostingItems.length ? (
+          <>
+            <ul>
+              {hostingItems.map((item) => (
+                <li key={item.pet.id}>
+                  <span>
+                    <strong>{item.pet.nome}</strong>
+                    <small>
+                      {item.plano
+                        ? `${item.tipo} - ${item.entrada} a ${item.saida} - ${formatCurrency(
+                            item.dailyValue,
+                          )} x ${item.days || 0} dias`
+                        : "Sem valor configurado para este pet"}
+                    </small>
+                  </span>
+                  <strong>{formatCurrency(item.total)}</strong>
+                </li>
+              ))}
+            </ul>
+            <div className="melpet-hosting-total">
+              <span>Total final</span>
+              <strong>{formatCurrency(hostingTotal)}</strong>
+            </div>
+            <div className="melpet-hosting-actions">
+              <Button
+                type="button"
+                disabled={sendingHostingRequest}
+                onClick={sendHostingRequest}
+              >
+                {sendingHostingRequest ? "Enviando..." : "Enviar solicitação"}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <p>Selecione pelo menos um pet aprovado para calcular o pedido.</p>
+        )}
+      </section>
+    </div>
+  );
+
+  const hostingPanels = [
+    {
+      id: "hosting",
+      title: "Mel Pet Hostel",
+      summary: "Acesse o sistema operacional do pet hotel.",
+      ariaLabel: "Hospedagem",
+      items: [
+        {
+          id: "solicitar-hospedagem",
+          title: "Solicitar Hospedagem",
+          isOpen: hostingMenuOpen,
+          onAction: () => setHostingMenuOpen((current) => !current),
+          content: hostingRequestContent,
+        },
+      ],
+      after: (
+        <div className="pet-main-actions">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleBackToMainMenu}
+          >
+            Voltar
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   const clientSearchContent = (
     <section className="melpet-client-search">
@@ -2498,7 +2876,6 @@ export default function MelPetHostel({
               placeholder="Ex: Kg, Anos, Porte"
             />
           </label>
-
         </div>
 
         <div className="melpet-plan-form-actions">
@@ -2668,38 +3045,38 @@ export default function MelPetHostel({
                 content: planosContent,
               },
             ]
-        : [
-            {
-              id: "conferir-documentos",
-              title: "Aprovar Documentos",
-              summary: "Conferir e aprovar documentos enviados.",
-              isOpen: activeMenu === "conferirDocumentos",
-              onAction: () => {
-                setActiveMenu((prev) =>
-                  prev === "conferirDocumentos" ? "" : "conferirDocumentos",
-                );
-                setSelectedPendingUser(null);
-                setSelectedUserFiles([]);
-                setSelectedUserFilesError("");
+          : [
+              {
+                id: "conferir-documentos",
+                title: "Aprovar Documentos",
+                summary: "Conferir e aprovar documentos enviados.",
+                isOpen: activeMenu === "conferirDocumentos",
+                onAction: () => {
+                  setActiveMenu((prev) =>
+                    prev === "conferirDocumentos" ? "" : "conferirDocumentos",
+                  );
+                  setSelectedPendingUser(null);
+                  setSelectedUserFiles([]);
+                  setSelectedUserFilesError("");
+                },
               },
-            },
-            {
-              id: "pesquisar-clientes",
-              title: "Pesquisar Cliente",
-              summary:
-                "Pesquise por código ou nome e confira cadastro, endereço e pets.",
-              isOpen: activeMenu === "pesquisarClientes",
-              onAction: () => {
-                setActiveMenu((prev) =>
-                  prev === "pesquisarClientes" ? "" : "pesquisarClientes",
-                );
-                setSelectedPendingUser(null);
-                setSelectedUserFiles([]);
-                setSelectedUserFilesError("");
+              {
+                id: "pesquisar-clientes",
+                title: "Pesquisar Cliente",
+                summary:
+                  "Pesquise por código ou nome e confira cadastro, endereço e pets.",
+                isOpen: activeMenu === "pesquisarClientes",
+                onAction: () => {
+                  setActiveMenu((prev) =>
+                    prev === "pesquisarClientes" ? "" : "pesquisarClientes",
+                  );
+                  setSelectedPendingUser(null);
+                  setSelectedUserFiles([]);
+                  setSelectedUserFilesError("");
+                },
+                content: clientSearchContent,
               },
-              content: clientSearchContent,
-            },
-          ],
+            ],
       after: (
         <div className="pet-main-actions">
           <Button
@@ -2713,6 +3090,10 @@ export default function MelPetHostel({
       ),
     },
   ];
+
+  if (!isAdmin && userMenu === "hospedagem") {
+    return <MenuTemplate panels={hostingPanels} />;
+  }
 
   if (
     shouldRenderPetRegistrationDashboard ||

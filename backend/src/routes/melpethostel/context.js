@@ -23,6 +23,8 @@ const TABLE_NAMES = Object.freeze({
   petVacinasConfig: "Pet_Vacinas_Config",
   petVacinasRespostas: "Pet_Vacinas_Respostas",
   planos: "Planos",
+  hospedagemSolicitacoes: "Hospedagem_Solicitacoes",
+  hospedagemSolicitacaoItens: "Hospedagem_Solicitacao_Itens",
 });
 
 const DEFAULT_DOCUMENT_TYPES = Object.freeze([
