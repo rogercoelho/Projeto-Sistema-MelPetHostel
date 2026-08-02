@@ -22,6 +22,7 @@ function renderItem(item) {
       disabled={item.disabled}
       isOpen={item.isOpen}
       key={item.id || item.key || getItemTitle(item)}
+      leadingAction={item.leadingAction}
       onAction={item.onAction}
       summary={getItemSummary(item)}
       title={getItemTitle(item)}
@@ -91,6 +92,7 @@ export function MenuItem({
   contentClassName = "",
   disabled = false,
   isOpen = false,
+  leadingAction,
   onAction,
   summary,
   title,
@@ -106,19 +108,25 @@ export function MenuItem({
 
   return (
     <section className={cx("menu-template-item", isOpen && "is-open", className)}>
-      {isInteractive ? (
-        <button
-          className="menu-template-item-button"
-          type="button"
-          aria-expanded={hasContent ? isOpen : undefined}
-          disabled={disabled}
-          onClick={onAction}
-        >
-          {itemContent}
-        </button>
-      ) : (
-        <div className="menu-template-item-button">{itemContent}</div>
-      )}
+      <div className={cx(leadingAction && "menu-template-item-row")}>
+        {leadingAction ? (
+          <div className="menu-template-item-leading">{leadingAction}</div>
+        ) : null}
+
+        {isInteractive ? (
+          <button
+            className="menu-template-item-button"
+            type="button"
+            aria-expanded={hasContent ? isOpen : undefined}
+            disabled={disabled}
+            onClick={onAction}
+          >
+            {itemContent}
+          </button>
+        ) : (
+          <div className="menu-template-item-button">{itemContent}</div>
+        )}
+      </div>
 
       {isOpen && hasContent ? (
         <div className={cx("menu-template-item-content", contentClassName)}>

@@ -72,6 +72,23 @@
   text-align: left;
 }
 
+.menu-template-item-row .menu-template-item-button {
+  border-left: 4px solid var(--cor-marrom);
+  border-radius: 8px 0 0 8px;
+}
+
+.menu-template-item-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.menu-template-item-leading {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
 button.menu-template-item-button {
   cursor: pointer;
 }

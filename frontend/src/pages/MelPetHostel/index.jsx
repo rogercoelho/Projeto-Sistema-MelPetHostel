@@ -110,7 +110,9 @@ function normalizeVaccineTypes(tipos = [], fallbackDuration = "") {
     .map((item) => normalizeVaccineType(item, fallbackDuration))
     .filter((item) => item.descricao);
   return Array.from(
-    new Map(mapped.map((item) => [normalizeText(item.descricao), item])).values(),
+    new Map(
+      mapped.map((item) => [normalizeText(item.descricao), item]),
+    ).values(),
   );
 }
 
@@ -135,6 +137,34 @@ function parseVaccineResponseValues(value) {
 
 function getSingleVaccineResponseValue(value) {
   return parseVaccineResponseValues(value)[0] || "";
+}
+
+function formatBrazilDate(value) {
+  const text = String(value || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return "-";
+  const [year, month, day] = text.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function addMonthsToDate(value, months) {
+  const text = String(value || "").slice(0, 10);
+  const amount = Number.parseInt(months, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || !Number.isFinite(amount)) {
+    return "";
+  }
+
+  const [year, month, day] = text.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  const originalDay = date.getDate();
+  date.setMonth(date.getMonth() + amount);
+  if (date.getDate() < originalDay) {
+    date.setDate(0);
+  }
+
+  const nextYear = date.getFullYear();
+  const nextMonth = String(date.getMonth() + 1).padStart(2, "0");
+  const nextDay = String(date.getDate()).padStart(2, "0");
+  return `${nextYear}-${nextMonth}-${nextDay}`;
 }
 
 function getPetFormInitialData(pet) {
@@ -195,6 +225,9 @@ export default function MelPetHostel({
   const [petDocsPet, setPetDocsPet] = useState(null);
   const [petVaccineConfigs, setPetVaccineConfigs] = useState([]);
   const [petVaccineResponses, setPetVaccineResponses] = useState({});
+  const [vaccineCardItems, setVaccineCardItems] = useState([]);
+  const [loadingVaccineCardInfo, setLoadingVaccineCardInfo] = useState(false);
+  const [vaccineCardInfoError, setVaccineCardInfoError] = useState("");
   const [petVaccineFiles, setPetVaccineFiles] = useState({
     frente: null,
     verso: null,
@@ -227,7 +260,7 @@ export default function MelPetHostel({
   const [pendingVaccineCards, setPendingVaccineCards] = useState([]);
   const [loadingVaccineCards, setLoadingVaccineCards] = useState(false);
   const [vaccineCardsError, setVaccineCardsError] = useState("");
-  const [selectedVaccineCard, setSelectedVaccineCard] = useState(null);
+  const [selectedVaccineUser, setSelectedVaccineUser] = useState(null);
   const [approvingVaccineCardId, setApprovingVaccineCardId] = useState(null);
   const [vaccineConfigItems, setVaccineConfigItems] = useState([]);
   const [loadingVaccineConfig, setLoadingVaccineConfig] = useState(false);
@@ -245,6 +278,19 @@ export default function MelPetHostel({
     tipos: [],
     tipoAtual: "",
     tipoDuracaoAtual: "",
+  });
+  const [planos, setPlanos] = useState([]);
+  const [loadingPlanos, setLoadingPlanos] = useState(false);
+  const [savingPlano, setSavingPlano] = useState(false);
+  const [planosError, setPlanosError] = useState("");
+  const [editingPlanoId, setEditingPlanoId] = useState(null);
+  const [openPlanoTipos, setOpenPlanoTipos] = useState({});
+  const [planoForm, setPlanoForm] = useState({
+    tipo: "",
+    categoriaDe: "",
+    categoriaAte: "",
+    unidade: "Kg",
+    valor: "",
   });
   const [documentPreviewOpen, setDocumentPreviewOpen] = useState(false);
   const [documentPreviewTitle, setDocumentPreviewTitle] = useState("");
@@ -266,7 +312,9 @@ export default function MelPetHostel({
 
   useEffect(() => {
     if (isAdmin) {
-      setActiveMenu(initialAdminMenu === "cadastroPets" ? "" : initialAdminMenu || "");
+      setActiveMenu(
+        initialAdminMenu === "cadastroPets" ? "" : initialAdminMenu || "",
+      );
     }
   }, [initialAdminMenu, isAdmin]);
 
@@ -277,6 +325,9 @@ export default function MelPetHostel({
   );
   const fluxoObrigatorioPets = Boolean(
     !isAdmin && petRegistrationOnly && shouldEnforceContractGate,
+  );
+  const deveBloquearVoltarNoFluxoPet = Boolean(
+    fluxoObrigatorioPets && registeredPets.length <= 1,
   );
   const acessoDiretoMenu =
     isAdmin ||
@@ -618,13 +669,16 @@ export default function MelPetHostel({
       );
       const cards = Array.isArray(data?.carteiras) ? data.carteiras : [];
       setPendingVaccineCards(cards);
-      setSelectedVaccineCard((current) => {
+      setSelectedVaccineUser((current) => {
         if (!current) return null;
-        return cards.find((card) => card.id === current.id) || null;
+        return cards.some((card) => getVaccineUserKey(card) === current.key)
+          ? current
+          : null;
       });
     } catch (error) {
       console.error("Erro ao carregar carteiras pendentes:", error);
       setPendingVaccineCards([]);
+      setSelectedVaccineUser(null);
       setVaccineCardsError(
         error?.message || "Não foi possível carregar as carteiras pendentes.",
       );
@@ -639,11 +693,21 @@ export default function MelPetHostel({
 
     setApprovingVaccineCardId(id);
     try {
-      await api.post(`/melpethostel/pets/carteiras-vacinacao/${id}/aprovar`, {});
+      await api.post(
+        `/melpethostel/pets/carteiras-vacinacao/${id}/aprovar`,
+        {},
+      );
       setPendingVaccineCards((current) =>
         (current || []).filter((item) => Number(item.id) !== id),
       );
-      setSelectedVaccineCard(null);
+      setSelectedVaccineUser((current) => {
+        if (!current) return null;
+        const hasPendingCardForUser = pendingVaccineCards.some(
+          (item) =>
+            Number(item.id) !== id && getVaccineUserKey(item) === current.key,
+        );
+        return hasPendingCardForUser ? current : null;
+      });
       showToast("Carteira de vacinação aprovada com sucesso.", "success");
     } catch (error) {
       showToast(
@@ -655,14 +719,168 @@ export default function MelPetHostel({
     }
   }
 
-  function handleOpenVaccineCard(card) {
-    setSelectedVaccineCard((current) =>
-      current?.id === card?.id ? null : card,
+  function getVaccineUserKey(card) {
+    return String(card?.clienteId || card?.clienteNome || "");
+  }
+
+  function buildVaccineUserList(cards) {
+    const usersByKey = new Map();
+
+    for (const card of cards || []) {
+      const key = getVaccineUserKey(card);
+      if (!key || usersByKey.has(key)) continue;
+
+      usersByKey.set(key, {
+        key,
+        clienteId: card?.clienteId,
+        nome: card?.clienteNome || `Cliente ${card?.clienteId}`,
+      });
+    }
+
+    return Array.from(usersByKey.values());
+  }
+
+  function handleOpenVaccineUser(user) {
+    setSelectedVaccineUser((current) =>
+      current?.key === user?.key ? null : user,
     );
   }
 
-  function handleCloseVaccineCard() {
-    setSelectedVaccineCard(null);
+  function handleCloseVaccineUser() {
+    setSelectedVaccineUser(null);
+  }
+
+  function getVaccineDocumentName(card) {
+    return `Carteira de vacinação ${
+      card?.lado === "verso" ? "Verso" : "Frente"
+    }`;
+  }
+
+  function formatCurrency(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return "R$ 0,00";
+    return number.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+  }
+
+  function maskCurrencyInput(value) {
+    const digits = String(value || "").replace(/\D/g, "");
+    if (!digits) return "";
+    const cents = Number(digits) / 100;
+    return cents.toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  async function loadPlanos() {
+    setLoadingPlanos(true);
+    setPlanosError("");
+    try {
+      const data = await api.get("/melpethostel/planos");
+      setPlanos(Array.isArray(data?.planos) ? data.planos : []);
+    } catch (error) {
+      setPlanos([]);
+      setPlanosError(error?.message || "Não foi possível carregar os planos.");
+    } finally {
+      setLoadingPlanos(false);
+    }
+  }
+
+  async function savePlano(event) {
+    event.preventDefault();
+    setPlanosError("");
+
+    if (!planoForm.tipo.trim()) {
+      setPlanosError("Informe o tipo do plano.");
+      return;
+    }
+
+    if (!planoForm.categoriaDe.trim()) {
+      setPlanosError("Informe a categoria DE do plano.");
+      return;
+    }
+
+    if (!planoForm.categoriaAte.trim()) {
+      setPlanosError("Informe a categoria ATÉ do plano.");
+      return;
+    }
+
+    if (!planoForm.valor.trim()) {
+      setPlanosError("Informe o valor do plano.");
+      return;
+    }
+
+    setSavingPlano(true);
+    try {
+      const data = editingPlanoId
+        ? await api.put(`/melpethostel/planos/${editingPlanoId}`, planoForm)
+        : await api.post("/melpethostel/planos", planoForm);
+      if (data?.plano) {
+        setPlanos((current) =>
+          editingPlanoId
+            ? current.map((item) =>
+                Number(item.id) === Number(editingPlanoId)
+                  ? data.plano
+                  : item,
+              )
+            : [...current, data.plano],
+        );
+      } else {
+        await loadPlanos();
+      }
+      setEditingPlanoId(null);
+      setPlanoForm((current) => ({
+        tipo: current.tipo,
+        categoriaDe: "",
+        categoriaAte: "",
+        unidade: current.unidade,
+        valor: "",
+      }));
+      showToast(
+        editingPlanoId
+          ? "Plano atualizado com sucesso."
+          : "Categoria adicionada ao plano.",
+        "success",
+      );
+    } catch (error) {
+      setPlanosError(error?.message || "Não foi possível salvar o plano.");
+    } finally {
+      setSavingPlano(false);
+    }
+  }
+
+  function startEditPlano(plano) {
+    setEditingPlanoId(plano.id);
+    setPlanosError("");
+    setPlanoForm({
+      tipo: plano.tipo || "",
+      categoriaDe: plano.categoriaDe || "",
+      categoriaAte: plano.categoriaAte || "",
+      unidade: plano.unidade || "Kg",
+      valor: maskCurrencyInput(String(Math.round(Number(plano.valor || 0) * 100))),
+    });
+  }
+
+  function cancelEditPlano() {
+    setEditingPlanoId(null);
+    setPlanosError("");
+    setPlanoForm({
+      tipo: "",
+      categoriaDe: "",
+      categoriaAte: "",
+      unidade: "Kg",
+      valor: "",
+    });
+  }
+
+  function togglePlanoTipo(tipo) {
+    setOpenPlanoTipos((current) => ({
+      ...current,
+      [tipo]: !current[tipo],
+    }));
   }
 
   async function loadVaccineConfigItems() {
@@ -889,6 +1107,12 @@ export default function MelPetHostel({
   }, [isAdmin, activeMenu]);
 
   useEffect(() => {
+    if (!isAdmin) return;
+    if (activeMenu !== "controlePlanos") return;
+    loadPlanos();
+  }, [isAdmin, activeMenu]);
+
+  useEffect(() => {
     if (!isAdmin || activeMenu !== "pesquisarClientes") return;
     if (!clientSearchSubmitted) return;
     loadClientSearch();
@@ -911,8 +1135,7 @@ export default function MelPetHostel({
         console.error("Erro ao carregar pets cadastrados:", error);
         if (!ignore) {
           showToast(
-            error?.message ||
-              "Não foi possível carregar os pets cadastrados.",
+            error?.message || "Não foi possível carregar os pets cadastrados.",
             "error",
           );
         }
@@ -950,7 +1173,8 @@ export default function MelPetHostel({
         };
 
         setPetDocsPet(pendingPet);
-        setPetFormMode("list");
+        setSelectedPet(pendingPet);
+        setPetFormMode("vaccineUpload");
         setPetVaccineConfigs(Array.isArray(data.configs) ? data.configs : []);
         setUploadedPetVaccineSides({
           frente: Array.isArray(data.carteiras)
@@ -1124,6 +1348,7 @@ export default function MelPetHostel({
       idade: pet?.idade || payload.idade,
       pesoAproximado: pet?.pesoAproximado || payload.pesoAproximado,
       sexo: pet?.sexo || pet?.ficha?.sexo || payload.sexo || "",
+      carteiras: [],
       cadastradoEm: createdAt,
       ficha: {
         ...(pet?.ficha || payload),
@@ -1131,12 +1356,12 @@ export default function MelPetHostel({
       },
     };
     setRegisteredPets((current) => [createdPet, ...current]);
-    setSelectedPet(null);
+    setSelectedPet(createdPet);
     setPetDocsPet(createdPet);
     setPetVaccineResponses({});
     setPetVaccineFiles({ frente: null, verso: null });
     setUploadedPetVaccineSides({ frente: false, verso: false });
-    setPetFormMode("list");
+    setPetFormMode("vaccineUpload");
     await loadPetVaccineConfigs();
     showToast("Ficha do pet cadastrada com sucesso.", "success");
   }
@@ -1150,6 +1375,61 @@ export default function MelPetHostel({
     const isSamePet = selectedPet?.id === pet.id && petFormMode === "view";
     setSelectedPet(isSamePet ? null : pet);
     setPetFormMode(isSamePet ? "list" : "view");
+  }
+
+  async function openVaccineCardInfo(pet) {
+    const status = getPetVaccineStatus(pet);
+    const targetMode =
+      status.tone === "approved" ? "vaccine" : "vaccineUpload";
+    const isSamePet = selectedPet?.id === pet.id && petFormMode === targetMode;
+    if (isSamePet) {
+      closeVaccineCardInfo();
+      return;
+    }
+
+    setSelectedPet(pet);
+    setPetFormMode(targetMode);
+    setPetDocsPet(pet);
+    setPetVaccineFiles({ frente: null, verso: null });
+    setUploadedPetVaccineSides({
+      frente: Array.isArray(pet?.carteiras)
+        ? pet.carteiras.some((item) => item.lado === "frente")
+        : false,
+      verso: Array.isArray(pet?.carteiras)
+        ? pet.carteiras.some((item) => item.lado === "verso")
+        : false,
+    });
+
+    if (targetMode === "vaccineUpload") {
+      setVaccineCardItems([]);
+      setVaccineCardInfoError("");
+      await loadPetVaccineConfigs();
+      return;
+    }
+
+    setVaccineCardItems([]);
+    setVaccineCardInfoError("");
+    setLoadingVaccineCardInfo(true);
+    try {
+      const data = await api.get(
+        `/melpethostel/pets/${pet.id}/carteira-vacinacao/info`,
+      );
+      setVaccineCardItems(Array.isArray(data?.itens) ? data.itens : []);
+    } catch (error) {
+      setVaccineCardInfoError(
+        error?.message || "Não foi possível carregar a carteira de vacinação.",
+      );
+    } finally {
+      setLoadingVaccineCardInfo(false);
+    }
+  }
+
+  function closeVaccineCardInfo() {
+    setVaccineCardItems([]);
+    setVaccineCardInfoError("");
+    setSelectedPet(null);
+    setPetDocsPet(null);
+    setPetFormMode("list");
   }
 
   function handleClosePetForm() {
@@ -1176,11 +1456,7 @@ export default function MelPetHostel({
 
   function getPetGenderText(pet) {
     const sexo = normalizeText(pet?.ficha?.sexo || pet?.sexo || "");
-    if (
-      sexo.includes("femea") ||
-      sexo.includes("feminino") ||
-      sexo === "f"
-    ) {
+    if (sexo.includes("femea") || sexo.includes("feminino") || sexo === "f") {
       return "da Pequena";
     }
     return "do Pequeno";
@@ -1189,7 +1465,11 @@ export default function MelPetHostel({
   function handlePetVaccineFile(side, event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
-    if (!String(file.name || "").toLowerCase().endsWith(".pdf")) {
+    if (
+      !String(file.name || "")
+        .toLowerCase()
+        .endsWith(".pdf")
+    ) {
       showToast("Selecione um arquivo PDF.", "error");
       return;
     }
@@ -1240,12 +1520,47 @@ export default function MelPetHostel({
         if (!response.ok || data?.status === "erro") {
           throw new Error(data?.mensagem || "Falha no upload da carteirinha.");
         }
+        if (data?.carteira) {
+          setRegisteredPets((current) =>
+            current.map((item) =>
+              Number(item.id) === Number(pet.id)
+                ? {
+                    ...item,
+                    carteiras: [
+                      ...((Array.isArray(item.carteiras)
+                        ? item.carteiras
+                        : []
+                      ).filter((carteira) => carteira.lado !== side)),
+                      data.carteira,
+                    ],
+                  }
+                : item,
+            ),
+          );
+          setPetDocsPet((current) =>
+            current?.id === pet.id
+              ? {
+                  ...current,
+                  carteiras: [
+                    ...((Array.isArray(current.carteiras)
+                      ? current.carteiras
+                      : []
+                    ).filter((carteira) => carteira.lado !== side)),
+                    data.carteira,
+                  ],
+                }
+              : current,
+          );
+        }
       });
       setUploadedPetVaccineSides((current) => ({ ...current, [side]: true }));
       clearPetVaccineFile(side);
       showToast("Carteirinha enviada com sucesso.", "success");
     } catch (error) {
-      showToast(error?.message || "Não foi possível enviar a carteirinha.", "error");
+      showToast(
+        error?.message || "Não foi possível enviar a carteirinha.",
+        "error",
+      );
     } finally {
       setUploadingPetVaccineSide("");
     }
@@ -1300,10 +1615,9 @@ export default function MelPetHostel({
 
     setSavingPetVaccines(true);
     try {
-      await api.post(
-        `/melpethostel/pets/${petDocsPet.id}/vacinas-respostas`,
-        { respostas },
-      );
+      await api.post(`/melpethostel/pets/${petDocsPet.id}/vacinas-respostas`, {
+        respostas,
+      });
       showToast("Vacinas e outros salvos com sucesso.", "success");
       setPetDocsPet(null);
       onPetRegistered?.();
@@ -1402,6 +1716,98 @@ export default function MelPetHostel({
     openSupportFilePicker(key);
   }
 
+  function getPetVaccineStatus(pet) {
+    const carteiras = Array.isArray(pet?.carteiras) ? pet.carteiras : [];
+    const hasApproved = carteiras.some(
+      (item) => item?.conferido || item?.status === "aprovado",
+    );
+    if (hasApproved) {
+      return { label: "Aprovado", tone: "approved" };
+    }
+
+    if (carteiras.length) {
+      return { label: "Pendente", tone: "pending" };
+    }
+
+    return { label: "Enviar Carteira", tone: "missing" };
+  }
+
+  function renderPetVaccineAction(pet) {
+    const status = getPetVaccineStatus(pet);
+
+    return (
+      <button
+        type="button"
+        className="melpet-vaccine-card-btn"
+        onClick={() => openVaccineCardInfo(pet)}
+      >
+        <span>Carteira de Vacinação</span>
+        <strong
+          className={`melpet-vaccine-card-status melpet-vaccine-card-status--${status.tone}`}
+        >
+          {status.label}
+        </strong>
+      </button>
+    );
+  }
+
+  function renderVaccineCardInfoContainer() {
+    return (
+      <section className="melpet-vaccine-card-container pet-registration-form">
+        <div className="melpet-vaccine-card-container-header">
+          <h3>Carteira de Vacinação</h3>
+        </div>
+
+        <div className="pet-form-body">
+          {loadingVaccineCardInfo ? (
+            <p>Carregando carteira de vacinação...</p>
+          ) : vaccineCardInfoError ? (
+            <p className="melpet-error">{vaccineCardInfoError}</p>
+          ) : vaccineCardItems.length ? (
+            <div className="melpet-vaccine-card-list">
+              {vaccineCardItems.map((item) => {
+                const nextDate = addMonthsToDate(
+                  item.dataAplicacao,
+                  item.duracao,
+                );
+                return (
+                  <fieldset
+                    className="pet-form-section"
+                    key={`${item.configId}-${item.tipo}`}
+                  >
+                    <legend>{item.descricao || "Vacina / outro"}</legend>
+                    <div className="pet-form-grid melpet-vaccine-readonly-grid">
+                      <div className="pet-form-field melpet-vaccine-readonly-field melpet-vaccine-readonly-wide">
+                        <span className="pet-form-label">Tipo</span>
+                        <strong>{item.tipo || "-"}</strong>
+                      </div>
+                      <div className="pet-form-field melpet-vaccine-readonly-field">
+                        <span className="pet-form-label">
+                          Data de aplicação
+                        </span>
+                        <strong>{formatBrazilDate(item.dataAplicacao)}</strong>
+                      </div>
+                      <div className="pet-form-field melpet-vaccine-readonly-field">
+                        <span className="pet-form-label">
+                          Próxima aplicação
+                        </span>
+                        <strong>
+                          {nextDate ? formatBrazilDate(nextDate) : "-"}
+                        </strong>
+                      </div>
+                    </div>
+                  </fieldset>
+                );
+              })}
+            </div>
+          ) : (
+            <p>Nenhuma informação de vacinação cadastrada para este pet.</p>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   const petRegistrationPanels = [
     {
       id: "pet-registration",
@@ -1434,19 +1840,30 @@ export default function MelPetHostel({
             ]
           : registeredPets.map((pet) => ({
               id: pet.id,
+              leadingAction: renderPetVaccineAction(pet),
               title: pet.nome,
               summary: getPetSummary(pet),
-              isOpen: petFormMode === "view" && selectedPet?.id === pet.id,
+              isOpen:
+                (petFormMode === "view" ||
+                  petFormMode === "vaccine" ||
+                  petFormMode === "vaccineUpload") &&
+                selectedPet?.id === pet.id,
               onAction: () => handleOpenPetDetails(pet),
-              content: (
-                <PetRegistrationForm
-                  initialData={getPetFormInitialData(pet)}
-                  readOnly
-                />
-              ),
+              content:
+                petFormMode === "vaccine" && selectedPet?.id === pet.id ? (
+                  renderVaccineCardInfoContainer()
+                ) : petFormMode === "vaccineUpload" &&
+                  selectedPet?.id === pet.id ? (
+                  renderPetDocumentsContent()
+                ) : (
+                  <PetRegistrationForm
+                    initialData={getPetFormInitialData(pet)}
+                    readOnly
+                  />
+                ),
             }))),
       ],
-      after: fluxoObrigatorioPets ? null : (
+      after: deveBloquearVoltarNoFluxoPet ? null : (
         <div className="pet-main-actions">
           <Button
             type="button"
@@ -1460,7 +1877,10 @@ export default function MelPetHostel({
     },
   ];
 
-  const petDocumentsContent = petDocsPet ? (
+  function renderPetDocumentsContent() {
+    if (!petDocsPet) return null;
+
+    return (
     <section className="melpet-pet-documents">
       <p className="pet-registration-required-message">
         Agora é o momento de você nos enviar os documentos{" "}
@@ -1475,7 +1895,8 @@ export default function MelPetHostel({
           const selectedPetFile = petVaccineFiles[side];
           const isUploadingThis = uploadingPetVaccineSide === side;
           const isConcluded = Boolean(uploadedPetVaccineSides[side]);
-          const actionDisabled = Boolean(uploadingPetVaccineSide) || isConcluded;
+          const actionDisabled =
+            Boolean(uploadingPetVaccineSide) || isConcluded;
 
           return (
             <li
@@ -1612,22 +2033,10 @@ export default function MelPetHostel({
         </Button>
       ) : null}
     </section>
-  ) : null;
+    );
+  }
 
-  const userPetRegistrationPanels = [
-    ...petRegistrationPanels,
-    ...(petDocumentsContent
-      ? [
-          {
-            id: "pet-vaccination-documents",
-            title: "Mel Pet Hostel",
-            summary: "Documentos e vacinas do pet.",
-            ariaLabel: "Documentos e vacinas do pet",
-            children: petDocumentsContent,
-          },
-        ]
-      : []),
-  ];
+  const userPetRegistrationPanels = petRegistrationPanels;
 
   const clientSearchContent = (
     <section className="melpet-client-search">
@@ -1696,7 +2105,10 @@ export default function MelPetHostel({
           ) : clientSearchSubmitted ? (
             <p>Nenhum cliente encontrado.</p>
           ) : (
-            <p>Informe um código ou nome, ou clique em pesquisar para listar todos.</p>
+            <p>
+              Informe um código ou nome, ou clique em pesquisar para listar
+              todos.
+            </p>
           )}
         </div>
 
@@ -1715,7 +2127,9 @@ export default function MelPetHostel({
               </div>
               <div>
                 <dt>CPF</dt>
-                <dd>{selectedClient.cpf ? maskCpf(selectedClient.cpf) : "-"}</dd>
+                <dd>
+                  {selectedClient.cpf ? maskCpf(selectedClient.cpf) : "-"}
+                </dd>
               </div>
               <div>
                 <dt>RG</dt>
@@ -1778,7 +2192,10 @@ export default function MelPetHostel({
 
   const vaccineManagementContent = (
     <section className="melpet-vaccine-admin-stack">
-      <form className="admin-page-panel admin-page-form" onSubmit={saveVaccineConfig}>
+      <form
+        className="admin-page-panel admin-page-form"
+        onSubmit={saveVaccineConfig}
+      >
         <div className="admin-page-panel-title">
           <span>{editingVaccineConfigId ? "Editando" : "Novo item"}</span>
           <h3>
@@ -1828,7 +2245,11 @@ export default function MelPetHostel({
               }
               placeholder="Duração em meses"
             />
-            <Button type="button" variant="secondary" onClick={addVaccineConfigType}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={addVaccineConfigType}
+            >
               Adicionar
             </Button>
           </div>
@@ -1871,7 +2292,11 @@ export default function MelPetHostel({
 
         <div className="admin-page-actions">
           {editingVaccineConfigId ? (
-            <Button type="button" variant="secondary" onClick={resetVaccineConfigForm}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={resetVaccineConfigForm}
+            >
               Cancelar edicao
             </Button>
           ) : null}
@@ -1901,11 +2326,13 @@ export default function MelPetHostel({
                   <strong>{item.descricao}</strong>
                   <span>{item.obrigatorio ? "Obrigatório" : "Opcional"}</span>
                   <ul className="melpet-vaccine-config-type-lines">
-                    {normalizeVaccineTypes(item.tipos, item.duracao).map((tipo) => (
-                      <li key={normalizeVaccineType(tipo).descricao}>
-                        {getVaccineTypeLabel(tipo)}
-                      </li>
-                    ))}
+                    {normalizeVaccineTypes(item.tipos, item.duracao).map(
+                      (tipo) => (
+                        <li key={normalizeVaccineType(tipo).descricao}>
+                          {getVaccineTypeLabel(tipo)}
+                        </li>
+                      ),
+                    )}
                   </ul>
                 </div>
                 <div className="admin-page-row-actions">
@@ -1981,6 +2408,186 @@ export default function MelPetHostel({
     </section>
   );
 
+  const planosByTipo = planos.reduce((acc, plano) => {
+    const tipo = plano.tipo || "Sem tipo";
+    acc[tipo] = [...(acc[tipo] || []), plano];
+    return acc;
+  }, {});
+
+  const planosContent = (
+    <section className="melpet-vaccine-admin-stack">
+      <form className="admin-page-panel admin-page-form" onSubmit={savePlano}>
+        <div className="admin-page-panel-title">
+          <span>{editingPlanoId ? "Editando" : "Novo plano"}</span>
+          <h3>Cadastro de Planos</h3>
+        </div>
+
+        <label>
+          Tipo
+          <input
+            type="text"
+            value={planoForm.tipo}
+            onChange={(event) =>
+              setPlanoForm((current) => ({
+                ...current,
+                tipo: event.target.value,
+              }))
+            }
+            placeholder="Ex: Hotel"
+          />
+        </label>
+
+        <div className="melpet-plan-category-row">
+          <label>
+            De
+            <input
+              type="text"
+              value={planoForm.categoriaDe}
+              onChange={(event) =>
+                setPlanoForm((current) => ({
+                  ...current,
+                  categoriaDe: event.target.value,
+                }))
+              }
+              placeholder="Ex: 0 kg"
+            />
+          </label>
+
+          <label>
+            Até
+            <input
+              type="text"
+              value={planoForm.categoriaAte}
+              onChange={(event) =>
+                setPlanoForm((current) => ({
+                  ...current,
+                  categoriaAte: event.target.value,
+                }))
+              }
+              placeholder="Ex: 10 kg"
+            />
+          </label>
+
+          <label>
+            Valor
+            <input
+              type="text"
+              inputMode="decimal"
+              value={planoForm.valor}
+              onChange={(event) =>
+                setPlanoForm((current) => ({
+                  ...current,
+                  valor: maskCurrencyInput(event.target.value),
+                }))
+              }
+              placeholder="Ex: 20,00"
+            />
+          </label>
+
+          <label>
+            Unidade
+            <input
+              type="text"
+              value={planoForm.unidade}
+              onChange={(event) =>
+                setPlanoForm((current) => ({
+                  ...current,
+                  unidade: event.target.value,
+                }))
+              }
+              placeholder="Ex: Kg, Anos, Porte"
+            />
+          </label>
+
+        </div>
+
+        <div className="melpet-plan-form-actions">
+          {editingPlanoId ? (
+            <Button type="button" variant="secondary" onClick={cancelEditPlano}>
+              Cancelar edição
+            </Button>
+          ) : null}
+          <Button type="submit" disabled={savingPlano}>
+            {savingPlano
+              ? "Salvando..."
+              : editingPlanoId
+                ? "Salvar alterações"
+                : "Adicionar categoria"}
+          </Button>
+        </div>
+
+        {planosError ? (
+          <p className="admin-page-message erro">{planosError}</p>
+        ) : null}
+      </form>
+
+      <section className="admin-page-panel">
+        <div className="admin-page-panel-title">
+          <span>Itens cadastrados</span>
+          <h3>Planos</h3>
+        </div>
+
+        {loadingPlanos ? (
+          <p>Carregando planos...</p>
+        ) : planos.length ? (
+          <div className="melpet-plan-list">
+            {Object.entries(planosByTipo).map(([tipo, itens]) => {
+              const isOpen = Boolean(openPlanoTipos[tipo]);
+              return (
+                <article
+                  className={`melpet-plan-group ${isOpen ? "is-open" : ""}`}
+                  key={tipo}
+                >
+                  <button
+                    type="button"
+                    className="melpet-plan-type-toggle"
+                    aria-expanded={isOpen}
+                    onClick={() => togglePlanoTipo(tipo)}
+                  >
+                    <span>{tipo}</span>
+                    <strong className="melpet-plan-type-meta">
+                      <span>
+                        {itens.length} {itens.length === 1 ? "item" : "itens"}
+                      </span>
+                    </strong>
+                  </button>
+
+                  {isOpen ? (
+                    <ul>
+                      {itens.map((plano) => (
+                        <li key={plano.id}>
+                          <div className="melpet-plan-item-main">
+                            <span className="melpet-plan-range">
+                              De {plano.categoriaDe} até {plano.categoriaAte}{" "}
+                              {plano.unidade || "Kg"}
+                            </span>
+                            <strong>{formatCurrency(plano.valor)}</strong>
+                          </div>
+                          <div className="melpet-plan-item-actions">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => startEditPlano(plano)}
+                            >
+                              Editar
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <p>Nenhum plano cadastrado.</p>
+        )}
+      </section>
+    </section>
+  );
+
   const petAdminMenus = new Set([
     "cadastroPets",
     "aprovarCarteiraVacinacao",
@@ -1988,15 +2595,34 @@ export default function MelPetHostel({
   ]);
   const isPetAdminMenu =
     petAdminMenus.has(activeMenu) || petAdminMenus.has(initialAdminMenu);
+  const isPlanosAdminMenu =
+    activeMenu === "controlePlanos" || initialAdminMenu === "controlePlanos";
+
+  const pendingVaccineUsers = buildVaccineUserList(pendingVaccineCards);
+  const selectedVaccineUserCards = selectedVaccineUser
+    ? pendingVaccineCards.filter(
+        (card) => getVaccineUserKey(card) === selectedVaccineUser.key,
+      )
+    : [];
 
   const adminMenuPanels = [
     {
       id: "admin-melpethostel",
-      title: isPetAdminMenu ? "Cadastro de Pets" : "Mel Pet Hostel",
+      title: isPetAdminMenu
+        ? "Cadastro de Pets"
+        : isPlanosAdminMenu
+          ? "Controle de Planos"
+          : "Mel Pet Hostel",
       summary: isPetAdminMenu
         ? "Acesse as ferramentas administrativas dos pets."
-        : "Acesse as ferramentas administrativas do pet hotel.",
-      ariaLabel: isPetAdminMenu ? "Cadastro de Pets" : "Menu da Mel Pet Hostel",
+        : isPlanosAdminMenu
+          ? "Gerencie os planos do pet hotel."
+          : "Acesse as ferramentas administrativas do pet hotel.",
+      ariaLabel: isPetAdminMenu
+        ? "Cadastro de Pets"
+        : isPlanosAdminMenu
+          ? "Controle de Planos"
+          : "Menu da Mel Pet Hostel",
       items: isPetAdminMenu
         ? [
             {
@@ -2010,7 +2636,7 @@ export default function MelPetHostel({
                     ? ""
                     : "aprovarCarteiraVacinacao",
                 );
-                setSelectedVaccineCard(null);
+                setSelectedVaccineUser(null);
               },
             },
             {
@@ -2027,38 +2653,53 @@ export default function MelPetHostel({
               content: vaccineManagementContent,
             },
           ]
+        : isPlanosAdminMenu
+          ? [
+              {
+                id: "cadastro-planos",
+                title: "Cadastro de Planos",
+                summary: "Cadastre tipos, categorias e valores dos planos.",
+                isOpen: activeMenu === "controlePlanos",
+                onAction: () => {
+                  setActiveMenu((prev) =>
+                    prev === "controlePlanos" ? "" : "controlePlanos",
+                  );
+                },
+                content: planosContent,
+              },
+            ]
         : [
-        {
-          id: "conferir-documentos",
-          title: "Aprovar Documentos",
-          summary: "Conferir e aprovar documentos enviados.",
-          isOpen: activeMenu === "conferirDocumentos",
-          onAction: () => {
-            setActiveMenu((prev) =>
-              prev === "conferirDocumentos" ? "" : "conferirDocumentos",
-            );
-            setSelectedPendingUser(null);
-            setSelectedUserFiles([]);
-            setSelectedUserFilesError("");
-          },
-        },
-        {
-          id: "pesquisar-clientes",
-          title: "Pesquisar Cliente",
-          summary:
-            "Pesquise por código ou nome e confira cadastro, endereço e pets.",
-          isOpen: activeMenu === "pesquisarClientes",
-          onAction: () => {
-            setActiveMenu((prev) =>
-              prev === "pesquisarClientes" ? "" : "pesquisarClientes",
-            );
-            setSelectedPendingUser(null);
-            setSelectedUserFiles([]);
-            setSelectedUserFilesError("");
-          },
-          content: clientSearchContent,
-        },
-      ],
+            {
+              id: "conferir-documentos",
+              title: "Aprovar Documentos",
+              summary: "Conferir e aprovar documentos enviados.",
+              isOpen: activeMenu === "conferirDocumentos",
+              onAction: () => {
+                setActiveMenu((prev) =>
+                  prev === "conferirDocumentos" ? "" : "conferirDocumentos",
+                );
+                setSelectedPendingUser(null);
+                setSelectedUserFiles([]);
+                setSelectedUserFilesError("");
+              },
+            },
+            {
+              id: "pesquisar-clientes",
+              title: "Pesquisar Cliente",
+              summary:
+                "Pesquise por código ou nome e confira cadastro, endereço e pets.",
+              isOpen: activeMenu === "pesquisarClientes",
+              onAction: () => {
+                setActiveMenu((prev) =>
+                  prev === "pesquisarClientes" ? "" : "pesquisarClientes",
+                );
+                setSelectedPendingUser(null);
+                setSelectedUserFiles([]);
+                setSelectedUserFilesError("");
+              },
+              content: clientSearchContent,
+            },
+          ],
       after: (
         <div className="pet-main-actions">
           <Button
@@ -2112,7 +2753,8 @@ export default function MelPetHostel({
                   <div className="melpet-categories-card">
                     <div className="melpet-card-body">
                       <p className="melpet-validate-subtitle">
-                        Pets com carteira de vacinação pendente de conferência:
+                        Usuários com carteira de vacinação pendente de
+                        conferência:
                       </p>
                       {loadingVaccineCards ? (
                         <p className="melpet-validate-message">
@@ -2120,18 +2762,16 @@ export default function MelPetHostel({
                         </p>
                       ) : vaccineCardsError ? (
                         <p className="melpet-error">{vaccineCardsError}</p>
-                      ) : pendingVaccineCards.length ? (
+                      ) : pendingVaccineUsers.length ? (
                         <ul className="melpet-pending-users-list">
-                          {pendingVaccineCards.map((card) => (
-                            <li key={card.id}>
+                          {pendingVaccineUsers.map((user) => (
+                            <li key={user.key}>
                               <button
                                 type="button"
                                 className="melpet-pending-user-btn"
-                                onClick={() => handleOpenVaccineCard(card)}
+                                onClick={() => handleOpenVaccineUser(user)}
                               >
-                                {card.clienteNome ||
-                                  `Cliente ${card.clienteId}`}{" "}
-                                - {card.petNome || `Pet ${card.petId}`}
+                                {user.nome}
                               </button>
                             </li>
                           ))}
@@ -2145,93 +2785,97 @@ export default function MelPetHostel({
                   </div>
                 </div>
 
-                {selectedVaccineCard ? (
+                {selectedVaccineUser ? (
                   <div className="melpet-outer-card melpet-user-docs-container">
                     <div className="melpet-outer-card-header">
                       <h3>
-                        Carteira de vacinação -{" "}
-                        {selectedVaccineCard.petNome ||
-                          `Pet ${selectedVaccineCard.petId}`}
+                        Carteiras de vacinação de{" "}
+                        {selectedVaccineUser?.nome || "usuário"}
                       </h3>
                     </div>
 
                     <div className="melpet-categories-card melpet-docs-card-shell">
                       <div className="melpet-card-body melpet-docs-card-body">
                         <div className="melpet-docs-table-wrap">
-                          <table className="melpet-docs-table">
+                          <table className="melpet-docs-table melpet-vaccine-docs-table">
                             <thead>
                               <tr>
-                                <th>Cliente</th>
+                                <th>Nome do documento</th>
                                 <th>Pet</th>
-                                <th>Arquivo</th>
                                 <th>Visualizar</th>
                                 <th>Aprovar</th>
                                 <th>Reprovar</th>
                               </tr>
                             </thead>
                             <tbody>
-                              <tr>
-                                <td>
-                                  {selectedVaccineCard.clienteNome ||
-                                    selectedVaccineCard.clienteId}
-                                </td>
-                                <td>
-                                  {selectedVaccineCard.petNome ||
-                                    selectedVaccineCard.petId}
-                                </td>
-                                <td>{selectedVaccineCard.nomeArquivo}</td>
-                                <td>
-                                  <button
-                                    type="button"
-                                    className="melpet-view-doc-btn"
-                                    onClick={() =>
-                                      handleOpenDocumentPreview({
-                                        fileUrl: selectedVaccineCard.fileUrl,
-                                        nomeDocumento:
-                                          selectedVaccineCard.nomeArquivo,
-                                        tipoDocumento:
-                                          "Carteira de Vacinação",
-                                      })
-                                    }
-                                  >
-                                    Visualizar documento
-                                  </button>
-                                </td>
-                                <td>
-                                  <button
-                                    type="button"
-                                    className="melpet-review-btn melpet-review-btn--approve"
-                                    disabled={
-                                      approvingVaccineCardId ===
-                                      selectedVaccineCard.id
-                                    }
-                                    onClick={() =>
-                                      handleApproveVaccineCard(
-                                        selectedVaccineCard,
-                                      )
-                                    }
-                                  >
-                                    {approvingVaccineCardId ===
-                                    selectedVaccineCard.id
-                                      ? "Aprovando..."
-                                      : "Aprovar"}
-                                  </button>
-                                </td>
-                                <td>
-                                  <button
-                                    type="button"
-                                    className="melpet-review-btn melpet-review-btn--reject"
-                                    onClick={() =>
-                                      showToast(
-                                        "Reprovação ainda não integrada.",
-                                        "info",
-                                      )
-                                    }
-                                  >
-                                    Reprovar
-                                  </button>
-                                </td>
-                              </tr>
+                              {selectedVaccineUserCards.length ? (
+                                selectedVaccineUserCards.map((card) => {
+                                  const url = buildFileUrl(card.fileUrl);
+                                  const isApproving =
+                                    approvingVaccineCardId === card.id;
+                                  return (
+                                    <tr key={card.id}>
+                                      <td>{getVaccineDocumentName(card)}</td>
+                                      <td>
+                                        {card.petNome || `Pet ${card.petId}`}
+                                      </td>
+                                      <td>
+                                        <button
+                                          type="button"
+                                          className="melpet-view-doc-btn"
+                                          disabled={!url}
+                                          onClick={() =>
+                                            handleOpenDocumentPreview({
+                                              fileUrl: card.fileUrl,
+                                              nomeDocumento:
+                                                card.nomeArquivo ||
+                                                getVaccineDocumentName(card),
+                                              tipoDocumento:
+                                                getVaccineDocumentName(card),
+                                            })
+                                          }
+                                        >
+                                          Visualizar documento
+                                        </button>
+                                      </td>
+                                      <td>
+                                        <button
+                                          type="button"
+                                          className="melpet-review-btn melpet-review-btn--approve"
+                                          disabled={isApproving}
+                                          onClick={() =>
+                                            handleApproveVaccineCard(card)
+                                          }
+                                        >
+                                          {isApproving
+                                            ? "Aprovando..."
+                                            : "Aprovar"}
+                                        </button>
+                                      </td>
+                                      <td>
+                                        <button
+                                          type="button"
+                                          className="melpet-review-btn melpet-review-btn--reject"
+                                          onClick={() =>
+                                            showToast(
+                                              "Reprovação ainda não integrada.",
+                                              "info",
+                                            )
+                                          }
+                                        >
+                                          Reprovar
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              ) : (
+                                <tr>
+                                  <td colSpan={5}>
+                                    Nenhuma carteira de vacinação encontrada.
+                                  </td>
+                                </tr>
+                              )}
                             </tbody>
                           </table>
                         </div>
@@ -2242,7 +2886,7 @@ export default function MelPetHostel({
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={handleCloseVaccineCard}
+                        onClick={handleCloseVaccineUser}
                       >
                         Fechar
                       </Button>
@@ -2435,13 +3079,6 @@ export default function MelPetHostel({
                     </div>
                   </div>
                 ) : null}
-              </section>
-            ) : isAdmin && activeMenu === "controlePlanos" ? (
-              <section className="melpet-section-content">
-                <p>
-                  Área de controle de planos. Aqui você poderá gerenciar planos
-                  e ajustes do módulo.
-                </p>
               </section>
             ) : null}
           </>

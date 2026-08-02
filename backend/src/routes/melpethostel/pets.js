@@ -3,7 +3,6 @@ const router = express.Router();
 const {
   TABLE_NAMES,
   dbFor,
-  fileExistsByStoredPath,
   fs,
   getCurrentClienteId,
   getReqLogin,
@@ -421,6 +420,30 @@ router.get("/pets", async (req, res) => {
       [clienteId],
     );
 
+    const carteirasByPetId = new Map();
+    const carteirasTable = await resolveTableName(
+      req,
+      TABLE_NAMES.petCarteirasVacinacao,
+    );
+    if (carteirasTable) {
+      const [carteiraRows] = await dbFor(req).query(
+        `
+          SELECT *
+          FROM ${qtable(carteirasTable)}
+          WHERE cliente_id = ?
+          ORDER BY created_at DESC, id DESC
+        `,
+        [clienteId],
+      );
+
+      for (const row of carteiraRows || []) {
+        const petId = Number(row.pet_id);
+        const current = carteirasByPetId.get(petId) || [];
+        current.push(mapCarteiraRow(row));
+        carteirasByPetId.set(petId, current);
+      }
+    }
+
     return res.json({
       status: "ok",
       pets: (rows || []).map((pet) => ({
@@ -430,6 +453,7 @@ router.get("/pets", async (req, res) => {
         idade: pet.idade,
         pesoAproximado: pet.peso_aproximado,
         cadastradoEm: pet.criado_em,
+        carteiras: carteirasByPetId.get(Number(pet.id)) || [],
         ficha: {
           nomePet: pet.nome,
           raca: pet.raca,
@@ -510,16 +534,13 @@ router.get("/pets/carteiras-vacinacao/pendentes", async (req, res) => {
         FROM ${qtable(tableName)} cv
         INNER JOIN ${qtable(petsTable)} p ON p.id = cv.pet_id
         INNER JOIN ${qtable(clientesTable)} c ON c.id = cv.cliente_id
-        WHERE cv.conferido = 0
+        WHERE (cv.conferido IS NULL OR cv.conferido = 0)
+          AND (cv.status IS NULL OR cv.status <> 'aprovado')
         ORDER BY cv.created_at ASC, cv.id ASC
       `,
     );
 
-    const carteiras = [];
-    for (const row of rows || []) {
-      if (!(await fileExistsByStoredPath(row.file_path))) continue;
-      carteiras.push(mapCarteiraRow(row));
-    }
+    const carteiras = (rows || []).map(mapCarteiraRow);
 
     return res.json({ status: "sucesso", carteiras });
   } catch (error) {
@@ -670,6 +691,71 @@ router.get("/pets/onboarding-status", async (req, res) => {
     return res.json({ status: "sucesso", complete: true, pendingPet: null });
   } catch (error) {
     console.error("Error in GET /melpethostel/pets/onboarding-status:", error);
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.get("/pets/:petId/carteira-vacinacao/info", async (req, res) => {
+  try {
+    const clienteId = await getCurrentClienteId(req);
+    const petId = Number(req.params.petId);
+    if (!clienteId || !Number.isInteger(petId) || petId <= 0) {
+      return res.status(400).json({ status: "erro", mensagem: "Pet inválido." });
+    }
+
+    const pet = await getPetByIdForCliente(req, petId, clienteId);
+    if (!pet) {
+      return res.status(404).json({ status: "erro", mensagem: "Pet não encontrado." });
+    }
+
+    const respostasTable = await resolveTableName(
+      req,
+      TABLE_NAMES.petVacinasRespostas,
+    );
+    if (!respostasTable) {
+      return res.json({
+        status: "sucesso",
+        pet: { id: pet.id, nome: pet.nome },
+        itens: [],
+      });
+    }
+
+    const configs = await getVaccineConfigs(req);
+    const configById = new Map(configs.map((config) => [Number(config.id), config]));
+    const [rows] = await dbFor(req).query(
+      `
+        SELECT config_id, valor, data_aplicacao
+        FROM ${qtable(respostasTable)}
+        WHERE pet_id = ? AND cliente_id = ?
+        ORDER BY data_aplicacao DESC, config_id ASC
+      `,
+      [petId, clienteId],
+    );
+
+    const itens = (rows || []).map((row) => {
+      const config = configById.get(Number(row.config_id)) || {};
+      const tipo = (Array.isArray(config.tipos) ? config.tipos : []).find(
+        (item) => normalizeText(item.descricao) === normalizeText(row.valor),
+      );
+      return {
+        configId: row.config_id,
+        descricao: config.descricao || "",
+        tipo: row.valor || "",
+        duracao: tipo?.duracao || "",
+        dataAplicacao: row.data_aplicacao || "",
+      };
+    });
+
+    return res.json({
+      status: "sucesso",
+      pet: { id: pet.id, nome: pet.nome },
+      itens,
+    });
+  } catch (error) {
+    console.error(
+      "Error in GET /melpethostel/pets/:petId/carteira-vacinacao/info:",
+      error,
+    );
     return res.status(500).json({ status: "erro", mensagem: error.message });
   }
 });

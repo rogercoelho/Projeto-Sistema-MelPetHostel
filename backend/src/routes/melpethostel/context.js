@@ -22,6 +22,7 @@ const TABLE_NAMES = Object.freeze({
   petCarteirasVacinacao: "Pet_Carteiras_Vacinacao",
   petVacinasConfig: "Pet_Vacinas_Config",
   petVacinasRespostas: "Pet_Vacinas_Respostas",
+  planos: "Planos",
 });
 
 const DEFAULT_DOCUMENT_TYPES = Object.freeze([
@@ -81,9 +82,11 @@ function toPublicUploadPath(rawPath) {
     .replace(/\\/g, "/");
   if (!raw) return null;
   const cleaned = raw.replace(/^\/?(?:melpethostel\/)?uploads\/?/i, "");
-  const parts = cleaned.split("/").filter(Boolean).map(sanitizePart);
+  const parts = cleaned
+    .split("/")
+    .filter((part) => part && part !== "." && part !== "..");
   if (!parts.length) return null;
-  return `/melpethostel/uploads/${parts.join("/")}`;
+  return `/melpethostel/uploads/${parts.map(encodeURIComponent).join("/")}`;
 }
 
 function resolveUploadsDirToDisk(relativeDir) {

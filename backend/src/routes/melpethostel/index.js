@@ -5,6 +5,7 @@ router.use("/telegram", require("./telegram"));
 router.use(require("./contratos"));
 router.use(require("./pets"));
 router.use(require("./documentos"));
+router.use(require("./planos"));
 router.use(require("./admin"));
 
 module.exports = router;
