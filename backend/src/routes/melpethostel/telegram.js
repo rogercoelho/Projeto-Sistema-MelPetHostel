@@ -8,7 +8,6 @@ const {
   ensureTelegramSchema,
   getActiveBotConfig,
   getModuleAccessNotificationConfig,
-  getTelegramChatIdByLogin,
   getPublicBotConfig,
   normalizeModule,
   saveBotConfig,
@@ -136,16 +135,6 @@ async function getAdminUsersWithTelegram(req, module) {
 function getModuleFromRequest(req) {
   const raw = req.query?.module ?? req.body?.module ?? DEFAULT_MODULE;
   return normalizeModule(raw || DEFAULT_MODULE);
-}
-
-function moduleDisplayName(module) {
-  const value = normalizeModule(module);
-  if (value === "melpethostel") return "Mel Pet Hostel";
-  return value
-    .split("_")
-    .filter(Boolean)
-    .map((part) => part[0].toUpperCase() + part.slice(1))
-    .join(" ");
 }
 
 function handleError(res, err) {
@@ -565,57 +554,6 @@ router.post("/test", async (req, res) => {
     res.json({ status: "sucesso", mensagem: "Mensagem de teste enviada." });
   } catch (err) {
     console.error("Error in POST /melpethostel/telegram/test:", err);
-    handleError(res, err);
-  }
-});
-
-router.post("/acesso", async (req, res) => {
-  try {
-    const userLogin = requireUser(req, res);
-    if (!userLogin) return;
-
-    const db = dbFor(req);
-    await ensureTelegramSchema(db);
-    const module = getModuleFromRequest(req);
-    const config = await getModuleAccessNotificationConfig(module, db);
-
-    if (!config.enabled || !config.adminLogins || !config.adminLogins.length) {
-      return res.json({
-        status: "sucesso",
-        notified: false,
-        module,
-      });
-    }
-
-    const safeLogin = clean(userLogin);
-    const message = `Sistema ${moduleDisplayName(module)}\nO usuario <b>${safeLogin}</b> acessou o sistema ${moduleDisplayName(module)}.`;
-
-    const notifiedTo = [];
-    for (const adminLogin of config.adminLogins) {
-      const chatId =
-        (config.adminChatIds && config.adminChatIds[adminLogin]) ||
-        (await getTelegramChatIdByLogin(module, adminLogin, db));
-      if (!chatId) continue;
-      try {
-        await sendTelegram(chatId, message, { module });
-        notifiedTo.push({ adminLogin, chatId });
-      } catch (e) {
-        console.error(
-          "Error sending access notification to",
-          adminLogin,
-          e && e.message ? e.message : e,
-        );
-      }
-    }
-
-    res.json({
-      status: "sucesso",
-      notified: !!notifiedTo.length,
-      module,
-      notifiedTo,
-    });
-  } catch (err) {
-    console.error("Error in POST /melpethostel/telegram/acesso:", err);
     handleError(res, err);
   }
 });

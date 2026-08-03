@@ -28,6 +28,20 @@ function clean(value) {
   return value === undefined || value === null ? "" : String(value).trim();
 }
 
+function uniqueCleanList(values) {
+  const seen = new Set();
+  const result = [];
+
+  for (const value of values || []) {
+    const item = clean(value);
+    if (!item || seen.has(item)) continue;
+    seen.add(item);
+    result.push(item);
+  }
+
+  return result;
+}
+
 function positiveNumber(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -610,7 +624,7 @@ async function getModuleAccessNotificationConfig(
     try {
       const parsed = JSON.parse(row.admin_logins);
       if (Array.isArray(parsed)) {
-        adminLogins = parsed.map((value) => clean(value)).filter(Boolean);
+        adminLogins = uniqueCleanList(parsed);
       }
     } catch {
       // Fallback to the legacy single-admin column.
@@ -658,7 +672,7 @@ async function saveModuleAccessNotificationConfig(
 
   let logins = [];
   if (Array.isArray(adminLogins)) {
-    logins = adminLogins.map((value) => clean(value)).filter(Boolean);
+    logins = uniqueCleanList(adminLogins);
   } else if (adminLogin) {
     const login = clean(adminLogin);
     if (login) logins = [login];
@@ -728,6 +742,14 @@ async function sendSafe(activeBot, chatId, message) {
   }
 }
 
+function isPollingConflict(error) {
+  const message = String((error && error.message) || error || "");
+  return (
+    message.includes("409 Conflict") ||
+    message.includes("terminated by other getUpdates request")
+  );
+}
+
 function attachTelegramHandlers(activeBot, module = DEFAULT_MODULE) {
   const moduleKey = normalizeModule(module);
   activeBot.onText(/\/start(?:@\w+)?(?:\s+(.+))?/i, async (msg, match) => {
@@ -789,6 +811,18 @@ function attachTelegramHandlers(activeBot, module = DEFAULT_MODULE) {
       "[telegramService] polling_error:",
       err && err.message ? err.message : err,
     );
+
+    if (!isPollingConflict(err)) return;
+
+    console.error(
+      `[telegramService] polling disabled for ${moduleKey}: another bot instance is already running.`,
+    );
+    stopBotForModule(moduleKey).catch((error) => {
+      console.error(
+        "[telegramService] could not stop conflicting polling:",
+        error && error.message ? error.message : error,
+      );
+    });
   });
 }
 

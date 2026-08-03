@@ -77,27 +77,6 @@ router.get("/contratos/status", async (req, res) => {
   }
 });
 
-router.post("/acesso", async (req, res) => {
-  try {
-    const login = getReqLogin(req);
-    if (!login) {
-      return res.status(401).json({
-        status: "erro",
-        mensagem: "Usuario nao autenticado",
-      });
-    }
-
-    res.json({
-      status: "sucesso",
-      notified: false,
-      reason: "notificacao_enviada_no_login",
-    });
-  } catch (error) {
-    console.warn("Error in POST /melpethostel/acesso:", error);
-    res.status(500).json({ status: "erro", mensagem: error.message });
-  }
-});
-
 router.post("/contratos/:contratoId/conferir", async (req, res) => {
   try {
     const login = getReqLogin(req);

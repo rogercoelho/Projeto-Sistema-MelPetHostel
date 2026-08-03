@@ -1,11 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const {
-  getModuleAccessNotificationConfig,
-  getTelegramChatIdByLogin,
-  normalizeModule,
-  sendTelegram,
-} = require("../../services/telegramService");
+  MODULE,
+  sendTelegramToConfiguredAdmins,
+} = require("../../utils/moduleAccessNotification");
 const {
   TABLE_NAMES,
   dbFor,
@@ -15,8 +13,6 @@ const {
   qtable,
   resolveTableName,
 } = require("./context");
-
-const MODULE = normalizeModule("melpethostel");
 
 function clean(value) {
   return value === undefined || value === null ? "" : String(value).trim();
@@ -40,11 +36,6 @@ function formatTelegramDate(value) {
 
 async function notifyAdmins(req, pedido) {
   const db = dbFor(req);
-  const config = await getModuleAccessNotificationConfig(MODULE, db);
-  if (!config.enabled || !config.adminLogins?.length) {
-    return { notified: false, reason: "notificacao_desativada" };
-  }
-
   const message = [
     "<b>Nova solicitação de hospedagem</b>",
     `Tutor: <b>${pedido.login}</b>`,
@@ -55,26 +46,12 @@ async function notifyAdmins(req, pedido) {
     `Total: <b>${pedido.totalFormatado}</b>`,
   ].join("\n");
 
-  const notifiedTo = [];
-  for (const adminLogin of config.adminLogins) {
-    const chatId =
-      config.adminChatIds?.[adminLogin] ||
-      (await getTelegramChatIdByLogin(MODULE, adminLogin, db));
-    if (!chatId) continue;
-
-    try {
-      await sendTelegram(chatId, message, { module: MODULE, db });
-      notifiedTo.push(adminLogin);
-    } catch (error) {
-      console.error(
-        "notify hospedagem error sending to",
-        adminLogin,
-        error?.message || error,
-      );
-    }
-  }
-
-  return { notified: Boolean(notifiedTo.length), notifiedTo };
+  return sendTelegramToConfiguredAdmins({
+    db,
+    module: MODULE,
+    message,
+    disabledReason: "notificacao_desativada",
+  });
 }
 
 router.post("/hospedagens/solicitacoes", async (req, res) => {
