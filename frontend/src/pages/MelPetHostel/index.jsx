@@ -295,6 +295,10 @@ export default function MelPetHostel({
     categoriaDe: "",
     categoriaAte: "",
     unidade: "Kg",
+    tipoCobranca: "unico",
+    tipoCalculo: "pernoite",
+    tempoQuantidade: "1",
+    tempoUnidade: "dia",
     valor: "",
   });
   const [documentPreviewOpen, setDocumentPreviewOpen] = useState(false);
@@ -813,6 +817,16 @@ export default function MelPetHostel({
       return;
     }
 
+    if (!String(planoForm.tempoQuantidade || "").trim()) {
+      setPlanosError("Informe a quantidade de tempo do plano.");
+      return;
+    }
+
+    if (!planoForm.tempoUnidade.trim()) {
+      setPlanosError("Informe o tempo do plano.");
+      return;
+    }
+
     if (!planoForm.valor.trim()) {
       setPlanosError("Informe o valor do plano.");
       return;
@@ -840,6 +854,10 @@ export default function MelPetHostel({
         categoriaDe: "",
         categoriaAte: "",
         unidade: current.unidade,
+        tipoCobranca: current.tipoCobranca,
+        tipoCalculo: current.tipoCalculo,
+        tempoQuantidade: current.tempoQuantidade,
+        tempoUnidade: current.tempoUnidade,
         valor: "",
       }));
       showToast(
@@ -863,6 +881,10 @@ export default function MelPetHostel({
       categoriaDe: plano.categoriaDe || "",
       categoriaAte: plano.categoriaAte || "",
       unidade: plano.unidade || "Kg",
+      tipoCobranca: plano.tipoCobranca || "unico",
+      tipoCalculo: plano.tipoCalculo || "pernoite",
+      tempoQuantidade: String(plano.tempoQuantidade || "1"),
+      tempoUnidade: plano.tempoUnidade || "dia",
       valor: maskCurrencyInput(
         String(Math.round(Number(plano.valor || 0) * 100)),
       ),
@@ -877,6 +899,10 @@ export default function MelPetHostel({
       categoriaDe: "",
       categoriaAte: "",
       unidade: "Kg",
+      tipoCobranca: "unico",
+      tipoCalculo: "pernoite",
+      tempoQuantidade: "1",
+      tempoUnidade: "dia",
       valor: "",
     });
   }
@@ -895,20 +921,21 @@ export default function MelPetHostel({
     return match ? Number(match[0]) : null;
   }
 
-  function getHostingDaysBetween(entrada, saida) {
+  function getHostingDaysBetween(entrada, saida, tipoCalculo = "pernoite") {
     if (!entrada || !saida) return 0;
+    if (tipoCalculo === "dia_uso") return 1;
     const start = new Date(`${entrada}T00:00:00`);
     const end = new Date(`${saida}T00:00:00`);
     const diff = end.getTime() - start.getTime();
-    if (!Number.isFinite(diff) || diff <= 0) return 0;
+    if (!Number.isFinite(diff) || diff < 0) return 0;
     return Math.ceil(diff / 86400000);
   }
 
-  function getPetPlanValue(pet, tipo) {
+  function getPetPlansForType(pet, tipo) {
     const plansForType = planos.filter((plano) => plano.tipo === tipo);
-    if (!plansForType.length) return null;
+    if (!plansForType.length) return [];
 
-    const matchedPlan = plansForType.find((plano) => {
+    return plansForType.filter((plano) => {
       const unidade = normalizeText(plano.unidade || "");
       const petValue = unidade.includes("ano")
         ? parsePlanNumber(pet?.idade)
@@ -918,8 +945,73 @@ export default function MelPetHostel({
       if (petValue === null || min === null || max === null) return false;
       return petValue >= min && petValue <= max;
     });
+  }
 
-    return matchedPlan || null;
+  function getPetPlanValue(pet, tipo, planoId = null) {
+    const plansForPet = getPetPlansForType(pet, tipo);
+    if (!plansForPet.length) return null;
+    if (planoId) {
+      return (
+        plansForPet.find((plano) => Number(plano.id) === Number(planoId)) ||
+        null
+      );
+    }
+    return plansForPet.length === 1 ? plansForPet[0] : null;
+  }
+
+  function getDefaultUniquePlan(pet, tipo) {
+    return (
+      getPetPlansForType(pet, tipo).find(
+        (plano) => getPlanBillingMode(plano) === "unico",
+      ) || null
+    );
+  }
+
+  function getMonthlyPlans(pet, tipo) {
+    return getPetPlansForType(pet, tipo).filter(
+      (plano) => getPlanBillingMode(plano) === "mensal",
+    );
+  }
+
+  function getPlanDailyValue(plano) {
+    const valor = Number(plano?.valor || 0);
+    const quantidade = Number(plano?.tempoQuantidade || 1);
+    const tempo = normalizeText(plano?.tempoUnidade || "dia");
+    if (!Number.isFinite(valor) || valor <= 0) return 0;
+    if (!Number.isFinite(quantidade) || quantidade <= 0) return valor;
+    return tempo.includes("dia") ? valor / quantidade : valor;
+  }
+
+  function getPlanBillingMode(plano) {
+    return plano?.tipoCobranca === "mensal" ? "mensal" : "unico";
+  }
+
+  function isRecurringPlan(plano) {
+    return getPlanBillingMode(plano) === "mensal";
+  }
+
+  function isDayUsePlan(plano) {
+    return plano?.tipoCalculo === "dia_uso";
+  }
+
+  function getStartMonthDate(value) {
+    return value ? `${value}-01` : "";
+  }
+
+  function formatStartMonth(value) {
+    if (!value) return "";
+    const [year, month] = String(value).split("-");
+    if (!year || !month) return value;
+    return `${month}/${year.slice(-2)}`;
+  }
+
+  function formatPlanTempo(plano) {
+    const quantidade = Number(plano?.tempoQuantidade || 1);
+    return `${Math.max(1, Math.trunc(quantidade || 1))} ${plano?.tempoUnidade || "dia"}`;
+  }
+
+  function formatTipoCalculo(plano) {
+    return plano?.tipoCalculo === "dia_uso" ? "Dia de uso" : "Pernoite";
   }
 
   function toggleHostingPet(petId) {
@@ -937,8 +1029,11 @@ export default function MelPetHostel({
         ...periods,
         [petId]: {
           tipo: "",
+          planoId: "",
           entrada: "",
           saida: "",
+          dataUso: "",
+          inicioMes: "",
         },
       }));
       return [...current, petId];
@@ -951,6 +1046,12 @@ export default function MelPetHostel({
       [petId]: {
         ...(current[petId] || {}),
         [field]: value,
+        ...(field === "tipo"
+          ? { planoId: "", entrada: "", saida: "", dataUso: "", inicioMes: "" }
+          : {}),
+        ...(field === "planoId"
+          ? { entrada: "", saida: "", dataUso: "", inicioMes: "" }
+          : {}),
       },
     }));
   }
@@ -973,18 +1074,34 @@ export default function MelPetHostel({
       );
       return;
     }
-    const itemWithoutPeriod = hostingItems.find((item) => !item.days);
-    if (itemWithoutPeriod) {
+    const itemWithoutPlan = hostingItems.find((item) => !item.plano);
+    if (itemWithoutPlan) {
+      const availablePlans = itemWithoutPlan.tipo
+        ? getPetPlansForType(itemWithoutPlan.pet, itemWithoutPlan.tipo)
+        : [];
+      const monthlyPlans = itemWithoutPlan.tipo
+        ? getMonthlyPlans(itemWithoutPlan.pet, itemWithoutPlan.tipo)
+        : [];
       showToast(
-        `Informe entrada e saída válidas para ${itemWithoutPeriod.pet.nome}.`,
+        monthlyPlans.length
+          ? `Selecione o plano para ${itemWithoutPlan.pet.nome}.`
+          : availablePlans.length
+            ? `Não existe plano único compatível para ${itemWithoutPlan.pet.nome}.`
+            : `Não existe plano compatível para ${itemWithoutPlan.pet.nome}.`,
         "error",
       );
       return;
     }
-    const itemWithoutPlan = hostingItems.find((item) => !item.plano);
-    if (itemWithoutPlan) {
+    const itemWithoutPeriod = hostingItems.find((item) =>
+      item.recurring ? !item.inicioMes || !item.quantity : !item.days,
+    );
+    if (itemWithoutPeriod) {
       showToast(
-        `Não existe plano compatível para ${itemWithoutPlan.pet.nome}.`,
+        itemWithoutPeriod.recurring
+          ? `Informe quantidade e mês de início para ${itemWithoutPeriod.pet.nome}.`
+          : itemWithoutPeriod.dayUse
+            ? `Informe a data de utilização para ${itemWithoutPeriod.pet.nome}.`
+            : `Informe entrada e saída válidas para ${itemWithoutPeriod.pet.nome}.`,
         "error",
       );
       return;
@@ -995,14 +1112,29 @@ export default function MelPetHostel({
       const tiposSelecionados = Array.from(
         new Set(hostingItems.map((item) => item.tipo).filter(Boolean)),
       );
+      const modosSelecionados = Array.from(
+        new Set(hostingItems.map((item) => item.billingMode).filter(Boolean)),
+      );
       await api.post("/melpethostel/hospedagens/solicitacoes", {
         tipo:
           tiposSelecionados.length === 1 ? tiposSelecionados[0] : "Múltiplos",
-        dataEntrada: hostingItems.map((item) => item.entrada).sort()[0],
-        dataSaida: hostingItems
-          .map((item) => item.saida)
-          .sort()
-          .at(-1),
+        modoCobranca:
+          modosSelecionados.length === 1 ? modosSelecionados[0] : "misto",
+        inicioMes:
+          hostingItems
+            .map((item) => item.inicioMes)
+            .filter(Boolean)
+            .sort()[0] || "",
+        dataEntrada: hostingItems
+          .map((item) => item.entrada)
+          .filter(Boolean)
+          .sort()[0],
+        dataSaida:
+          hostingItems
+            .map((item) => item.saida)
+            .filter(Boolean)
+            .sort()
+            .at(-1) || null,
         dias: Math.max(...hostingItems.map((item) => item.days)),
         total: hostingTotal,
         itens: hostingItems.map((item) => ({
@@ -1010,6 +1142,11 @@ export default function MelPetHostel({
           petNome: item.pet.nome,
           planoId: item.plano.id,
           tipo: item.tipo,
+          modoCobranca: item.billingMode,
+          quantidadeSolicitada: item.quantity,
+          tempoQuantidade: item.quantity,
+          tempoUnidade: item.plano.tempoUnidade || "dia",
+          inicioMes: item.inicioMes,
           dataEntrada: item.entrada,
           dataSaida: item.saida,
           dias: item.days,
@@ -1873,7 +2010,7 @@ export default function MelPetHostel({
       (item) => item?.conferido || item?.status === "aprovado",
     );
     if (hasApproved) {
-      return { label: "Aprovado", tone: "approved" };
+      return { label: "Pet Aprovado", tone: "approved" };
     }
 
     if (carteiras.length) {
@@ -2198,20 +2335,52 @@ export default function MelPetHostel({
   const hostingItems = hostingSelectedPets.map((pet) => {
     const period = hostingPetPeriods[pet.id] || {};
     const tipo = period.tipo || "";
-    const plano = tipo ? getPetPlanValue(pet, tipo) : null;
-    const dailyValue = plano ? Number(plano.valor) : 0;
-    const entrada = period.entrada || "";
-    const saida = period.saida || "";
-    const days = getHostingDaysBetween(entrada, saida);
+    const monthlyPlans = tipo ? getMonthlyPlans(pet, tipo) : [];
+    const selectedMonthlyPlan = tipo
+      ? getPetPlanValue(pet, tipo, period.planoId)
+      : null;
+    const uniquePlan = tipo ? getDefaultUniquePlan(pet, tipo) : null;
+    const plano =
+      selectedMonthlyPlan &&
+      getPlanBillingMode(selectedMonthlyPlan) === "mensal"
+        ? selectedMonthlyPlan
+        : monthlyPlans.length
+          ? null
+          : uniquePlan;
+    const billingMode = plano ? getPlanBillingMode(plano) : "unico";
+    const recurring = plano ? isRecurringPlan(plano) : false;
+    const dayUse = plano ? isDayUsePlan(plano) : false;
+    const quantity = Number(plano?.tempoQuantidade || 1);
+    const dailyValue = plano ? getPlanDailyValue(plano) : 0;
+    const inicioMes = recurring ? period.inicioMes || "" : "";
+    const entrada = recurring
+      ? getStartMonthDate(inicioMes)
+      : dayUse
+        ? period.dataUso || ""
+        : period.entrada || "";
+    const saida = recurring
+      ? ""
+      : dayUse
+        ? period.dataUso || ""
+        : period.saida || "";
+    const days = recurring
+      ? 1
+      : getHostingDaysBetween(entrada, saida, plano?.tipoCalculo);
+    const recurringValue = plano ? Number(plano.valor || 0) : 0;
     return {
       pet,
       tipo,
       plano,
+      billingMode,
+      recurring,
+      dayUse,
+      quantity,
+      inicioMes,
       entrada,
       saida,
       days,
       dailyValue,
-      total: dailyValue * days,
+      total: recurring ? recurringValue : dailyValue * days,
     };
   });
   const hostingTotal = hostingItems.reduce((sum, item) => sum + item.total, 0);
@@ -2220,9 +2389,8 @@ export default function MelPetHostel({
     <div className="melpet-hosting-stack">
       <section className="melpet-hosting-request">
         <div className="melpet-hosting-guidance">
-          Você pode incluir Pets diferentes com períodos diferentes na mesma
-          solicitação. Para períodos diferentes do mesmo Pet, faça solicitações
-          de hospedagem separadas.
+          Hotel e Pet Day usam período por diária. Creche, Lar Temporário e
+          Residência usam pagamento recorrente, com quantidade e mês de início.
         </div>
 
         <section className="melpet-hosting-pets">
@@ -2234,9 +2402,21 @@ export default function MelPetHostel({
                 const approved = status.tone === "approved";
                 const selected = hostingPetIds.includes(pet.id);
                 const period = hostingPetPeriods[pet.id] || {};
-                const plano = period.tipo
-                  ? getPetPlanValue(pet, period.tipo)
+                const monthlyPlans = period.tipo
+                  ? getMonthlyPlans(pet, period.tipo)
+                  : [];
+                const uniquePlan = period.tipo
+                  ? getDefaultUniquePlan(pet, period.tipo)
                   : null;
+                const plano = period.tipo
+                  ? getPetPlanValue(pet, period.tipo, period.planoId) ||
+                    (monthlyPlans.length ? null : uniquePlan)
+                  : null;
+                const recurring = plano ? isRecurringPlan(plano) : false;
+                const dayUse = plano ? isDayUsePlan(plano) : false;
+                const shouldShowPeriodFields =
+                  Boolean(period.tipo) &&
+                  (!monthlyPlans.length || Boolean(period.planoId));
                 return (
                   <div
                     className={`melpet-hosting-pet-card ${
@@ -2261,15 +2441,23 @@ export default function MelPetHostel({
                             : "melpet-hosting-status is-blocked"
                         }
                       >
-                        {approved ? "Aprovado" : "Pendente"}
+                        {approved
+                          ? "Pet Aprovado"
+                          : "Pet Pendente: Verifique Documentação"}
+                        {approved && selected && period.tipo ? (
+                          <span
+                            className={
+                              plano
+                                ? "melpet-hosting-status-price"
+                                : "melpet-hosting-status-price is-missing"
+                            }
+                          >
+                            {plano
+                              ? `${formatCurrency(plano.valor)} / ${formatPlanTempo(plano)}`
+                              : "selecione um plano"}
+                          </span>
+                        ) : null}
                       </em>
-                      {selected && period.tipo ? (
-                        <small>
-                          {plano
-                            ? `${formatCurrency(plano.valor)} / dia`
-                            : "Sem plano para a faixa"}
-                        </small>
-                      ) : null}
                     </button>
 
                     {selected ? (
@@ -2294,34 +2482,94 @@ export default function MelPetHostel({
                             ))}
                           </select>
                         </label>
-                        <label>
-                          Entrada
-                          <input
-                            type="date"
-                            value={period.entrada || ""}
-                            onChange={(event) =>
-                              updateHostingPetPeriod(
-                                pet.id,
-                                "entrada",
-                                event.target.value,
-                              )
-                            }
-                          />
-                        </label>
-                        <label>
-                          Saída
-                          <input
-                            type="date"
-                            value={period.saida || ""}
-                            onChange={(event) =>
-                              updateHostingPetPeriod(
-                                pet.id,
-                                "saida",
-                                event.target.value,
-                              )
-                            }
-                          />
-                        </label>
+                        {period.tipo && monthlyPlans.length ? (
+                          <label>
+                            Plano
+                            <select
+                              value={period.planoId || ""}
+                              onChange={(event) =>
+                                updateHostingPetPeriod(
+                                  pet.id,
+                                  "planoId",
+                                  event.target.value,
+                                )
+                              }
+                            >
+                              <option value="">Selecione</option>
+                              {monthlyPlans.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {formatPlanTempo(item)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : null}
+                        {shouldShowPeriodFields && recurring ? (
+                          <>
+                            <label>
+                              Iniciando em
+                              <input
+                                type="month"
+                                value={period.inicioMes || ""}
+                                onChange={(event) =>
+                                  updateHostingPetPeriod(
+                                    pet.id,
+                                    "inicioMes",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                            </label>
+                          </>
+                        ) : null}
+                        {shouldShowPeriodFields && dayUse ? (
+                          <label>
+                            Data de utilização
+                            <input
+                              type="date"
+                              value={period.dataUso || ""}
+                              onChange={(event) =>
+                                updateHostingPetPeriod(
+                                  pet.id,
+                                  "dataUso",
+                                  event.target.value,
+                                )
+                              }
+                            />
+                          </label>
+                        ) : null}
+                        {shouldShowPeriodFields && !recurring && !dayUse ? (
+                          <>
+                            <label>
+                              Entrada
+                              <input
+                                type="date"
+                                value={period.entrada || ""}
+                                onChange={(event) =>
+                                  updateHostingPetPeriod(
+                                    pet.id,
+                                    "entrada",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                            </label>
+                            <label>
+                              Saída
+                              <input
+                                type="date"
+                                value={period.saida || ""}
+                                onChange={(event) =>
+                                  updateHostingPetPeriod(
+                                    pet.id,
+                                    "saida",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                            </label>
+                          </>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -2356,9 +2604,13 @@ export default function MelPetHostel({
                     <strong>{item.pet.nome}</strong>
                     <small>
                       {item.plano
-                        ? `${item.tipo} - ${item.entrada} a ${item.saida} - ${formatCurrency(
-                            item.dailyValue,
-                          )} x ${item.days || 0} dias`
+                        ? item.recurring
+                          ? `${item.tipo} / ${item.quantity} ${item.plano.tempoUnidade || "dia"} - início ${formatStartMonth(item.inicioMes)} - mensal`
+                          : item.dayUse
+                            ? `${item.tipo} / ${formatPlanTempo(item.plano)} - ${formatBrazilDate(item.entrada)} - ${formatCurrency(item.dailyValue)} x 1 dia`
+                            : `${item.tipo} / ${formatPlanTempo(item.plano)} - ${formatBrazilDate(item.entrada)} a ${formatBrazilDate(item.saida)} - ${formatCurrency(
+                                item.dailyValue,
+                              )} x ${item.days || 0} dias`
                         : "Sem valor configurado para este pet"}
                     </small>
                   </span>
@@ -2800,82 +3052,160 @@ export default function MelPetHostel({
           <h3>Cadastro de Planos</h3>
         </div>
 
-        <label>
-          Tipo
-          <input
-            type="text"
-            value={planoForm.tipo}
-            onChange={(event) =>
-              setPlanoForm((current) => ({
-                ...current,
-                tipo: event.target.value,
-              }))
-            }
-            placeholder="Ex: Hotel"
-          />
-        </label>
+        <div className="melpet-plan-form-grid">
+          <section className="melpet-plan-form-section">
+            <span>Identificação</span>
+            <label>
+              Tipo
+              <input
+                type="text"
+                value={planoForm.tipo}
+                onChange={(event) =>
+                  setPlanoForm((current) => ({
+                    ...current,
+                    tipo: event.target.value,
+                  }))
+                }
+                placeholder="Ex: Hotel"
+              />
+            </label>
+          </section>
 
-        <div className="melpet-plan-category-row">
-          <label>
-            De
-            <input
-              type="text"
-              value={planoForm.categoriaDe}
-              onChange={(event) =>
-                setPlanoForm((current) => ({
-                  ...current,
-                  categoriaDe: event.target.value,
-                }))
-              }
-              placeholder="Ex: 0 kg"
-            />
-          </label>
+          <section className="melpet-plan-form-section">
+            <span>Faixa do pet</span>
+            <div className="melpet-plan-form-row">
+              <label>
+                De
+                <input
+                  type="text"
+                  value={planoForm.categoriaDe}
+                  onChange={(event) =>
+                    setPlanoForm((current) => ({
+                      ...current,
+                      categoriaDe: event.target.value,
+                    }))
+                  }
+                  placeholder="Ex: 0 kg"
+                />
+              </label>
 
-          <label>
-            Até
-            <input
-              type="text"
-              value={planoForm.categoriaAte}
-              onChange={(event) =>
-                setPlanoForm((current) => ({
-                  ...current,
-                  categoriaAte: event.target.value,
-                }))
-              }
-              placeholder="Ex: 10 kg"
-            />
-          </label>
+              <label>
+                Até
+                <input
+                  type="text"
+                  value={planoForm.categoriaAte}
+                  onChange={(event) =>
+                    setPlanoForm((current) => ({
+                      ...current,
+                      categoriaAte: event.target.value,
+                    }))
+                  }
+                  placeholder="Ex: 10 kg"
+                />
+              </label>
 
-          <label>
-            Valor
-            <input
-              type="text"
-              inputMode="decimal"
-              value={planoForm.valor}
-              onChange={(event) =>
-                setPlanoForm((current) => ({
-                  ...current,
-                  valor: maskCurrencyInput(event.target.value),
-                }))
-              }
-              placeholder="Ex: 20,00"
-            />
-          </label>
+              <label>
+                Unidade
+                <input
+                  type="text"
+                  value={planoForm.unidade}
+                  onChange={(event) =>
+                    setPlanoForm((current) => ({
+                      ...current,
+                      unidade: event.target.value,
+                    }))
+                  }
+                  placeholder="Ex: Kg"
+                />
+              </label>
+            </div>
+          </section>
 
-          <label>
-            Unidade
-            <input
-              type="text"
-              value={planoForm.unidade}
-              onChange={(event) =>
-                setPlanoForm((current) => ({
-                  ...current,
-                  unidade: event.target.value,
-                }))
-              }
-              placeholder="Ex: Kg, Anos, Porte"
-            />
-          </label>
+          <section className="melpet-plan-form-section">
+            <span>Cobrança</span>
+            <div className="melpet-plan-form-row">
+              <label>
+                Quantidade
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  step="1"
+                  value={planoForm.tempoQuantidade}
+                  onChange={(event) =>
+                    setPlanoForm((current) => ({
+                      ...current,
+                      tempoQuantidade: event.target.value.replace(/\D/g, ""),
+                    }))
+                  }
+                  placeholder="Ex: 1"
+                />
+              </label>
+
+              <label>
+                Tempo
+                <input
+                  type="text"
+                  value={planoForm.tempoUnidade}
+                  onChange={(event) =>
+                    setPlanoForm((current) => ({
+                      ...current,
+                      tempoUnidade: event.target.value,
+                    }))
+                  }
+                  placeholder="Ex: dia, mês"
+                />
+              </label>
+
+              <label>
+                Tipo de cobrança
+                <select
+                  value={planoForm.tipoCobranca}
+                  onChange={(event) =>
+                    setPlanoForm((current) => ({
+                      ...current,
+                      tipoCobranca: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="unico">Único</option>
+                  <option value="mensal">Mensal</option>
+                </select>
+              </label>
+
+              <label>
+                Tipo de cálculo
+                <select
+                  value={planoForm.tipoCalculo}
+                  onChange={(event) =>
+                    setPlanoForm((current) => ({
+                      ...current,
+                      tipoCalculo: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="pernoite">Pernoite</option>
+                  <option value="dia_uso">Dia de uso</option>
+                </select>
+              </label>
+
+              <label>
+                Valor
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={planoForm.valor}
+                  onChange={(event) =>
+                    setPlanoForm((current) => ({
+                      ...current,
+                      valor: maskCurrencyInput(event.target.value),
+                    }))
+                  }
+                  placeholder="Ex: 20,00"
+                />
+              </label>
+            </div>
+          </section>
         </div>
 
         <div className="melpet-plan-form-actions">
@@ -2938,7 +3268,14 @@ export default function MelPetHostel({
                               De {plano.categoriaDe} até {plano.categoriaAte}{" "}
                               {plano.unidade || "Kg"}
                             </span>
-                            <strong>{formatCurrency(plano.valor)}</strong>
+                            <strong>
+                              {formatPlanTempo(plano)} -{" "}
+                              {formatCurrency(plano.valor)} - Pagamento:{" "}
+                              {plano.tipoCobranca === "mensal"
+                                ? "Mensal"
+                                : "Único"}{" "}
+                              - Cálculo: {formatTipoCalculo(plano)}
+                            </strong>
                           </div>
                           <div className="melpet-plan-item-actions">
                             <Button

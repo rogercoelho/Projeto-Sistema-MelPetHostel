@@ -1,6 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const {
+  notifyDocumentUploadForReview,
+} = require("../../utils/moduleAccessNotification");
+const {
   TABLE_NAMES,
   buildSupportDocumentFileName,
   checkAllRequiredDocsConcluded,
@@ -634,6 +637,17 @@ router.post(
           [userRow.Usuario_ID, contratoId, tipo.Id, filePath],
         );
       }
+
+      notifyDocumentUploadForReview(req, {
+        usuario: userRow,
+        login,
+        documentNames: [tipo.Documento_Tipo],
+      }).catch((error) => {
+        console.error(
+          "Erro ao enviar aviso de documento no Telegram:",
+          error?.message || error,
+        );
+      });
 
       return res.json({
         status: "sucesso",

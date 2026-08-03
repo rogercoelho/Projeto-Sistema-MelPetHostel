@@ -1,11 +1,15 @@
 ﻿const express = require("express");
 const router = express.Router();
 const {
+  notifyDocumentUploadForReview,
+} = require("../../utils/moduleAccessNotification");
+const {
   TABLE_NAMES,
   dbFor,
   fs,
   getCurrentClienteId,
   getReqLogin,
+  getUsuarioByLogin,
   parseJsonArray,
   path,
   qcol,
@@ -940,6 +944,30 @@ router.post(
         `,
         [petId, clienteId, lado, nomeArquivo, filePath],
       );
+
+      getUsuarioByLogin(req, login)
+        .catch((error) => {
+          console.error(
+            "Erro ao carregar usuário para notificação de carteira:",
+            error?.message || error,
+          );
+          return null;
+        })
+        .then((usuario) =>
+          notifyDocumentUploadForReview(req, {
+            usuario,
+            login,
+            documentNames: [
+              `Carteirinha de Vacinação ${lado === "verso" ? "Verso" : "Frente"} - ${pet.nome}`,
+            ],
+          }),
+        )
+        .catch((error) => {
+          console.error(
+            "Erro ao enviar aviso de carteira no Telegram:",
+            error?.message || error,
+          );
+        });
 
       return res.status(201).json({
         status: "sucesso",

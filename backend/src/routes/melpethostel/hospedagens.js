@@ -28,21 +28,73 @@ function asDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : "";
 }
 
+function asStartMonth(value) {
+  const text = clean(value);
+  if (/^\d{4}-\d{2}$/.test(text)) return text;
+  if (/^\d{2}\/\d{2}$/.test(text)) {
+    const [month, year] = text.split("/");
+    return `20${year}-${month}`;
+  }
+  return "";
+}
+
+function formatTelegramMonth(value) {
+  const [year, month] = clean(value).split("-");
+  if (!year || !month) return clean(value);
+  return `${month}/${year.slice(-2)}`;
+}
+
+function asPositiveInteger(value, fallback = null) {
+  const parsed = Number(value);
+  if (Number.isInteger(parsed) && parsed > 0) return parsed;
+  return fallback;
+}
+
+function normalizeBillingMode(value) {
+  const normalized = clean(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (normalized.includes("mes")) return "mensal";
+  if (["mensal", "misto", "recorrente"].includes(normalized)) {
+    return normalized;
+  }
+  return "unico";
+}
+
+function formatBillingMode(value) {
+  const mode = normalizeBillingMode(value);
+  if (mode === "unico") return "único";
+  if (mode === "mensal") return "mensal";
+  return "recorrente";
+}
+
 function formatTelegramDate(value) {
   const [year, month, day] = clean(value).split("-");
   if (!year || !month || !day) return clean(value);
-  return `${day}${month}${year.slice(-2)}`;
+  return `${day}/${month}/${year.slice(-2)}`;
 }
 
 async function notifyAdmins(req, pedido) {
   const db = dbFor(req);
+  const periodLines =
+    pedido.modoCobranca === "unico"
+      ? [
+          `Entrada: <b>${formatTelegramDate(pedido.dataEntrada)}</b>`,
+          `Saída: <b>${formatTelegramDate(pedido.dataSaida)}</b>`,
+          `Dias: <b>${pedido.dias}</b>`,
+        ]
+      : [
+          `Início: <b>${formatTelegramMonth(pedido.inicioMes)}</b>`,
+          `Recorrência: <b>${formatBillingMode(pedido.modoCobranca)}</b>`,
+        ];
+
   const message = [
     "<b>Nova solicitação de hospedagem</b>",
     `Tutor: <b>${pedido.login}</b>`,
     `Tipo: <b>${pedido.tipo}</b>`,
-    `Entrada: <b>${formatTelegramDate(pedido.dataEntrada)}</b>`,
-    `Saída: <b>${formatTelegramDate(pedido.dataSaida)}</b>`,
-    `Pets: <b>${pedido.petNames.join(", ")}</b>`,
+    ...periodLines,
+    `Pets: <b>${pedido.petDetails.join("; ")}</b>`,
     `Total: <b>${pedido.totalFormatado}</b>`,
   ].join("\n");
 
@@ -61,9 +113,11 @@ router.post("/hospedagens/solicitacoes", async (req, res) => {
     const clienteId = await getCurrentClienteId(req);
     const login = getReqLogin(req);
     const tipo = clean(req.body?.tipo);
+    const modoCobranca = normalizeBillingMode(req.body?.modoCobranca);
+    const inicioMes = asStartMonth(req.body?.inicioMes);
     const dataEntrada = asDate(req.body?.dataEntrada);
-    const dataSaida = asDate(req.body?.dataSaida);
-    const dias = Number(req.body?.dias);
+    const dataSaida = modoCobranca === "unico" ? asDate(req.body?.dataSaida) : null;
+    const dias = asPositiveInteger(req.body?.dias, modoCobranca === "unico" ? null : 1);
     const total = asMoney(req.body?.total);
     const itens = Array.isArray(req.body?.itens) ? req.body.itens : [];
 
@@ -74,10 +128,24 @@ router.post("/hospedagens/solicitacoes", async (req, res) => {
       });
     }
 
-    if (!tipo || !dataEntrada || !dataSaida || !Number.isInteger(dias) || dias <= 0) {
+    if (!tipo || !dataEntrada || !dias) {
       return res.status(400).json({
         status: "erro",
-        mensagem: "Informe tipo de hospedagem, entrada e saída válidos.",
+        mensagem: "Informe tipo de hospedagem e período válidos.",
+      });
+    }
+
+    if (modoCobranca === "unico" && !dataSaida) {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Informe entrada e saída válidas.",
+      });
+    }
+
+    if (modoCobranca !== "unico" && !inicioMes) {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Informe o mês de início.",
       });
     }
 
@@ -112,44 +180,61 @@ router.post("/hospedagens/solicitacoes", async (req, res) => {
           (${[
             qcol("cliente_id"),
             qcol("tipo"),
+            qcol("modo_cobranca"),
+            qcol("inicio_mes"),
             qcol("data_entrada"),
             qcol("data_saida"),
             qcol("dias"),
             qcol("valor_total"),
             qcol("status"),
           ].join(", ")})
-        VALUES (?, ?, ?, ?, ?, ?, 'pendente')
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pendente')
       `,
-      [clienteId, tipo, dataEntrada, dataSaida, dias, total],
+      [clienteId, tipo, modoCobranca, inicioMes || null, dataEntrada, dataSaida, dias, total],
     );
 
     const pedidoId = pedidoResult.insertId;
-    const petNames = [];
+    const petDetails = [];
     for (const item of itens) {
       const petId = Number(item.petId);
       const petNome = clean(item.petNome);
       const itemTipo = clean(item.tipo);
       const planoId = item.planoId ? Number(item.planoId) : null;
+      const itemModoCobranca = normalizeBillingMode(item.modoCobranca);
+      const tempoQuantidade = asPositiveInteger(item.tempoQuantidade, 1);
+      const tempoUnidade = clean(item.tempoUnidade) || "dia";
+      const itemInicioMes = asStartMonth(item.inicioMes);
       const itemDataEntrada = asDate(item.dataEntrada);
-      const itemDataSaida = asDate(item.dataSaida);
-      const itemDias = Number(item.dias);
+      const itemDataSaida =
+        itemModoCobranca === "unico" ? asDate(item.dataSaida) : null;
+      const itemDias = asPositiveInteger(
+        item.dias,
+        itemModoCobranca === "unico" ? null : 1,
+      );
+      const quantidadeSolicitada = asPositiveInteger(item.quantidadeSolicitada, 1);
       const valorDiaria = asMoney(item.valorDiaria);
       const valorTotal = asMoney(item.valorTotal);
       if (
         !Number.isInteger(petId) ||
         petId <= 0 ||
         !itemTipo ||
+        !itemModoCobranca ||
+        !tempoQuantidade ||
+        !tempoUnidade ||
         !itemDataEntrada ||
-        !itemDataSaida ||
-        !Number.isInteger(itemDias) ||
-        itemDias <= 0 ||
+        (itemModoCobranca === "unico" && !itemDataSaida) ||
+        (itemModoCobranca !== "unico" && !itemInicioMes) ||
+        !itemDias ||
+        !quantidadeSolicitada ||
         valorDiaria === null ||
         valorTotal === null
       ) {
         throw new Error("Item de hospedagem inválido.");
       }
 
-      petNames.push(petNome || `Pet ${petId}`);
+      petDetails.push(
+        `${petNome || `Pet ${petId}`}: ${itemTipo} / ${quantidadeSolicitada} ${tempoUnidade}`,
+      );
       await conn.query(
         `
           INSERT INTO ${qtable(itensTable)}
@@ -159,13 +244,17 @@ router.post("/hospedagens/solicitacoes", async (req, res) => {
               qcol("pet_nome"),
               qcol("tipo"),
               qcol("plano_id"),
+              qcol("modo_cobranca"),
+              qcol("tempo_quantidade"),
+              qcol("tempo_unidade"),
+              qcol("inicio_mes"),
               qcol("data_entrada"),
               qcol("data_saida"),
               qcol("dias"),
               qcol("valor_diaria"),
               qcol("valor_total"),
             ].join(", ")})
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           pedidoId,
@@ -173,6 +262,10 @@ router.post("/hospedagens/solicitacoes", async (req, res) => {
           petNome || null,
           itemTipo,
           planoId,
+          itemModoCobranca,
+          tempoQuantidade,
+          tempoUnidade,
+          itemInicioMes || null,
           itemDataEntrada,
           itemDataSaida,
           itemDias,
@@ -191,9 +284,12 @@ router.post("/hospedagens/solicitacoes", async (req, res) => {
     notifyAdmins(req, {
       login,
       tipo,
+      modoCobranca,
       dataEntrada,
       dataSaida,
-      petNames,
+      inicioMes,
+      dias,
+      petDetails,
       totalFormatado,
     }).catch((error) => {
       console.error("Erro notificando hospedagem no Telegram:", error);

@@ -1,6 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const {
+  notifyDocumentUploadForReview,
+} = require("../../utils/moduleAccessNotification");
+const {
   TABLE_NAMES,
   checkAllDocsConferidosByContratoId,
   dbFor,
@@ -9,6 +12,7 @@ const {
   getContratosTableMeta,
   getLatestContratoRow,
   getReqLogin,
+  getUsuarioByLogin,
   isContratoConferido,
   path,
   qcol,
@@ -277,6 +281,28 @@ router.post(
           insertVals,
         );
       }
+
+      getUsuarioByLogin(req, login)
+        .catch((error) => {
+          console.error(
+            "Erro ao carregar usuário para notificação de contrato:",
+            error?.message || error,
+          );
+          return null;
+        })
+        .then((usuario) =>
+          notifyDocumentUploadForReview(req, {
+            usuario,
+            login,
+            documentNames: ["Contrato Assinado"],
+          }),
+        )
+        .catch((error) => {
+          console.error(
+            "Erro ao enviar aviso de contrato no Telegram:",
+            error?.message || error,
+          );
+        });
 
       return res.json({
         status: "sucesso",

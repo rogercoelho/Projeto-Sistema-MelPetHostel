@@ -20,6 +20,40 @@ function parseMoney(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parsePositiveInteger(value) {
+  const normalized = clean(value)
+    .replace(/\./g, "")
+    .replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeTipoCobranca(value) {
+  const normalized = clean(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (normalized === "mensal" || normalized.includes("mes")) {
+    return "mensal";
+  }
+  return "unico";
+}
+
+function normalizeTipoCalculo(value) {
+  const normalized = clean(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (
+    normalized === "dia_uso" ||
+    normalized.includes("dia uso") ||
+    normalized.includes("day")
+  ) {
+    return "dia_uso";
+  }
+  return "pernoite";
+}
+
 function mapPlano(row) {
   return {
     id: row.id,
@@ -27,6 +61,10 @@ function mapPlano(row) {
     categoriaDe: row.categoria_de,
     categoriaAte: row.categoria_ate,
     unidade: row.unidade || "Kg",
+    tipoCobranca: normalizeTipoCobranca(row.tipo_cobranca),
+    tipoCalculo: normalizeTipoCalculo(row.tipo_calculo),
+    tempoQuantidade: Number(row.tempo_quantidade || 1),
+    tempoUnidade: row.tempo_unidade || "dia",
     valor: Number(row.valor),
     ativo: Boolean(row.ativo),
     criadoEm: row.criado_em,
@@ -48,6 +86,10 @@ router.get("/planos", async (req, res) => {
                categoria_de,
                categoria_ate,
                unidade,
+               tipo_cobranca,
+               tipo_calculo,
+               tempo_quantidade,
+               tempo_unidade,
                valor,
                ativo,
                criado_em,
@@ -74,6 +116,10 @@ router.post("/planos", async (req, res) => {
     const categoriaDe = clean(req.body?.categoriaDe);
     const categoriaAte = clean(req.body?.categoriaAte);
     const unidade = clean(req.body?.unidade) || "Kg";
+    const tipoCobranca = normalizeTipoCobranca(req.body?.tipoCobranca);
+    const tipoCalculo = normalizeTipoCalculo(req.body?.tipoCalculo);
+    const tempoQuantidade = parsePositiveInteger(req.body?.tempoQuantidade);
+    const tempoUnidade = clean(req.body?.tempoUnidade);
     const valor = parseMoney(req.body?.valor);
 
     if (!tipo) {
@@ -92,6 +138,18 @@ router.post("/planos", async (req, res) => {
       return res
         .status(400)
         .json({ status: "erro", mensagem: "Categoria ATÉ é obrigatória." });
+    }
+
+    if (tempoQuantidade === null) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Quantidade de tempo inválida." });
+    }
+
+    if (!tempoUnidade) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Tempo é obrigatório." });
     }
 
     if (valor === null || valor < 0) {
@@ -117,11 +175,25 @@ router.post("/planos", async (req, res) => {
             qcol("categoria_de"),
             qcol("categoria_ate"),
             qcol("unidade"),
+            qcol("tipo_cobranca"),
+            qcol("tipo_calculo"),
+            qcol("tempo_quantidade"),
+            qcol("tempo_unidade"),
             qcol("valor"),
           ].join(", ")})
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
-      [tipo, categoriaDe, categoriaAte, unidade, valor],
+      [
+        tipo,
+        categoriaDe,
+        categoriaAte,
+        unidade,
+        tipoCobranca,
+        tipoCalculo,
+        tempoQuantidade,
+        tempoUnidade,
+        valor,
+      ],
     );
 
     return res.status(201).json({
@@ -133,6 +205,10 @@ router.post("/planos", async (req, res) => {
         categoriaDe,
         categoriaAte,
         unidade,
+        tipoCobranca,
+        tipoCalculo,
+        tempoQuantidade,
+        tempoUnidade,
         valor,
         ativo: true,
       },
@@ -150,6 +226,10 @@ router.put("/planos/:id", async (req, res) => {
     const categoriaDe = clean(req.body?.categoriaDe);
     const categoriaAte = clean(req.body?.categoriaAte);
     const unidade = clean(req.body?.unidade) || "Kg";
+    const tipoCobranca = normalizeTipoCobranca(req.body?.tipoCobranca);
+    const tipoCalculo = normalizeTipoCalculo(req.body?.tipoCalculo);
+    const tempoQuantidade = parsePositiveInteger(req.body?.tempoQuantidade);
+    const tempoUnidade = clean(req.body?.tempoUnidade);
     const valor = parseMoney(req.body?.valor);
 
     if (!Number.isInteger(id) || id <= 0) {
@@ -176,6 +256,18 @@ router.put("/planos/:id", async (req, res) => {
         .json({ status: "erro", mensagem: "Categoria ATÉ é obrigatória." });
     }
 
+    if (tempoQuantidade === null) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Quantidade de tempo inválida." });
+    }
+
+    if (!tempoUnidade) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Tempo é obrigatório." });
+    }
+
     if (valor === null || valor < 0) {
       return res
         .status(400)
@@ -198,11 +290,26 @@ router.put("/planos/:id", async (req, res) => {
             ${qcol("categoria_de")} = ?,
             ${qcol("categoria_ate")} = ?,
             ${qcol("unidade")} = ?,
+            ${qcol("tipo_cobranca")} = ?,
+            ${qcol("tipo_calculo")} = ?,
+            ${qcol("tempo_quantidade")} = ?,
+            ${qcol("tempo_unidade")} = ?,
             ${qcol("valor")} = ?
         WHERE ${qcol("id")} = ?
           AND ${qcol("ativo")} = 1
       `,
-      [tipo, categoriaDe, categoriaAte, unidade, valor, id],
+      [
+        tipo,
+        categoriaDe,
+        categoriaAte,
+        unidade,
+        tipoCobranca,
+        tipoCalculo,
+        tempoQuantidade,
+        tempoUnidade,
+        valor,
+        id,
+      ],
     );
 
     if (!result || result.affectedRows === 0) {
@@ -220,6 +327,10 @@ router.put("/planos/:id", async (req, res) => {
         categoriaDe,
         categoriaAte,
         unidade,
+        tipoCobranca,
+        tipoCalculo,
+        tempoQuantidade,
+        tempoUnidade,
         valor,
         ativo: true,
       },

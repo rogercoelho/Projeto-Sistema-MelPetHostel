@@ -298,9 +298,40 @@
   overflow-wrap: anywhere;
 }
 
-.melpet-plan-category-row {
+.melpet-plan-form-grid {
   display: grid;
-  gap: var(--spacing-sm);
+  gap: 12px;
+}
+
+.melpet-plan-form-section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.melpet-plan-form-section > span {
+  color: var(--cor-marrom-claro);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.melpet-plan-form-section label {
+  min-width: 0;
+}
+
+.melpet-plan-form-row {
+  display: grid;
+  gap: 10px;
+}
+
+.melpet-plan-form-grid input,
+.melpet-plan-form-grid select {
+  background: #ffffff;
 }
 
 .melpet-plan-form-actions {
@@ -614,6 +645,16 @@
   padding: 12px;
 }
 
+.melpet-hosting-plan-note {
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  border-radius: 8px;
+  background: #f8fafc;
+  color: var(--cor-marrom);
+  font-size: 0.85rem;
+  font-weight: 800;
+  padding: 11px 12px;
+}
+
 .melpet-hosting-pet-period label {
   display: grid;
   gap: 6px;
@@ -640,21 +681,48 @@
 }
 
 .melpet-hosting-status {
+  display: inline-grid;
+  gap: 6px;
+  justify-items: center;
+  min-width: min(100%, 180px);
   width: fit-content;
-  border-radius: 999px;
+  border: 1px solid #86efac;
+  border-radius: 14px;
   font-size: 0.72rem;
   font-style: normal;
   font-weight: 900;
-  padding: 5px 9px;
+  line-height: 1.2;
+  padding: 9px;
+}
+
+.melpet-hosting-status-price {
+  width: 100%;
+  border-radius: 10px;
+  background: #15803d;
+  box-shadow: 0 6px 14px rgba(21, 128, 61, 0.22);
+  color: #ffffff;
+  font-size: 0.86rem;
+  font-weight: 950;
+  line-height: 1.15;
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.melpet-hosting-status-price.is-missing {
+  background: #991b1b;
+  box-shadow: 0 6px 14px rgba(153, 27, 27, 0.18);
+  font-size: 0.76rem;
 }
 
 .melpet-hosting-status.is-approved {
   background: #dcfce7;
+  border-color: #86efac;
   color: #166534;
 }
 
 .melpet-hosting-status.is-blocked {
   background: #fee2e2;
+  border-color: #fca5a5;
   color: #991b1b;
 }
 
@@ -1457,11 +1525,15 @@
     grid-column: 1 / -1;
   }
 
-  .melpet-plan-category-row {
-    grid-template-columns:
-      minmax(120px, 1fr) minmax(120px, 1fr)
-      minmax(130px, 170px) minmax(110px, 150px);
+  .melpet-plan-form-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: end;
+  }
+
+  .melpet-plan-form-section:nth-child(3) .melpet-plan-form-row {
+    grid-template-columns:
+      minmax(0, 0.65fr) minmax(0, 0.75fr)
+      minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 0.9fr);
   }
 
   .melpet-plan-form-actions {
