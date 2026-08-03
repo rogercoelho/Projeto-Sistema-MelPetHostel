@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js",
-    "dev": "node --watch app.js",
-    "web": "node app.js",
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "web": "node server.js",
     "telegram:bot": "node telegramBotWorker.js",
     "lint": "npm run check:mojibake && eslint .",
     "check:mojibake": "powershell -ExecutionPolicy Bypass -File ../scripts/check_mojibake.ps1",

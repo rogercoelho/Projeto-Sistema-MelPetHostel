@@ -5,15 +5,19 @@ const {
 
 let started = false;
 
-async function startBackgroundServices({ source = "telegram-bot-worker" } = {}) {
+async function startBackgroundServices({
+  source = "telegram-bot-worker",
+  polling,
+} = {}) {
   if (started) {
     return false;
   }
 
   started = true;
+  const shouldPoll = polling === undefined ? source !== "api" : !!polling;
   console.log(`[background] starting services from ${source}`);
 
-  await startTelegramService({ polling: true });
+  await startTelegramService({ polling: shouldPoll });
 
   console.log("[background] services started");
   return true;

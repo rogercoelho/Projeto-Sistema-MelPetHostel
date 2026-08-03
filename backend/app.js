@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ quiet: true });
 const express = require("express");
 const cors = require("cors");
 const routes = require("./src/routes");
@@ -8,9 +8,9 @@ const jwt = require("jsonwebtoken");
 const JWT_SECRET = process.env.JWT_SECRET;
 const path = require("path");
 const {
-  startBackgroundServices,
-  stopBackgroundServices,
-} = require("./src/services/backgroundServices");
+  createRequestLogger,
+  logError,
+} = require("./src/utils/apiLogger");
 
 if (!JWT_SECRET) {
   console.error(
@@ -21,58 +21,7 @@ if (!JWT_SECRET) {
 
 const app = express();
 
-function shouldStartBackgroundServices() {
-  return process.env.START_BACKGROUND_SERVICES !== "false";
-}
-
-async function startAppBackgroundServices() {
-  if (!shouldStartBackgroundServices()) {
-    console.log("Background services disabled for API process");
-    return;
-  }
-
-  try {
-    await startBackgroundServices({ source: "api" });
-  } catch (error) {
-    console.error(
-      "Failed to start Telegram services:",
-      error.message || error,
-    );
-  }
-}
-
-function installShutdownHandlers(server) {
-  let shuttingDown = false;
-
-  async function shutdown(signal) {
-    if (shuttingDown) return;
-    shuttingDown = true;
-
-    console.log(`Received ${signal}. Stopping API server...`);
-    const forceExitTimer = setTimeout(() => process.exit(1), 10000);
-    forceExitTimer.unref?.();
-
-    try {
-      await stopBackgroundServices();
-      server.close(async () => {
-        try {
-          await dbPool.end();
-        } catch (error) {
-          console.error("Failed to close database pool:", error.message || error);
-        }
-
-        clearTimeout(forceExitTimer);
-        process.exit(0);
-      });
-    } catch (error) {
-      console.error("Failed to stop API cleanly:", error.message || error);
-      process.exit(1);
-    }
-  }
-
-  process.once("SIGINT", () => shutdown("SIGINT"));
-  process.once("SIGTERM", () => shutdown("SIGTERM"));
-}
+app.use(createRequestLogger());
 
 // CORS: allow local dev frontends plus the published domains.
 const defaultOrigins = [
@@ -212,14 +161,20 @@ app.use(async (req, res, next) => {
     // set session variable for triggers to read
     await conn.query("SET @log_usuario = ?", [user]);
 
-    // Release connection when response finished
-    res.on("finish", () => {
+    let released = false;
+    const releaseConnection = () => {
+      if (released) return;
+      released = true;
       try {
         conn.release();
       } catch {
         // ignore
       }
-    });
+    };
+
+    res.on("finish", releaseConnection);
+    res.on("close", releaseConnection);
+    res.on("error", releaseConnection);
 
     next();
   } catch (err) {
@@ -255,18 +210,14 @@ app.use((err, req, res, next) => {
     payload.codigo = err.code;
   }
 
+  logError("api_error", err, {
+    requestId: req.requestId,
+    method: req.method,
+    url: req.originalUrl || req.url,
+    status,
+  });
   console.error("API error:", err);
   res.status(status).json(payload);
 });
 
-// If run directly, start the server. Otherwise export for tests.
-if (require.main === module) {
-  const port = process.env.PORT || 3001;
-  const server = app.listen(port, () => {
-    console.log(`API server listening on port ${port}`);
-    startAppBackgroundServices();
-  });
-  installShutdownHandlers(server);
-} else {
-  module.exports = app;
-}
+module.exports = app;
