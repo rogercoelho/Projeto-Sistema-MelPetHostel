@@ -2608,9 +2608,8 @@ export default function MelPetHostel({
                           ? `${item.tipo} / ${item.quantity} ${item.plano.tempoUnidade || "dia"} - início ${formatStartMonth(item.inicioMes)} - mensal`
                           : item.dayUse
                             ? `${item.tipo} / ${formatPlanTempo(item.plano)} - ${formatBrazilDate(item.entrada)} - ${formatCurrency(item.dailyValue)} x 1 dia`
-                            : `${item.tipo} / ${formatPlanTempo(item.plano)} - ${formatBrazilDate(item.entrada)} a ${formatBrazilDate(item.saida)} - ${formatCurrency(
-                                item.dailyValue,
-                              )} x ${item.days || 0} dias`
+                            : `${item.tipo} / ${formatPlanTempo(item.plano)} - ${formatCurrency(item.dailyValue)} ->
+                            ${formatBrazilDate(item.entrada)} a ${formatBrazilDate(item.saida)} x ${item.days || 0} dias`
                         : "Sem valor configurado para este pet"}
                     </small>
                   </span>
