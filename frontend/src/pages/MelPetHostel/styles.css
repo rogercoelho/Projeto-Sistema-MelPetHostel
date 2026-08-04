@@ -742,6 +742,572 @@
   width: 100%;
 }
 
+.melpet-hosting-history {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.melpet-hosting-history-hero {
+  display: grid;
+  gap: var(--spacing-sm);
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f6f8fb 100%);
+  padding: 14px;
+}
+
+.melpet-hosting-history-kicker {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  background: rgba(var(--cor-marrom-rgb), 0.08);
+  color: var(--cor-marrom);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  padding: 5px 10px;
+  text-transform: uppercase;
+}
+
+.melpet-hosting-history-hero h3 {
+  margin: 8px 0 0;
+  color: var(--cor-marrom);
+  font-size: 1.12rem;
+}
+
+.melpet-hosting-history-hero p {
+  margin: 6px 0 0;
+  color: var(--cor-marrom);
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.melpet-hosting-history-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.melpet-hosting-history-stats div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  border-radius: 10px;
+  background: var(--cor-branco);
+  padding: 10px;
+  text-align: center;
+}
+
+.melpet-hosting-history-stats strong {
+  color: var(--cor-marrom);
+  font-size: 1.08rem;
+  line-height: 1;
+}
+
+.melpet-hosting-history-stats span {
+  color: var(--cor-marrom-claro);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.melpet-hosting-history-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.melpet-hosting-history-toolbar p {
+  margin: 0;
+  color: var(--cor-marrom);
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.melpet-hosting-history-list {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.melpet-hosting-history-filters {
+  display: grid;
+  gap: 10px;
+}
+
+.melpet-hosting-history-select-field {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--cor-marrom);
+  padding: 10px 12px;
+}
+
+.melpet-hosting-history-select-field span {
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+.melpet-hosting-history-select-field select {
+  width: 100%;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.18);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--cor-marrom);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  min-height: 42px;
+  padding: 10px 12px;
+}
+
+.melpet-hosting-history-select-field select:focus {
+  border-color: var(--cor-marrom-claro);
+  box-shadow: 0 0 0 3px rgba(var(--cor-marrom-rgb), 0.12);
+  outline: none;
+}
+
+.melpet-hosting-history-filters-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.14);
+  border-left: 4px solid var(--cor-marrom);
+  border-radius: 12px;
+  background: var(--cor-branco);
+  color: var(--cor-marrom);
+  padding: 14px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+}
+
+.melpet-hosting-history-filters-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.melpet-hosting-history-filters-card-header strong {
+  display: block;
+  color: var(--cor-marrom);
+  font-size: 1rem;
+}
+
+.melpet-hosting-history-filters-card-header p {
+  margin: 4px 0 0;
+  color: var(--cor-marrom-claro);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.melpet-hosting-history-status-filter.is-active {
+  border-color: var(--cor-marrom);
+  background: rgba(var(--cor-marrom-rgb), 0.08);
+}
+
+.melpet-hosting-history-filter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.14);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--cor-marrom);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 900;
+  padding: 10px 14px;
+}
+
+.melpet-hosting-history-filter span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 22px;
+  border-radius: 999px;
+  background: rgba(var(--cor-marrom-rgb), 0.08);
+  color: var(--cor-marrom);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.melpet-hosting-history-filter.is-active {
+  border-color: var(--cor-marrom);
+  background: rgba(var(--cor-marrom-rgb), 0.08);
+}
+
+.melpet-hosting-history-card {
+  display: grid;
+  gap: var(--spacing-sm);
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.14);
+  border-left: 4px solid var(--cor-marrom);
+  border-radius: 12px;
+  background: var(--cor-branco);
+  color: var(--cor-marrom);
+  padding: 14px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+}
+
+.melpet-hosting-history-card > * {
+  width: 100%;
+}
+
+.melpet-hosting-history-card.is-open {
+  background: linear-gradient(180deg, #ffffff 0%, #fdfdfb 100%);
+}
+
+.melpet-hosting-history-card-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  padding: 0;
+}
+
+.melpet-hosting-history-card-toggle strong {
+  font-size: 0.98rem;
+}
+
+.melpet-hosting-history-card-main {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.melpet-hosting-history-card-topline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.melpet-hosting-history-card-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(var(--cor-marrom-rgb), 0.08);
+  color: var(--cor-marrom);
+  font-size: 0.72rem;
+  font-weight: 900;
+  padding: 4px 8px;
+}
+
+.melpet-hosting-history-card-date {
+  display: grid;
+  gap: 2px;
+}
+
+.melpet-hosting-history-card-date span {
+  color: var(--cor-marrom-claro);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.melpet-hosting-history-card-date strong {
+  color: var(--cor-marrom);
+  font-size: 0.95rem;
+}
+
+.melpet-hosting-history-status-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.melpet-hosting-history-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+  min-height: 32px;
+  padding: 6px 12px;
+}
+
+.melpet-hosting-history-status.is-approved,
+.melpet-hosting-history-status.is-confirmed,
+.melpet-hosting-history-status.is-completed,
+.melpet-hosting-history-status.is-pending,
+.melpet-hosting-history-status.is-review,
+.melpet-hosting-history-status.is-rejected,
+.melpet-hosting-history-status.is-canceled {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+}
+
+.melpet-hosting-history-status.is-confirmed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.melpet-hosting-history-status.is-completed {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.melpet-hosting-history-status.is-canceled {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.melpet-hosting-history-toggle-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(var(--cor-marrom-rgb), 0.08);
+  color: var(--cor-marrom);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.melpet-hosting-history-card-summary {
+  margin: 0;
+  color: var(--cor-marrom);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.melpet-hosting-history-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.melpet-hosting-history-card-header strong {
+  display: block;
+  color: var(--cor-marrom);
+  font-size: 1rem;
+}
+
+.melpet-hosting-history-card-header small {
+  color: var(--cor-marrom-claro);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.melpet-hosting-history-status {
+  display: inline-grid;
+  gap: 4px;
+  align-self: flex-start;
+  width: fit-content;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  background: var(--cor-areia);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.2;
+  padding: 8px 12px;
+}
+
+.melpet-hosting-history-status strong {
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.melpet-hosting-history-status span {
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.melpet-hosting-history-highlight {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  background: rgba(21, 128, 61, 0.08);
+  color: #166534;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  padding: 5px 10px;
+  text-transform: uppercase;
+}
+
+.melpet-hosting-history-status.is-approved {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.melpet-hosting-history-status.is-aprovado {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.melpet-hosting-history-status.is-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.melpet-hosting-history-status.is-pendente {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.melpet-hosting-history-status.is-review {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.melpet-hosting-history-status.is-aguardando_pagamento {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.melpet-hosting-history-status.is-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.melpet-hosting-history-status.is-confirmado {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.melpet-hosting-history-status.is-completed,
+.melpet-hosting-history-status.is-concluido {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.melpet-hosting-history-status.is-canceled,
+.melpet-hosting-history-status.is-cancelado {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.melpet-hosting-history-meta {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.melpet-hosting-history-meta div {
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  padding: 10px 11px;
+}
+
+.melpet-hosting-history-meta dt {
+  color: var(--cor-marrom-claro);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.melpet-hosting-history-meta dd {
+  margin: 0;
+  color: var(--cor-marrom);
+  overflow-wrap: anywhere;
+  font-weight: 800;
+}
+
+.melpet-hosting-history-items {
+  display: grid;
+  gap: var(--spacing-sm);
+  border-top: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  width: 100%;
+  padding-top: 10px;
+}
+
+.melpet-hosting-history-items h4,
+.melpet-hosting-history-note strong {
+  margin: 0;
+  color: var(--cor-marrom);
+  font-size: 0.92rem;
+}
+
+.melpet-hosting-history-items ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.melpet-hosting-history-items li {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  border-radius: 10px;
+  background: #f8fafc;
+  color: var(--cor-marrom);
+  margin: 0;
+  padding: 10px 11px;
+  width: 100%;
+}
+
+.melpet-hosting-history-items li strong {
+  display: block;
+}
+
+.melpet-hosting-history-items li small {
+  display: block;
+  color: var(--cor-marrom-claro);
+  font-size: 0.82rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.melpet-hosting-history-note {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  padding-top: 10px;
+}
+
+.melpet-hosting-history-note strong {
+  color: #991b1b;
+}
+
+.melpet-hosting-history-note p {
+  margin: 0;
+  color: #7f1d1d;
+  font-size: 0.9rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.melpet-hosting-history-actions {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  padding-top: 4px;
+}
+
+.melpet-hosting-history-actions .btn {
+  width: 100%;
+}
+
+.melpet-hosting-history-actions .btn-danger {
+  border: 2px solid rgba(110, 5, 5);
+}
+
 .melpet-vaccine-card-btn {
   display: grid;
   align-content: center;
@@ -1566,7 +2132,10 @@
   }
 
   .melpet-hosting-fields {
-    grid-template-columns: minmax(0, 1fr) minmax(150px, 190px) minmax(150px, 190px);
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 190px) minmax(
+        150px,
+        190px
+      );
     align-items: end;
   }
 
@@ -1577,7 +2146,10 @@
   }
 
   .melpet-hosting-pet-period {
-    grid-template-columns: minmax(0, 1fr) minmax(150px, 190px) minmax(150px, 190px);
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 190px) minmax(
+        150px,
+        190px
+      );
   }
 
   .melpet-hosting-actions {
@@ -1588,6 +2160,53 @@
   .melpet-hosting-actions .btn {
     width: auto;
     min-width: 190px;
+  }
+
+  .melpet-hosting-history-toolbar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .melpet-hosting-history-toolbar .btn {
+    width: auto;
+    min-width: 150px;
+  }
+
+  .melpet-hosting-history-card-header {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .melpet-hosting-history-card-toggle {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .melpet-hosting-history-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .melpet-hosting-history-hero {
+    grid-template-columns: minmax(0, 1.5fr) minmax(220px, 0.8fr);
+    align-items: center;
+  }
+
+  .melpet-hosting-history-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .melpet-hosting-history-items ul {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .melpet-hosting-history-actions .btn {
+    width: auto;
+    min-width: 180px;
+  }
+
+  .melpet-hosting-history-card {
+    padding: 16px;
   }
 
   .melpet-client-search-form {

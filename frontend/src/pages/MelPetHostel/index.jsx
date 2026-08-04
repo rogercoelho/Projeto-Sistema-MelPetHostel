@@ -240,9 +240,16 @@ export default function MelPetHostel({
   const [uploadingPetVaccineSide, setUploadingPetVaccineSide] = useState("");
   const [savingPetVaccines, setSavingPetVaccines] = useState(false);
   const [hostingMenuOpen, setHostingMenuOpen] = useState(false);
+  const [hostingHistoryOpen, setHostingHistoryOpen] = useState(false);
+  const [hostingHistoryStatusFilter, setHostingHistoryStatusFilter] = useState("all");
+  const [hostingRequestOpenId, setHostingRequestOpenId] = useState(null);
+  const [cancelingHostingRequestId, setCancelingHostingRequestId] = useState(null);
   const [hostingPetIds, setHostingPetIds] = useState([]);
   const [hostingPetPeriods, setHostingPetPeriods] = useState({});
   const [sendingHostingRequest, setSendingHostingRequest] = useState(false);
+  const [hostingRequests, setHostingRequests] = useState([]);
+  const [loadingHostingRequests, setLoadingHostingRequests] = useState(false);
+  const [hostingRequestsError, setHostingRequestsError] = useState("");
   const [activeMenu, setActiveMenu] = useState(
     initialAdminMenu === "cadastroPets" ? "" : initialAdminMenu,
   );
@@ -774,6 +781,117 @@ export default function MelPetHostel({
     });
   }
 
+  function formatDateTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value || "-");
+    return date.toLocaleString("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+  }
+
+  function formatBillingMode(value) {
+    const normalized = normalizeText(value);
+    if (normalized === "unico") return "único";
+    if (normalized === "mensal") return "mensal";
+    if (normalized === "recorrente") return "recorrente";
+    return value || "-";
+  }
+
+  function getHostingRequestStatusLabel(status) {
+    const normalized = normalizeText(status);
+    if (normalized.includes("cancel")) return "Cancelado";
+    if (normalized.includes("conclu")) return "Concluído";
+    if (normalized.includes("confirm")) return "Confirmado";
+    if (normalized.includes("aprov")) return "Aprovado";
+    if (normalized.includes("recus")) return "Recusado";
+    if (normalized.includes("anal") || normalized.includes("aguard")) return "Pendente";
+    return "Pendente";
+  }
+
+  function getHostingRequestStatusDetail(status) {
+    const normalized = normalizeText(status);
+    if (normalized.includes("aprov")) return "Pedido aprovado";
+    if (normalized.includes("recus")) return "Pedido recusado";
+    if (normalized.includes("anal")) return "Aguardando análise";
+    if (normalized.includes("aguard")) return "Aguardando pagamento";
+    if (normalized.includes("confirm")) return "Pagamento confirmado";
+    if (normalized.includes("conclu")) return "Hospedagem concluída";
+    if (normalized.includes("cancel")) return "Pedido cancelado";
+    return "Aguardando análise";
+  }
+
+  function getHostingRequestStatusTone(status) {
+    const normalized = normalizeText(status);
+    if (normalized.includes("aprov")) return "approved";
+    if (normalized.includes("recus")) return "rejected";
+    if (normalized.includes("anal")) return "review";
+    if (normalized.includes("confirm")) return "confirmed";
+    if (normalized.includes("conclu")) return "completed";
+    if (normalized.includes("cancel")) return "canceled";
+    return "pending";
+  }
+
+  function getHostingRequestStatusIcon(status) {
+    const tone = getHostingRequestStatusTone(status);
+    if (tone === "approved") return "✓";
+    if (tone === "rejected") return "✕";
+    if (tone === "review") return "…";
+    if (tone === "confirmed") return "●";
+    if (tone === "completed") return "✓";
+    if (tone === "canceled") return "×";
+    return "•";
+  }
+
+  function getHostingRequestStatusKey(status) {
+    const normalized = normalizeText(status);
+    if (normalized.includes("aprov")) return "aprovado";
+    if (normalized.includes("aguard")) return "aguardando_pagamento";
+    if (normalized.includes("confirm")) return "confirmado";
+    if (normalized.includes("conclu")) return "concluido";
+    if (normalized.includes("cancel")) return "cancelado";
+    return "pendente";
+  }
+
+  function getHostingRequestStatusActionLabel(status) {
+    const key = getHostingRequestStatusKey(status);
+    if (key === "aprovado") return "Aprovado";
+    if (key === "aguardando_pagamento") return "Aguardando pagamento";
+    if (key === "confirmado") return "Confirmado";
+    if (key === "concluido") return "Concluído";
+    if (key === "cancelado") return "Cancelado";
+    return "Pendente";
+  }
+
+  function canCancelHostingRequest(status) {
+    const key = getHostingRequestStatusKey(status);
+    return key === "pendente" || key === "aguardando_pagamento";
+  }
+
+  function formatHostingRequestPeriod(request) {
+    if (request?.modoCobranca === "unico") {
+      return `${formatBrazilDate(request.dataEntrada)} a ${formatBrazilDate(
+        request.dataSaida,
+      )} · ${request.dias || 0} dias`;
+    }
+
+    return `${formatStartMonth(request.inicioMes)} · ${formatBillingMode(
+      request.modoCobranca,
+    )}`;
+  }
+
+  function formatHostingItemPeriod(item) {
+    if (item?.modoCobranca === "unico") {
+      return `${formatBrazilDate(item.dataEntrada)} a ${formatBrazilDate(
+        item.dataSaida,
+      )} · ${item.dias || 0} dias`;
+    }
+
+    return `${formatStartMonth(item.inicioMes)} · ${formatBillingMode(
+      item.modoCobranca,
+    )}`;
+  }
+
   function maskCurrencyInput(value) {
     const digits = String(value || "").replace(/\D/g, "");
     if (!digits) return "";
@@ -795,6 +913,25 @@ export default function MelPetHostel({
       setPlanosError(error?.message || "Não foi possível carregar os planos.");
     } finally {
       setLoadingPlanos(false);
+    }
+  }
+
+  async function loadHostingRequests() {
+    setLoadingHostingRequests(true);
+    setHostingRequestsError("");
+
+    try {
+      const data = await api.get("/melpethostel/hospedagens/solicitacoes");
+      setHostingRequests(
+        Array.isArray(data?.solicitacoes) ? data.solicitacoes : [],
+      );
+    } catch (error) {
+      setHostingRequests([]);
+      setHostingRequestsError(
+        error?.message || "Não foi possível carregar seus pedidos.",
+      );
+    } finally {
+      setLoadingHostingRequests(false);
     }
   }
 
@@ -1154,6 +1291,7 @@ export default function MelPetHostel({
           valorTotal: item.total,
         })),
       });
+      await loadHostingRequests();
       showToast("Solicitação de hospedagem enviada.", "success");
       clearHostingRequest();
       setHostingMenuOpen(false);
@@ -1400,6 +1538,11 @@ export default function MelPetHostel({
     if (isAdmin || userMenu !== "hospedagem") return;
     loadPlanos();
   }, [isAdmin, userMenu]);
+
+  useEffect(() => {
+    if (isAdmin || userMenu !== "hospedagem") return;
+    loadHostingRequests();
+  }, [isAdmin, userMenu, hostingHistoryOpen]);
 
   useEffect(() => {
     if (!isAdmin || activeMenu !== "pesquisarClientes") return;
@@ -2384,6 +2527,77 @@ export default function MelPetHostel({
     };
   });
   const hostingTotal = hostingItems.reduce((sum, item) => sum + item.total, 0);
+  const hostingHistoryStats = useMemo(() => {
+    const total = hostingRequests.length;
+    const pending = hostingRequests.filter(
+      (request) => getHostingRequestStatusTone(request.status) === "pending",
+    ).length;
+    const approved = hostingRequests.filter(
+      (request) => getHostingRequestStatusTone(request.status) === "approved",
+    ).length;
+    const latestRequest = hostingRequests[0] || null;
+
+    return { total, pending, approved, latestRequest };
+  }, [hostingRequests]);
+
+  const hostingStatusFilters = [
+    { key: "all", label: "Todos" },
+    { key: "pendente", label: "Pendente" },
+    { key: "aprovado", label: "Aprovado" },
+    { key: "aguardando_pagamento", label: "Aguardando pagamento" },
+    { key: "confirmado", label: "Confirmado" },
+    { key: "concluido", label: "Concluído" },
+    { key: "cancelado", label: "Cancelado" },
+  ];
+
+  const hostingRequestsOrdered = useMemo(
+    () =>
+      [...hostingRequests].sort((left, right) => {
+        const leftTime = new Date(left.criadoEm || 0).getTime();
+        const rightTime = new Date(right.criadoEm || 0).getTime();
+        return rightTime - leftTime;
+      }),
+    [hostingRequests],
+  );
+
+  const hostingRequestsVisible = useMemo(() => {
+    const filteredByStatus =
+      hostingHistoryStatusFilter === "all"
+        ? hostingRequestsOrdered
+        : hostingRequestsOrdered.filter(
+            (request) =>
+              getHostingRequestStatusKey(request.status) ===
+              hostingHistoryStatusFilter,
+          );
+
+    return filteredByStatus;
+  }, [hostingHistoryStatusFilter, hostingRequestsOrdered]);
+
+  async function cancelHostingRequest(requestId) {
+    setCancelingHostingRequestId(requestId);
+    try {
+      const data = await api.patch(
+        `/melpethostel/hospedagens/solicitacoes/${requestId}/cancelar`,
+      );
+      if (data?.solicitacao?.id) {
+        setHostingRequests((current) =>
+          current.map((request) =>
+            Number(request.id) === Number(requestId)
+              ? { ...request, status: data.solicitacao.status }
+              : request,
+          ),
+        );
+        setHostingRequestOpenId(Number(requestId));
+      } else {
+        await loadHostingRequests();
+      }
+      showToast("Solicitação cancelada.", "success");
+    } catch (error) {
+      showToast(error?.message || "Não foi possível cancelar o pedido.", "error");
+    } finally {
+      setCancelingHostingRequestId(null);
+    }
+  }
 
   const hostingRequestContent = (
     <div className="melpet-hosting-stack">
@@ -2638,6 +2852,207 @@ export default function MelPetHostel({
     </div>
   );
 
+  const hostingRequestsContent = (
+    <section className="melpet-hosting-history">
+      <header className="melpet-hosting-history-hero">
+        <div>
+          <span className="melpet-hosting-history-kicker">
+            Acompanhamento do seu pet hotel
+          </span>
+          <h3>Meus Pedidos de Hospedagem</h3>
+          <p>
+            Consulte suas solicitações, acompanhe o status e revise os itens de
+            cada pedido em um só lugar.
+          </p>
+        </div>
+
+        <div className="melpet-hosting-history-stats">
+          <div>
+            <strong>{hostingHistoryStats.total}</strong>
+            <span>Total</span>
+          </div>
+          <div>
+            <strong>{hostingHistoryStats.pending}</strong>
+            <span>Pendentes</span>
+          </div>
+          <div>
+            <strong>{hostingHistoryStats.approved}</strong>
+            <span>Aprovados</span>
+          </div>
+        </div>
+      </header>
+
+      <div className="melpet-hosting-history-toolbar">
+        <p>
+          Veja aqui os pedidos enviados e o andamento de cada solicitação.
+        </p>
+      </div>
+
+      <div className="melpet-hosting-history-filters-card">
+        <div className="melpet-hosting-history-filters-card-header">
+          <div>
+            <strong>Filtrar por status</strong>
+            <p>Use o mesmo bloco visual dos pedidos para manter o padrão.</p>
+          </div>
+          <span className="melpet-hosting-history-card-badge">
+            {hostingRequestsVisible.length} visível(is)
+          </span>
+        </div>
+
+        <label className="melpet-hosting-history-select-field">
+          <span>Status</span>
+          <select
+            value={hostingHistoryStatusFilter}
+            onChange={(event) => {
+              setHostingHistoryStatusFilter(event.target.value);
+              setHostingRequestOpenId(null);
+            }}
+          >
+            {hostingStatusFilters.map((filter) => (
+              <option key={filter.key} value={filter.key}>
+                {filter.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {hostingRequestsError ? (
+        <p className="melpet-error">{hostingRequestsError}</p>
+      ) : null}
+
+      {loadingHostingRequests ? (
+        <p>Carregando pedidos...</p>
+      ) : hostingRequestsVisible.length ? (
+        <div className="melpet-hosting-history-list">
+          {hostingRequestsVisible.map((request) => {
+            const isOpen = hostingRequestOpenId === request.id;
+            const requestTotal = request.valorFinal ?? request.valorTotal;
+            return (
+              <article
+                key={request.id}
+                className={`melpet-hosting-history-card ${isOpen ? "is-open" : ""}`}
+              >
+                <button
+                  type="button"
+                  className="melpet-hosting-history-card-toggle"
+                  aria-expanded={isOpen}
+                  onClick={() =>
+                    setHostingRequestOpenId((current) =>
+                      current === request.id ? null : request.id,
+                    )
+                  }
+                >
+                  <div className="melpet-hosting-history-card-main">
+                    <div className="melpet-hosting-history-card-topline">
+                      <strong>Pedido #{request.id}</strong>
+                      <span className="melpet-hosting-history-card-badge">
+                        {request.itens?.length || 0} item(s)
+                      </span>
+                    </div>
+                    <div className="melpet-hosting-history-card-date">
+                      <span>Data do pedido</span>
+                      <strong>{formatDateTime(request.criadoEm)}</strong>
+                    </div>
+                  </div>
+                  <span
+                    className={`melpet-hosting-history-status is-${getHostingRequestStatusTone(request.status)}`}
+                  >
+                    <strong>{getHostingRequestStatusLabel(request.status)}</strong>
+                    <span>{getHostingRequestStatusDetail(request.status)}</span>
+                  </span>
+                  <span
+                    className="melpet-hosting-history-toggle-icon"
+                    aria-hidden="true"
+                  >
+                    {isOpen ? "−" : "+"}
+                  </span>
+                </button>
+
+                {isOpen ? (
+                  <>
+                    <dl className="melpet-hosting-history-meta">
+                      <div>
+                        <dt>Serviço</dt>
+                        <dd>{request.tipo || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt>Período</dt>
+                        <dd>{formatHostingRequestPeriod(request)}</dd>
+                      </div>
+                      <div>
+                        <dt>Total solicitado</dt>
+                        <dd>{formatCurrency(requestTotal)}</dd>
+                      </div>
+                      <div>
+                        <dt>Atualizado em</dt>
+                        <dd>{formatDateTime(request.atualizadoEm)}</dd>
+                      </div>
+                    </dl>
+
+                    {hostingHistoryStats.latestRequest?.id === request.id ? (
+                      <div className="melpet-hosting-history-highlight">
+                        Pedido mais recente
+                      </div>
+                    ) : null}
+
+                    <div className="melpet-hosting-history-items">
+                      <h4>Itens</h4>
+                      <ul>
+                        {(request.itens || []).map((item) => {
+                          const itemTotal = item.valorTotal;
+                          return (
+                            <li key={item.id}>
+                              <strong>{item.petNome || `Pet ${item.petId}`}</strong>
+                              <small>
+                                {item.tipo} / {item.tempoQuantidade} {item.tempoUnidade} -> {formatCurrency(item.valorDiaria)}
+                              </small>
+                              <small>{formatHostingItemPeriod(item)}</small>
+                              <strong>{formatCurrency(itemTotal)}</strong>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+
+                    {request.motivoRecusa ? (
+                      <div className="melpet-hosting-history-note">
+                        <strong>Motivo da recusa</strong>
+                        <p>{request.motivoRecusa}</p>
+                      </div>
+                    ) : null}
+
+                    {canCancelHostingRequest(request.status) ? (
+                      <div className="melpet-hosting-history-actions">
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          disabled={cancelingHostingRequestId === request.id}
+                          onClick={() => cancelHostingRequest(request.id)}
+                        >
+                          {cancelingHostingRequestId === request.id
+                            ? "Cancelando..."
+                            : "Cancelar pedido"}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="melpet-hosting-history-card-summary">
+                    {request.tipo || "Hospedagem"} · {formatHostingRequestPeriod(request)} · {formatCurrency(requestTotal)}
+                  </p>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <p>Nenhum pedido de hospedagem encontrado.</p>
+      )}
+    </section>
+  );
+
   const hostingPanels = [
     {
       id: "hosting",
@@ -2651,6 +3066,14 @@ export default function MelPetHostel({
           isOpen: hostingMenuOpen,
           onAction: () => setHostingMenuOpen((current) => !current),
           content: hostingRequestContent,
+        },
+        {
+          id: "meus-pedidos-hospedagem",
+          title: "Meus Pedidos de Hospedagem",
+          summary: "Acompanhe as solicitações enviadas.",
+          isOpen: hostingHistoryOpen,
+          onAction: () => setHostingHistoryOpen((current) => !current),
+          content: hostingRequestsContent,
         },
       ],
       after: (

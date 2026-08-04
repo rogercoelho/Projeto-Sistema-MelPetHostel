@@ -7,10 +7,7 @@ const dbPool = require("./src/config/database");
 const jwt = require("jsonwebtoken");
 const JWT_SECRET = process.env.JWT_SECRET;
 const path = require("path");
-const {
-  createRequestLogger,
-  logError,
-} = require("./src/utils/apiLogger");
+const { createRequestLogger, logError } = require("./src/utils/apiLogger");
 
 if (!JWT_SECRET) {
   console.error(
@@ -56,7 +53,7 @@ app.use(
       err.publicMessage = `Origem nao permitida pelo CORS: ${origin}`;
       callback(err);
     },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
       "Content-Type",
       "Authorization",
