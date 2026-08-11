@@ -240,6 +240,7 @@ SET @sql = CONCAT(
   '`conferido_at` DATETIME NULL DEFAULT NULL,',
   '`conferido_por` VARCHAR(191) NULL DEFAULT NULL,',
   '`status` VARCHAR(50) NOT NULL DEFAULT ''pendente'',',
+  '`motivo_reprovacao` TEXT NULL,',
   '`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,',
   '`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,',
   'INDEX `idx_pet_carteiras_pet` (`pet_id`),',
@@ -268,6 +269,23 @@ SET @sql = IF(
   @pet_carteiras_has_lado > 0,
   'SELECT ''Pet_Carteiras_Vacinacao.lado ja existe'' AS status',
   'ALTER TABLE `Pet_Carteiras_Vacinacao` ADD COLUMN `lado` VARCHAR(20) NOT NULL DEFAULT ''frente'' AFTER `cliente_id`'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @pet_carteiras_has_motivo_reprovacao = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'Pet_Carteiras_Vacinacao'
+     AND COLUMN_NAME = 'motivo_reprovacao'
+);
+
+SET @sql = IF(
+  @pet_carteiras_has_motivo_reprovacao > 0,
+  'SELECT ''Pet_Carteiras_Vacinacao.motivo_reprovacao ja existe'' AS status',
+  'ALTER TABLE `Pet_Carteiras_Vacinacao` ADD COLUMN `motivo_reprovacao` TEXT NULL AFTER `status`'
 );
 PREPARE stmt FROM @sql;
 EXECUTE stmt;

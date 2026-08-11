@@ -7,6 +7,7 @@ const {
   TABLE_NAMES,
   checkAllDocsConferidosByContratoId,
   dbFor,
+  ensureUserDocumentStorage,
   fileExistsOnDisk,
   fs,
   getContratosTableMeta,
@@ -19,7 +20,6 @@ const {
   qtable,
   requireCompleteClienteCadastro,
   resolveUploadsDirToDisk,
-  resolveUserDocumentsRelativeDir,
   uploadContrato,
 } = require("./context");
 
@@ -218,7 +218,7 @@ router.post(
       }
 
       const existingRow = await getLatestContratoRow(req, meta, login);
-      const userDirData = await resolveUserDocumentsRelativeDir(req, login);
+      const userDirData = await ensureUserDocumentStorage(req, login);
       if (!userDirData) {
         return res.status(400).json({
           status: "erro",
@@ -228,7 +228,6 @@ router.post(
 
       const { relativeDir, safeUsuario } = userDirData;
       const diskDir = resolveUploadsDirToDisk(relativeDir);
-      await fs.mkdir(diskDir, { recursive: true });
 
       const finalFileName = `${safeUsuario}_Contrato_Assinado.pdf`;
       const fullPath = path.join(diskDir, finalFileName);

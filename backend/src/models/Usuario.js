@@ -1,9 +1,9 @@
 const dbFor = require("../utils/dbFor");
 const { getTableColumnsMap, pickColumn, tableExists } = require("./schema");
 
-const TABLE = "usuarios";
-const TABLE_CANDIDATES = ["usuarios", "Usuarios"];
-const CLIENT_TABLE_CANDIDATES = ["Clientes", "clientes"];
+const TABLE = "Usuarios";
+const CLIENT_TABLE = "Clientes";
+const GROUP_TABLE = "Grupos";
 
 function qid(identifier) {
   return `\`${String(identifier).replace(/`/g, "``")}\``;
@@ -19,79 +19,76 @@ function toDbBoolean(value, fallback = 1) {
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
     if (["true", "sim", "s", "yes"].includes(normalized)) return 1;
-    if (["false", "nao", "n", "no", "0"].includes(normalized)) {
-      return 0;
-    }
+    if (["false", "nao", "n", "no", "0"].includes(normalized)) return 0;
   }
   return value ? 1 : 0;
 }
 
 async function resolveClientMeta(req) {
-  for (const tableName of CLIENT_TABLE_CANDIDATES) {
-    if (!(await tableExists(req, tableName))) continue;
+  if (!(await tableExists(req, CLIENT_TABLE))) return null;
 
-    const columnsMap = await getTableColumnsMap(req, tableName);
-    const idCol = pickColumn(columnsMap, ["id"]);
+  const columnsMap = await getTableColumnsMap(req, CLIENT_TABLE);
+  const idCol = pickColumn(columnsMap, ["id"]);
+  if (!idCol) return null;
 
-    if (idCol) {
-      return {
-        tableName,
-        idCol,
-        nomeCol: pickColumn(columnsMap, ["nome"]),
-        cpfCol: pickColumn(columnsMap, ["cpf"]),
-        rgCol: pickColumn(columnsMap, ["rg"]),
-        dataNascimentoCol: pickColumn(columnsMap, ["data_nascimento"]),
-        telefoneCol: pickColumn(columnsMap, ["telefone"]),
-        whatsappCol: pickColumn(columnsMap, ["whatsapp"]),
-        emailCol: pickColumn(columnsMap, ["email"]),
-        observacoesCol: pickColumn(columnsMap, ["observacoes"]),
-        ativoCol: pickColumn(columnsMap, ["ativo"]),
-        criadoEmCol: pickColumn(columnsMap, ["criado_em"]),
-        atualizadoEmCol: pickColumn(columnsMap, ["atualizado_em"]),
-      };
-    }
-  }
+  return {
+    tableName: CLIENT_TABLE,
+    idCol,
+    nomeCol: pickColumn(columnsMap, ["nome"]),
+    cpfCol: pickColumn(columnsMap, ["cpf"]),
+    rgCol: pickColumn(columnsMap, ["rg"]),
+    dataNascimentoCol: pickColumn(columnsMap, ["data_nascimento"]),
+    telefoneCol: pickColumn(columnsMap, ["telefone"]),
+    whatsappCol: pickColumn(columnsMap, ["whatsapp"]),
+    emailCol: pickColumn(columnsMap, ["email"]),
+    observacoesCol: pickColumn(columnsMap, ["observacoes"]),
+    ativoCol: pickColumn(columnsMap, ["ativo"]),
+    criadoEmCol: pickColumn(columnsMap, ["criado_em"]),
+    atualizadoEmCol: pickColumn(columnsMap, ["atualizado_em"]),
+  };
+}
 
-  return null;
+async function resolveGroupMeta(req) {
+  if (!(await tableExists(req, GROUP_TABLE))) return null;
+
+  const columnsMap = await getTableColumnsMap(req, GROUP_TABLE);
+  const idCol = pickColumn(columnsMap, ["id", "Grupo_ID"]);
+  const nomeCol = pickColumn(columnsMap, ["Nome_Grupo", "Grupo_Nome", "nome"]);
+  if (!idCol || !nomeCol) return null;
+
+  return { tableName: GROUP_TABLE, idCol, nomeCol };
 }
 
 async function resolveMeta(req) {
-  for (const tableName of TABLE_CANDIDATES) {
-    if (!(await tableExists(req, tableName))) continue;
+  if (!(await tableExists(req, TABLE))) return null;
 
-    const columnsMap = await getTableColumnsMap(req, tableName);
-    const idCol = pickColumn(columnsMap, ["usuario_id", "Usuario_ID"]);
-    const loginCol = pickColumn(columnsMap, [
-      "usuario_login",
-      "Usuario_Login",
-    ]);
-    const passwordCol = pickColumn(columnsMap, [
-      "usuario_senha",
-      "Usuario_Senha",
-    ]);
-    const groupIdCol = pickColumn(columnsMap, ["grupo_id", "Grupo_ID"]);
+  const columnsMap = await getTableColumnsMap(req, TABLE);
+  const idCol = pickColumn(columnsMap, ["Usuario_ID", "usuario_id", "id"]);
+  const loginCol = pickColumn(columnsMap, ["Usuario_Login", "usuario_login", "login"]);
+  const passwordCol = pickColumn(columnsMap, ["Usuario_Senha", "usuario_senha", "senha"]);
+  const groupIdCol = pickColumn(columnsMap, ["Grupo_ID", "grupo_id", "grupo"]);
 
-    if (!idCol || !loginCol || !passwordCol || !groupIdCol) continue;
+  if (!idCol || !loginCol || !passwordCol || !groupIdCol) return null;
 
-    return {
-      tableName,
-      idCol,
-      loginCol,
-      passwordCol,
-      clienteIdCol: pickColumn(columnsMap, ["cliente_id", "Cliente_ID"]),
-      firstAccessCol: pickColumn(columnsMap, [
-        "primeiro_acesso",
-        "Primeiro_Acesso",
-      ]),
-      activeCol: pickColumn(columnsMap, ["ativo", "Ativo"]),
-      createdAtCol: pickColumn(columnsMap, ["created_at", "Created_At"]),
-      updatedAtCol: pickColumn(columnsMap, ["updated_at", "Updated_At"]),
-      groupIdCol,
-      client: await resolveClientMeta(req),
-    };
-  }
-
-  return null;
+  return {
+    tableName: TABLE,
+    idCol,
+    loginCol,
+    passwordCol,
+    clienteIdCol: pickColumn(columnsMap, ["Cliente_ID", "cliente_id", "clienteId"]),
+    firstAccessCol: pickColumn(columnsMap, [
+      "Primeiro_Acesso",
+      "primeiro_acesso",
+      "primeiroAcesso",
+      "PrimeiroAcesso",
+    ]),
+    activeCol: pickColumn(columnsMap, ["Ativo", "ativo"]),
+    createdAtCol: pickColumn(columnsMap, ["Created_At", "created_at"]),
+    updatedAtCol: pickColumn(columnsMap, ["Updated_At", "updated_at"]),
+    groupIdCol,
+    client: await resolveClientMeta(req),
+    group: await resolveGroupMeta(req),
+  };
 }
 
 function aliased(column, alias, tableAlias = "u", fallback = "NULL") {
@@ -132,14 +129,27 @@ function buildSelect(meta, { includePassword = true } = {}) {
     );
   }
 
+  if (meta.group && meta.groupIdCol) {
+    fields.push(
+      aliased(meta.group.idCol, "grupo_ref_id", "g"),
+      aliased(meta.group.nomeCol, "grupo_nome", "g"),
+    );
+  }
+
   return fields.join(",\n");
 }
 
-function buildClientJoin(meta) {
-  if (!meta.client || !meta.clienteIdCol) return "";
-
-  return `LEFT JOIN ${qid(meta.client.tableName)} c
-            ON c.${qid(meta.client.idCol)} = u.${qid(meta.clienteIdCol)}`;
+function buildJoins(meta) {
+  const joins = [];
+  if (meta.client && meta.clienteIdCol) {
+    joins.push(`LEFT JOIN ${qid(meta.client.tableName)} c
+            ON c.${qid(meta.client.idCol)} = u.${qid(meta.clienteIdCol)}`);
+  }
+  if (meta.group && meta.groupIdCol) {
+    joins.push(`LEFT JOIN ${qid(meta.group.tableName)} g
+            ON g.${qid(meta.group.idCol)} = u.${qid(meta.groupIdCol)}`);
+  }
+  return joins.join("\n");
 }
 
 function clienteFromRow(row) {
@@ -191,6 +201,7 @@ function normalize(row) {
     Usuario_Senha: senha,
     Primeiro_Acesso: primeiroAcesso,
     Grupo_ID: grupoId,
+    Grupo_Nome: grupoNome,
     Cliente_ID: clienteId,
   };
 }
@@ -202,7 +213,7 @@ async function findByLogin(req, login) {
   const [rows] = await dbFor(req).query(
     `SELECT ${buildSelect(meta)}
        FROM ${qid(meta.tableName)} u
-       ${buildClientJoin(meta)}
+       ${buildJoins(meta)}
       WHERE u.${qid(meta.loginCol)} = ?
       LIMIT 1`,
     [login],
@@ -218,7 +229,7 @@ async function findById(req, id) {
   const [rows] = await dbFor(req).query(
     `SELECT ${buildSelect(meta)}
        FROM ${qid(meta.tableName)} u
-       ${buildClientJoin(meta)}
+       ${buildJoins(meta)}
       WHERE u.${qid(meta.idCol)} = ?
       LIMIT 1`,
     [id],
@@ -234,7 +245,7 @@ async function list(req) {
   const [rows] = await dbFor(req).query(
     `SELECT ${buildSelect(meta, { includePassword: false })}
        FROM ${qid(meta.tableName)} u
-       ${buildClientJoin(meta)}
+       ${buildJoins(meta)}
       ORDER BY u.${qid(meta.loginCol)}`,
   );
 
@@ -254,7 +265,7 @@ async function create(
 ) {
   const meta = await resolveMeta(req);
   if (!meta) {
-    throw new Error("Tabela usuarios nao encontrada.");
+    throw new Error("Tabela Usuarios nao encontrada.");
   }
 
   const insertCols = [];
@@ -291,10 +302,8 @@ async function update(req, id, { login, grupoId, clienteId, ativo }) {
   const updates = [`${qid(meta.loginCol)} = ?`];
   const values = [clean(login)];
 
-  if (meta.groupIdCol) {
-    updates.push(`${qid(meta.groupIdCol)} = ?`);
-    values.push(grupoId || null);
-  }
+  updates.push(`${qid(meta.groupIdCol)} = ?`);
+  values.push(grupoId || null);
 
   if (meta.clienteIdCol) {
     updates.push(`${qid(meta.clienteIdCol)} = ?`);
@@ -354,7 +363,7 @@ async function remove(req, id) {
 
 async function removeByGroup(req, grupoId) {
   const meta = await resolveMeta(req);
-  if (!meta || !meta.groupIdCol) return { affectedRows: 0 };
+  if (!meta) return { affectedRows: 0 };
 
   const [result] = await dbFor(req).query(
     `DELETE FROM ${qid(meta.tableName)} WHERE ${qid(meta.groupIdCol)} = ?`,

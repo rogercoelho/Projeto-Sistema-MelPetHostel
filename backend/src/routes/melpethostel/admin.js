@@ -4,6 +4,8 @@ const bcrypt = require("bcryptjs");
 const {
   TABLE_NAMES,
   dbFor,
+  getUsuarioLoginByClienteId,
+  movePetDocumentsToExpurgo,
   qcol,
   qtable,
   resolveTableName,
@@ -19,6 +21,14 @@ function clean(value) {
 
 function isNumeric(value) {
   return /^\d+$/.test(clean(value));
+}
+
+function isAdminGroupValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .includes("admin");
 }
 
 function normalizeCliente(row) {
@@ -107,23 +117,19 @@ async function listPetsByClienteIds(req, clienteIds) {
 
 async function listAdminClienteIds(req, clienteIds) {
   if (!clienteIds.length) return new Set();
-  const usuariosTable = await resolveTableName(req, "usuarios");
-  const gruposTable = await resolveTableName(req, "Grupos");
-  if (!usuariosTable || !gruposTable) return new Set();
 
-  const placeholders = clienteIds.map(() => "?").join(", ");
-  const [rows] = await dbFor(req).query(
-    `
-      SELECT DISTINCT u.${qcol("cliente_id")} AS clienteId
-      FROM ${qtable(usuariosTable)} u
-      INNER JOIN ${qtable(gruposTable)} g ON g.${qcol("id")} = u.${qcol("grupo_id")}
-      WHERE u.${qcol("cliente_id")} IN (${placeholders})
-        AND LOWER(g.${qcol("Nome_Grupo")}) LIKE '%admin%'
-    `,
-    clienteIds,
-  );
+  const clienteIdSet = new Set(clienteIds.map((id) => String(id)));
+  const usuarios = await Usuario.list(req);
+  const adminClienteIds = (usuarios || [])
+    .filter((usuario) => {
+      const clienteId = usuario?.Cliente_ID || usuario?.clienteId;
+      if (!clienteIdSet.has(String(clienteId))) return false;
+      return isAdminGroupValue(usuario?.grupoNome || usuario?.Grupo_Nome);
+    })
+    .map((usuario) => usuario?.Cliente_ID || usuario?.clienteId)
+    .filter(Boolean);
 
-  return new Set((rows || []).map((row) => row.clienteId).filter(Boolean));
+  return new Set(adminClienteIds);
 }
 
 router.get("/clientes", async (req, res) => {
@@ -139,13 +145,26 @@ router.get("/clientes", async (req, res) => {
     const ordenar = clean(req.query.ordenar);
     const where = [];
     const values = [];
+    const petsTable = await resolveTableName(req, TABLE_NAMES.pets);
 
     if (busca) {
+      const petNameClause = petsTable
+        ? ` OR EXISTS (
+              SELECT 1
+              FROM ${qtable(petsTable)} p
+              WHERE p.${qcol("cliente_id")} = c.${qcol("id")}
+                AND p.${qcol("nome")} LIKE ?
+            )`
+        : "";
       if (isNumeric(busca)) {
-        where.push("(c.id = ? OR c.nome LIKE ?)");
+        where.push(`(c.id = ? OR c.nome LIKE ?${petNameClause})`);
         values.push(Number(busca), `%${busca}%`);
       } else {
-        where.push("c.nome LIKE ?");
+        where.push(`(c.nome LIKE ?${petNameClause})`);
+        values.push(`%${busca}%`);
+      }
+
+      if (petsTable) {
         values.push(`%${busca}%`);
       }
     }
@@ -177,6 +196,107 @@ router.get("/clientes", async (req, res) => {
     });
   } catch (error) {
     console.error("Error in GET /melpethostel/clientes:", error);
+    res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.patch("/pets/:petId/status", async (req, res) => {
+  try {
+    const petId = Number(req.params.petId);
+    if (!Number.isInteger(petId) || petId <= 0) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Pet invalido." });
+    }
+
+    const tableName = await resolveTableName(req, TABLE_NAMES.pets);
+    if (!tableName) {
+      return res
+        .status(500)
+        .json({ status: "erro", mensagem: "Tabela Pets nao encontrada." });
+    }
+
+    const [petRows] = await dbFor(req).query(
+      `SELECT ${qcol("id")} AS id, ${qcol("cliente_id")} AS clienteId
+         FROM ${qtable(tableName)}
+        WHERE ${qcol("id")} = ?
+        LIMIT 1`,
+      [petId],
+    );
+    const pet = petRows && petRows.length ? petRows[0] : null;
+    if (!pet) {
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Pet nao encontrado." });
+    }
+
+    const ativo = Boolean(req.body?.ativo);
+    await dbFor(req).beginTransaction();
+    let movedDocuments = 0;
+    try {
+      const [result] = await dbFor(req).query(
+        `UPDATE ${qtable(tableName)} SET ${qcol("ativo")} = ? WHERE ${qcol("id")} = ?`,
+        [ativo ? 1 : 0, petId],
+      );
+
+      if (!result || result.affectedRows === 0) {
+        await dbFor(req).rollback();
+        return res
+          .status(404)
+          .json({ status: "erro", mensagem: "Pet nao encontrado." });
+      }
+
+      if (!ativo) {
+        const login = await getUsuarioLoginByClienteId(req, pet.clienteId);
+        movedDocuments = await movePetDocumentsToExpurgo(req, {
+          petId,
+          clienteId: pet.clienteId,
+          login,
+        });
+      } else {
+        const carteirasTable = await resolveTableName(
+          req,
+          TABLE_NAMES.petCarteirasVacinacao,
+        );
+        if (carteirasTable) {
+          await dbFor(req).query(
+            `UPDATE ${qtable(carteirasTable)}
+                SET conferido = 0,
+                    conferido_at = NULL,
+                    conferido_por = NULL,
+                    status = 'expurgado'
+              WHERE pet_id = ?`,
+            [petId],
+          );
+        }
+
+        const respostasTable = await resolveTableName(
+          req,
+          TABLE_NAMES.petVacinasRespostas,
+        );
+        if (respostasTable) {
+          await dbFor(req).query(
+            `DELETE FROM ${qtable(respostasTable)}
+              WHERE pet_id = ?`,
+            [petId],
+          );
+        }
+      }
+
+      await dbFor(req).commit();
+    } catch (error) {
+      await dbFor(req).rollback();
+      throw error;
+    }
+
+    return res.json({
+      status: "sucesso",
+      mensagem: ativo ? "Pet ativado com sucesso." : "Pet inativado com sucesso.",
+      pet: { id: petId, ativo },
+      documentosMovidos: movedDocuments,
+    });
+  } catch (error) {
+    console.error("Error in PATCH /melpethostel/pets/:petId/status:", error);
     res.status(500).json({ status: "erro", mensagem: error.message });
   }
 });

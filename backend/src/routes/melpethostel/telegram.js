@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const dbFor = require("../../utils/dbFor");
+const { Usuario } = require("../../models");
 const crypto = require("crypto");
 const {
   DEFAULT_TIMEZONE,
@@ -56,7 +57,6 @@ function isAdminUser(req) {
   return Boolean(
     user.admin ||
     user.isAdmin ||
-    user.source === "usuarios" ||
     values.some((value) =>
       String(value || "")
         .normalize("NFD")
@@ -91,14 +91,14 @@ async function getAdminUsersWithTelegram(req, module) {
   const moduleKey = normalizeModule(module);
   await ensureTelegramSchema(db);
 
-  const [users] = await db.query(
-    `SELECT Usuario_ID AS id,
-            Usuario_Login AS login,
-            Usuario_Grupo AS grupo
-       FROM Usuarios
-      ORDER BY Usuario_Login`,
-  );
-  const admins = (users || []).filter((user) => isAdminGroupValue(user.grupo));
+  const users = await Usuario.list(req);
+  const admins = (users || [])
+    .filter((user) => isAdminGroupValue(user?.grupoNome || user?.Grupo_Nome))
+    .map((user) => ({
+      id: user.Usuario_ID || user.id,
+      login: user.Usuario_Login || user.login,
+      grupo: user.grupoNome || user.Grupo_Nome,
+    }));
 
   if (!admins.length) return [];
 

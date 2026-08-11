@@ -26,6 +26,7 @@ function renderItem(item) {
       onAction={item.onAction}
       summary={getItemSummary(item)}
       title={getItemTitle(item)}
+      trailingAction={item.trailingAction}
     >
       {item.content}
     </MenuItem>
@@ -96,9 +97,11 @@ export function MenuItem({
   onAction,
   summary,
   title,
+  trailingAction,
 }) {
   const hasContent = children !== undefined && children !== null;
   const isInteractive = Boolean(onAction);
+  const hasSideAction = Boolean(leadingAction || trailingAction);
   const itemContent = (
     <>
       <strong>{title}</strong>
@@ -108,7 +111,13 @@ export function MenuItem({
 
   return (
     <section className={cx("menu-template-item", isOpen && "is-open", className)}>
-      <div className={cx(leadingAction && "menu-template-item-row")}>
+      <div
+        className={cx(
+          hasSideAction && "menu-template-item-row",
+          leadingAction && "has-leading-action",
+          trailingAction && "has-trailing-action",
+        )}
+      >
         {leadingAction ? (
           <div className="menu-template-item-leading">{leadingAction}</div>
         ) : null}
@@ -126,6 +135,10 @@ export function MenuItem({
         ) : (
           <div className="menu-template-item-button">{itemContent}</div>
         )}
+
+        {trailingAction ? (
+          <div className="menu-template-item-trailing">{trailingAction}</div>
+        ) : null}
       </div>
 
       {isOpen && hasContent ? (

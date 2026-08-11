@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
   ContractModal,
@@ -177,6 +177,58 @@ function getPetFormInitialData(pet) {
   };
 }
 
+function isExpurgoCarteira(item) {
+  const status = String(item?.status || "").toLowerCase();
+  const filePath = String(item?.filePath || item?.file_path || "").replace(
+    /\\/g,
+    "/",
+  );
+  return status === "expurgado" || /\/expurgo\//i.test(filePath);
+}
+
+function getActivePetCarteiras(pet) {
+  const carteiras = Array.isArray(pet?.carteiras) ? pet.carteiras : [];
+  return carteiras.filter((item) => !isExpurgoCarteira(item));
+}
+
+function getCurrentPetCarteiras(pet) {
+  return getActivePetCarteiras(pet).filter(
+    (item) => item?.status !== "reprovado",
+  );
+}
+
+function getPetRejectionReasons(pet) {
+  return getActivePetCarteiras(pet)
+    .filter((item) => item?.status === "reprovado")
+    .map((item) => String(item?.motivoReprovacao || "").trim())
+    .filter(Boolean);
+}
+
+function getLatestCarteiraBySide(pet, side) {
+  const targetSide = side === "verso" ? "verso" : "frente";
+  return getActivePetCarteiras(pet)
+    .filter((item) => (item?.lado === "verso" ? "verso" : "frente") === targetSide)
+    .sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0))[0];
+}
+
+function getPetCarteiraSideStatus(pet, side) {
+  const carteira = getLatestCarteiraBySide(pet, side);
+  if (!carteira) {
+    return { label: "Pendente", tone: "pending", motivo: "" };
+  }
+  if (carteira.status === "reprovado") {
+    return {
+      label: "Reprovado",
+      tone: "rejected",
+      motivo: String(carteira.motivoReprovacao || "").trim(),
+    };
+  }
+  if (carteira.conferido || carteira.status === "aprovado") {
+    return { label: "Aprovado", tone: "done", motivo: "" };
+  }
+  return { label: "Enviado para conferência", tone: "pending", motivo: "" };
+}
+
 export default function MelPetHostel({
   onBack,
   clientProfile,
@@ -211,9 +263,27 @@ export default function MelPetHostel({
     outros: null,
   });
   const [documentStatusByKey, setDocumentStatusByKey] = useState({
-    identificacao: { existsDb: false, existsDisk: false, identifiedCount: 0 },
-    comprovante: { existsDb: false, existsDisk: false, identifiedCount: 0 },
-    outros: { existsDb: false, existsDisk: false, identifiedCount: 0 },
+    identificacao: {
+      existsDb: false,
+      existsDisk: false,
+      identifiedCount: 0,
+      status: "pendente",
+      motivoReprovacao: "",
+    },
+    comprovante: {
+      existsDb: false,
+      existsDisk: false,
+      identifiedCount: 0,
+      status: "pendente",
+      motivoReprovacao: "",
+    },
+    outros: {
+      existsDb: false,
+      existsDisk: false,
+      identifiedCount: 0,
+      status: "pendente",
+      motivoReprovacao: "",
+    },
   });
   const [uploading, setUploading] = useState(false);
   const [uploadingSupportKey, setUploadingSupportKey] = useState("");
@@ -224,6 +294,8 @@ export default function MelPetHostel({
   const [petFormMode, setPetFormMode] = useState("list");
   const [selectedPet, setSelectedPet] = useState(null);
   const [petDocsPet, setPetDocsPet] = useState(null);
+  const [pendingDeletePet, setPendingDeletePet] = useState(null);
+  const [deletingPetId, setDeletingPetId] = useState(null);
   const [petVaccineConfigs, setPetVaccineConfigs] = useState([]);
   const [petVaccineResponses, setPetVaccineResponses] = useState({});
   const [vaccineCardItems, setVaccineCardItems] = useState([]);
@@ -241,9 +313,11 @@ export default function MelPetHostel({
   const [savingPetVaccines, setSavingPetVaccines] = useState(false);
   const [hostingMenuOpen, setHostingMenuOpen] = useState(false);
   const [hostingHistoryOpen, setHostingHistoryOpen] = useState(false);
-  const [hostingHistoryStatusFilter, setHostingHistoryStatusFilter] = useState("all");
+  const [hostingHistoryStatusFilter, setHostingHistoryStatusFilter] =
+    useState("all");
   const [hostingRequestOpenId, setHostingRequestOpenId] = useState(null);
-  const [cancelingHostingRequestId, setCancelingHostingRequestId] = useState(null);
+  const [cancelingHostingRequestId, setCancelingHostingRequestId] =
+    useState(null);
   const [hostingPetIds, setHostingPetIds] = useState([]);
   const [hostingPetPeriods, setHostingPetPeriods] = useState({});
   const [sendingHostingRequest, setSendingHostingRequest] = useState(false);
@@ -260,6 +334,12 @@ export default function MelPetHostel({
   const [loadingClientSearch, setLoadingClientSearch] = useState(false);
   const [clientSearchSubmitted, setClientSearchSubmitted] = useState(false);
   const [clientSearchError, setClientSearchError] = useState("");
+  const [petStatusSearchTerm, setPetStatusSearchTerm] = useState("");
+  const [petStatusResults, setPetStatusResults] = useState([]);
+  const [loadingPetStatus, setLoadingPetStatus] = useState(false);
+  const [petStatusSubmitted, setPetStatusSubmitted] = useState(false);
+  const [petStatusError, setPetStatusError] = useState("");
+  const [savingPetStatusId, setSavingPetStatusId] = useState(null);
   const [pendingUsers, setPendingUsers] = useState([]);
   const [loadingPendingUsers, setLoadingPendingUsers] = useState(false);
   const [pendingUsersError, setPendingUsersError] = useState("");
@@ -269,11 +349,17 @@ export default function MelPetHostel({
     useState(false);
   const [selectedUserFilesError, setSelectedUserFilesError] = useState("");
   const [conferindoItemKey, setConferindoItemKey] = useState("");
+  const [rejectDocumentTarget, setRejectDocumentTarget] = useState(null);
+  const [rejectDocumentReason, setRejectDocumentReason] = useState("");
+  const [rejectingDocumentKey, setRejectingDocumentKey] = useState("");
   const [pendingVaccineCards, setPendingVaccineCards] = useState([]);
   const [loadingVaccineCards, setLoadingVaccineCards] = useState(false);
   const [vaccineCardsError, setVaccineCardsError] = useState("");
   const [selectedVaccineUser, setSelectedVaccineUser] = useState(null);
   const [approvingVaccineCardId, setApprovingVaccineCardId] = useState(null);
+  const [rejectingVaccineCardId, setRejectingVaccineCardId] = useState(null);
+  const [rejectVaccineCardTarget, setRejectVaccineCardTarget] = useState(null);
+  const [rejectVaccineReason, setRejectVaccineReason] = useState("");
   const [vaccineConfigItems, setVaccineConfigItems] = useState([]);
   const [loadingVaccineConfig, setLoadingVaccineConfig] = useState(false);
   const [savingVaccineConfig, setSavingVaccineConfig] = useState(false);
@@ -385,18 +471,21 @@ export default function MelPetHostel({
   const requiredDocKeys = SUPPORT_DOC_FIELDS.filter((d) => d.required).map(
     (d) => d.key,
   );
-  const requiredDocsComplete = requiredDocKeys.every(
-    (key) =>
-      documentStatusByKey[key]?.existsDb &&
-      documentStatusByKey[key]?.existsDisk,
+  function isSupportDocumentSubmitted(key) {
+    const status = documentStatusByKey[key];
+    return Boolean(
+      status?.existsDb &&
+        status?.existsDisk &&
+        String(status?.status || "").toLowerCase() !== "reprovado",
+    );
+  }
+
+  const requiredDocsComplete = requiredDocKeys.every((key) =>
+    isSupportDocumentSubmitted(key),
   );
 
   const pendingRequiredDocsCount = requiredDocKeys.filter(
-    (key) =>
-      !(
-        documentStatusByKey[key]?.existsDb &&
-        documentStatusByKey[key]?.existsDisk
-      ),
+    (key) => !isSupportDocumentSubmitted(key),
   ).length;
   const pendingUploadItemsCount =
     (contratoDetectado ? 0 : 1) + pendingRequiredDocsCount;
@@ -492,9 +581,23 @@ export default function MelPetHostel({
           existsDb: false,
           existsDisk: false,
           identifiedCount: 0,
+          status: "pendente",
+          motivoReprovacao: "",
         },
-        comprovante: { existsDb: false, existsDisk: false, identifiedCount: 0 },
-        outros: { existsDb: false, existsDisk: false, identifiedCount: 0 },
+        comprovante: {
+          existsDb: false,
+          existsDisk: false,
+          identifiedCount: 0,
+          status: "pendente",
+          motivoReprovacao: "",
+        },
+        outros: {
+          existsDb: false,
+          existsDisk: false,
+          identifiedCount: 0,
+          status: "pendente",
+          motivoReprovacao: "",
+        },
       };
 
       for (const doc of docs) {
@@ -504,6 +607,8 @@ export default function MelPetHostel({
             existsDb: Boolean(doc.existsDb),
             existsDisk: Boolean(doc.existsDisk),
             identifiedCount: Number(doc.identifiedCount) || 0,
+            status: doc?.status || "pendente",
+            motivoReprovacao: doc?.motivoReprovacao || "",
           };
         }
       }
@@ -643,6 +748,8 @@ export default function MelPetHostel({
             ? {
                 ...item,
                 conferido: true,
+                status: "aprovado",
+                motivoReprovacao: "",
                 conferidoAt: new Date().toISOString(),
                 conferidoPor: usuario?.login || item?.conferidoPor || null,
               }
@@ -735,6 +842,101 @@ export default function MelPetHostel({
     }
   }
 
+  function openRejectDocumentModal(file) {
+    if (file?.tipoRegistro !== "documento" || !file?.documentoId) return;
+    setRejectDocumentTarget(file);
+    setRejectDocumentReason("");
+  }
+
+  function closeRejectDocumentModal() {
+    if (rejectingDocumentKey) return;
+    setRejectDocumentTarget(null);
+    setRejectDocumentReason("");
+  }
+
+  async function submitRejectDocument() {
+    const file = rejectDocumentTarget;
+    const documentoId = Number(file?.documentoId);
+    if (!Number.isInteger(documentoId) || documentoId <= 0) return;
+
+    const motivoReprovacao = rejectDocumentReason.trim();
+    if (!motivoReprovacao) {
+      showToast("Informe o motivo da reprovacao.", "error");
+      return;
+    }
+
+    const rejectKey = buildConferirKey(file);
+    setRejectingDocumentKey(rejectKey);
+    try {
+      await api.post(`/melpethostel/documentos/${documentoId}/reprovar`, {
+        motivoReprovacao,
+      });
+      setSelectedUserFiles((prev) =>
+        (prev || []).filter((item) => buildConferirKey(item) !== rejectKey),
+      );
+      showToast("Documento reprovado com sucesso.", "success");
+      closeRejectDocumentModal();
+      await loadPendingValidationUsers();
+    } catch (error) {
+      showToast(
+        error?.message || "Nao foi possivel reprovar o documento.",
+        "error",
+      );
+    } finally {
+      setRejectingDocumentKey("");
+    }
+  }
+  function openRejectVaccineCardModal(card) {
+    if (!card?.id) return;
+    setRejectVaccineCardTarget(card);
+    setRejectVaccineReason("");
+  }
+
+  function closeRejectVaccineCardModal() {
+    if (rejectingVaccineCardId) return;
+    setRejectVaccineCardTarget(null);
+    setRejectVaccineReason("");
+  }
+
+  async function submitRejectVaccineCard() {
+    const card = rejectVaccineCardTarget;
+    const id = Number(card?.id);
+    if (!Number.isInteger(id) || id <= 0) return;
+    const motivoReprovacao = rejectVaccineReason.trim();
+    if (!motivoReprovacao) {
+      showToast("Informe o motivo da reprovação.", "error");
+      return;
+    }
+
+    setRejectingVaccineCardId(id);
+    try {
+      await api.post(
+        `/melpethostel/pets/carteiras-vacinacao/${id}/reprovar`,
+        { motivoReprovacao },
+      );
+      setPendingVaccineCards((current) =>
+        (current || []).filter((item) => Number(item.id) !== id),
+      );
+      setSelectedVaccineUser((current) => {
+        if (!current) return null;
+        const hasPendingCardForUser = pendingVaccineCards.some(
+          (item) =>
+            Number(item.id) !== id && getVaccineUserKey(item) === current.key,
+        );
+        return hasPendingCardForUser ? current : null;
+      });
+      showToast("Carteira de vacinação reprovada com sucesso.", "success");
+      closeRejectVaccineCardModal();
+    } catch (error) {
+      showToast(
+        error?.message || "Não foi possível reprovar a carteira de vacinação.",
+        "error",
+      );
+    } finally {
+      setRejectingVaccineCardId(null);
+    }
+  }
+
   function getVaccineUserKey(card) {
     return String(card?.clienteId || card?.clienteNome || "");
   }
@@ -805,7 +1007,8 @@ export default function MelPetHostel({
     if (normalized.includes("confirm")) return "Confirmado";
     if (normalized.includes("aprov")) return "Aprovado";
     if (normalized.includes("recus")) return "Recusado";
-    if (normalized.includes("anal") || normalized.includes("aguard")) return "Pendente";
+    if (normalized.includes("anal") || normalized.includes("aguard"))
+      return "Pendente";
     return "Pendente";
   }
 
@@ -1482,6 +1685,82 @@ export default function MelPetHostel({
     }
   }
 
+  async function loadPetStatusSearch(event) {
+    event?.preventDefault();
+    setPetStatusSubmitted(true);
+    setLoadingPetStatus(true);
+    setPetStatusError("");
+
+    try {
+      const params = ["ordenar=nome_asc"];
+      const trimmedSearch = petStatusSearchTerm.trim();
+      if (trimmedSearch) {
+        params.push(`busca=${encodeURIComponent(trimmedSearch)}`);
+      }
+
+      const data = await api.get(`/melpethostel/clientes?${params.join("&")}`);
+      setPetStatusResults(Array.isArray(data?.clientes) ? data.clientes : []);
+    } catch (error) {
+      setPetStatusResults([]);
+      setPetStatusError(error?.message || "Erro ao pesquisar pets.");
+    } finally {
+      setLoadingPetStatus(false);
+    }
+  }
+
+  function updatePetStatusInResults(petId, ativo) {
+    setPetStatusResults((current) =>
+      current.map((cliente) => ({
+        ...cliente,
+        pets: (cliente.pets || []).map((pet) =>
+          Number(pet.id) === Number(petId) ? { ...pet, ativo } : pet,
+        ),
+      })),
+    );
+    setClientSearchResults((current) =>
+      current.map((cliente) => ({
+        ...cliente,
+        pets: (cliente.pets || []).map((pet) =>
+          Number(pet.id) === Number(petId) ? { ...pet, ativo } : pet,
+        ),
+      })),
+    );
+    setSelectedClient((current) =>
+      current
+        ? {
+            ...current,
+            pets: (current.pets || []).map((pet) =>
+              Number(pet.id) === Number(petId) ? { ...pet, ativo } : pet,
+            ),
+          }
+        : current,
+    );
+  }
+
+  async function toggleAdminPetStatus(pet) {
+    if (!pet?.id || savingPetStatusId) return;
+
+    const nextActive = !pet.ativo;
+    setSavingPetStatusId(pet.id);
+    try {
+      await api.patch(`/melpethostel/pets/${pet.id}/status`, {
+        ativo: nextActive,
+      });
+      updatePetStatusInResults(pet.id, nextActive);
+      showToast(
+        nextActive ? "Pet ativado com sucesso." : "Pet inativado com sucesso.",
+        "success",
+      );
+    } catch (error) {
+      showToast(
+        error?.message || "Não foi possível alterar a situação do pet.",
+        "error",
+      );
+    } finally {
+      setSavingPetStatusId(null);
+    }
+  }
+
   function formatAddress(endereco = {}) {
     return [
       endereco.logradouro,
@@ -1608,13 +1887,10 @@ export default function MelPetHostel({
         setSelectedPet(pendingPet);
         setPetFormMode("vaccineUpload");
         setPetVaccineConfigs(Array.isArray(data.configs) ? data.configs : []);
+        const activeCarteiras = getCurrentPetCarteiras(data);
         setUploadedPetVaccineSides({
-          frente: Array.isArray(data.carteiras)
-            ? data.carteiras.some((item) => item.lado === "frente")
-            : false,
-          verso: Array.isArray(data.carteiras)
-            ? data.carteiras.some((item) => item.lado === "verso")
-            : false,
+          frente: activeCarteiras.some((item) => item.lado === "frente"),
+          verso: activeCarteiras.some((item) => item.lado === "verso"),
         });
         setPetVaccineResponses(
           (Array.isArray(data.respostas) ? data.respostas : []).reduce(
@@ -1809,6 +2085,38 @@ export default function MelPetHostel({
     setPetFormMode(isSamePet ? "list" : "view");
   }
 
+  function openDeletePetModal(pet) {
+    if (!pet?.id || deletingPetId) return;
+    setPendingDeletePet(pet);
+  }
+
+  function closeDeletePetModal() {
+    if (deletingPetId) return;
+    setPendingDeletePet(null);
+  }
+
+  async function confirmDeletePet() {
+    const pet = pendingDeletePet;
+    if (!pet?.id || deletingPetId) return;
+
+    setDeletingPetId(pet.id);
+    try {
+      await api.delete(`/melpethostel/pets/${pet.id}`);
+      setRegisteredPets((current) =>
+        current.filter((item) => Number(item.id) !== Number(pet.id)),
+      );
+      if (selectedPet?.id === pet.id) setSelectedPet(null);
+      if (petDocsPet?.id === pet.id) setPetDocsPet(null);
+      setPetFormMode("list");
+      setPendingDeletePet(null);
+      showToast("Pet excluído com sucesso.", "success");
+    } catch (error) {
+      showToast(error?.message || "Não foi possível excluir o pet.", "error");
+    } finally {
+      setDeletingPetId(null);
+    }
+  }
+
   async function openVaccineCardInfo(pet) {
     const status = getPetVaccineStatus(pet);
     const targetMode = status.tone === "approved" ? "vaccine" : "vaccineUpload";
@@ -1822,19 +2130,36 @@ export default function MelPetHostel({
     setPetFormMode(targetMode);
     setPetDocsPet(pet);
     setPetVaccineFiles({ frente: null, verso: null });
+    const activeCarteiras = getCurrentPetCarteiras(pet);
     setUploadedPetVaccineSides({
-      frente: Array.isArray(pet?.carteiras)
-        ? pet.carteiras.some((item) => item.lado === "frente")
-        : false,
-      verso: Array.isArray(pet?.carteiras)
-        ? pet.carteiras.some((item) => item.lado === "verso")
-        : false,
+      frente: activeCarteiras.some((item) => item.lado === "frente"),
+      verso: activeCarteiras.some((item) => item.lado === "verso"),
     });
 
     if (targetMode === "vaccineUpload") {
       setVaccineCardItems([]);
       setVaccineCardInfoError("");
       await loadPetVaccineConfigs();
+      try {
+        const data = await api.get(
+          `/melpethostel/pets/${pet.id}/carteira-vacinacao/info`,
+        );
+        const respostas = Array.isArray(data?.itens) ? data.itens : [];
+        setPetVaccineResponses(
+          respostas.reduce(
+            (acc, item) => ({
+              ...acc,
+              [item.configId]: {
+                valor: item.tipo || "",
+                dataAplicacao: String(item.dataAplicacao || "").slice(0, 10),
+              },
+            }),
+            {},
+          ),
+        );
+      } catch {
+        setPetVaccineResponses({});
+      }
       return;
     }
 
@@ -2132,9 +2457,7 @@ export default function MelPetHostel({
   function handleSupportPrimaryAction(key) {
     const fieldMeta = SUPPORT_DOC_FIELDS.find((d) => d.key === key);
     const isRequired = Boolean(fieldMeta?.required);
-    const isConcluded =
-      documentStatusByKey[key]?.existsDb &&
-      documentStatusByKey[key]?.existsDisk;
+    const isConcluded = isSupportDocumentSubmitted(key);
 
     if (isRequired && isConcluded) {
       return;
@@ -2148,15 +2471,16 @@ export default function MelPetHostel({
   }
 
   function getPetVaccineStatus(pet) {
-    const carteiras = Array.isArray(pet?.carteiras) ? pet.carteiras : [];
-    const hasApproved = carteiras.some(
-      (item) => item?.conferido || item?.status === "aprovado",
+    const sideStatuses = ["frente", "verso"].map((side) =>
+      getPetCarteiraSideStatus(pet, side),
     );
-    if (hasApproved) {
+    if (sideStatuses.some((item) => item.tone === "rejected")) {
+      return { label: "Reprovado", tone: "rejected" };
+    }
+    if (sideStatuses.every((item) => item.tone === "done")) {
       return { label: "Pet Aprovado", tone: "approved" };
     }
-
-    if (carteiras.length) {
+    if (getActivePetCarteiras(pet).length) {
       return { label: "Pendente", tone: "pending" };
     }
 
@@ -2165,12 +2489,18 @@ export default function MelPetHostel({
 
   function renderPetVaccineAction(pet) {
     const status = getPetVaccineStatus(pet);
+    const canOpen = ["approved", "missing", "pending", "rejected"].includes(
+      status.tone,
+    );
 
     return (
       <button
         type="button"
         className="melpet-vaccine-card-btn"
-        onClick={() => openVaccineCardInfo(pet)}
+        disabled={!canOpen}
+        onClick={() => {
+          if (canOpen) openVaccineCardInfo(pet);
+        }}
       >
         <span>Carteira de Vacinação</span>
         <strong
@@ -2179,6 +2509,20 @@ export default function MelPetHostel({
           {status.label}
         </strong>
       </button>
+    );
+  }
+
+  function renderPetDeleteAction(pet) {
+    return (
+      <Button
+        type="button"
+        variant="danger"
+        className="melpet-pet-delete-btn"
+        onClick={() => openDeletePetModal(pet)}
+        disabled={deletingPetId === pet.id}
+      >
+        {deletingPetId === pet.id ? "Excluindo..." : "Excluir"}
+      </Button>
     );
   }
 
@@ -2272,6 +2616,7 @@ export default function MelPetHostel({
           : registeredPets.map((pet) => ({
               id: pet.id,
               leadingAction: renderPetVaccineAction(pet),
+              trailingAction: renderPetDeleteAction(pet),
               title: pet.nome,
               summary: getPetSummary(pet),
               isOpen:
@@ -2310,13 +2655,54 @@ export default function MelPetHostel({
 
   function renderPetDocumentsContent() {
     if (!petDocsPet) return null;
+    const vaccineStatus = getPetVaccineStatus(petDocsPet);
+    const isReadOnlyVaccineUpload = vaccineStatus.tone === "pending";
+    const documentStatuses = [
+      ["frente", "Carteirinha de vacinação frente"],
+      ["verso", "Carteirinha de vacinação verso"],
+    ].map(([side, label]) => ({
+      side,
+      documentLabel: label,
+      statusLabel: getPetCarteiraSideStatus(petDocsPet, side).label,
+      tone: getPetCarteiraSideStatus(petDocsPet, side).tone,
+      motivo: getPetCarteiraSideStatus(petDocsPet, side).motivo,
+    }));
+    const rejectedDocumentStatuses = documentStatuses.filter(
+      (item) => item.tone === "rejected",
+    );
 
     return (
       <section className="melpet-pet-documents">
-        <p className="pet-registration-required-message">
-          Agora é o momento de você nos enviar os documentos{" "}
-          {getPetGenderText(petDocsPet)} {petDocsPet.nome}!
-        </p>
+        <div className="pet-registration-required-message">
+          {rejectedDocumentStatuses.length ? (
+            <div className="melpet-vaccine-rejection-notice">
+              <strong>Detalhes da reprovação</strong>
+              {rejectedDocumentStatuses.map((item) => (
+                <dl key={item.side}>
+                  <div>
+                    <dt>Documento:</dt>
+                    <dd>{item.documentLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Status:</dt>
+                    <dd>{item.statusLabel}</dd>
+                  </div>
+                  {item.tone === "rejected" ? (
+                    <div>
+                      <dt>Motivo:</dt>
+                      <dd>{item.motivo || "Motivo não informado."}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              ))}
+            </div>
+          ) : (
+            <p>
+              Agora é o momento de você nos enviar os documentos{" "}
+              {getPetGenderText(petDocsPet)} {petDocsPet.nome}!
+            </p>
+          )}
+        </div>
 
         <ul className="melpet-upload-doc-list">
           {[
@@ -2325,14 +2711,21 @@ export default function MelPetHostel({
           ].map(([side, label]) => {
             const selectedPetFile = petVaccineFiles[side];
             const isUploadingThis = uploadingPetVaccineSide === side;
+            const sideStatus = getPetCarteiraSideStatus(petDocsPet, side);
             const isConcluded = Boolean(uploadedPetVaccineSides[side]);
             const actionDisabled =
-              Boolean(uploadingPetVaccineSide) || isConcluded;
+              Boolean(uploadingPetVaccineSide) ||
+              isConcluded ||
+              isReadOnlyVaccineUpload;
 
             return (
               <li
                 className={`melpet-upload-doc-item ${
-                  isConcluded ? "is-done" : "is-pending"
+                  sideStatus.tone === "rejected"
+                    ? "is-rejected"
+                    : isConcluded
+                      ? "is-done"
+                      : "is-pending"
                 }`}
                 key={side}
               >
@@ -2340,13 +2733,9 @@ export default function MelPetHostel({
                   <div className="melpet-upload-doc-copy">
                     <strong>{label}</strong>
                     <span
-                      className={
-                        isConcluded
-                          ? "melpet-doc-status melpet-doc-status--done"
-                          : "melpet-doc-status melpet-doc-status--pending"
-                      }
+                      className={`melpet-doc-status melpet-doc-status--${sideStatus.tone}`}
                     >
-                      {isConcluded ? "Enviado para conferência" : "Pendente"}
+                      {sideStatus.label}
                     </span>
                   </div>
                   <Button
@@ -2422,6 +2811,7 @@ export default function MelPetHostel({
                         <input
                           type="checkbox"
                           checked={selectedValue === value}
+                          disabled={isReadOnlyVaccineUpload}
                           onChange={(event) =>
                             updatePetVaccineResponse(
                               config.id,
@@ -2440,6 +2830,7 @@ export default function MelPetHostel({
                   <input
                     type="date"
                     value={response.dataAplicacao || ""}
+                    disabled={isReadOnlyVaccineUpload}
                     onChange={(event) =>
                       updatePetVaccineResponse(
                         config.id,
@@ -2457,7 +2848,7 @@ export default function MelPetHostel({
         {petVaccineConfigs.length ? (
           <Button
             type="button"
-            disabled={savingPetVaccines}
+            disabled={savingPetVaccines || isReadOnlyVaccineUpload}
             onClick={savePetVaccineResponses}
           >
             {savingPetVaccines ? "Salvando..." : "Salvar vacinas e outros"}
@@ -2593,7 +2984,10 @@ export default function MelPetHostel({
       }
       showToast("Solicitação cancelada.", "success");
     } catch (error) {
-      showToast(error?.message || "Não foi possível cancelar o pedido.", "error");
+      showToast(
+        error?.message || "Não foi possível cancelar o pedido.",
+        "error",
+      );
     } finally {
       setCancelingHostingRequestId(null);
     }
@@ -2883,9 +3277,7 @@ export default function MelPetHostel({
       </header>
 
       <div className="melpet-hosting-history-toolbar">
-        <p>
-          Veja aqui os pedidos enviados e o andamento de cada solicitação.
-        </p>
+        <p>Veja aqui os pedidos enviados e o andamento de cada solicitação.</p>
       </div>
 
       <div className="melpet-hosting-history-filters-card">
@@ -2958,7 +3350,9 @@ export default function MelPetHostel({
                   <span
                     className={`melpet-hosting-history-status is-${getHostingRequestStatusTone(request.status)}`}
                   >
-                    <strong>{getHostingRequestStatusLabel(request.status)}</strong>
+                    <strong>
+                      {getHostingRequestStatusLabel(request.status)}
+                    </strong>
                     <span>{getHostingRequestStatusDetail(request.status)}</span>
                   </span>
                   <span
@@ -3003,9 +3397,13 @@ export default function MelPetHostel({
                           const itemTotal = item.valorTotal;
                           return (
                             <li key={item.id}>
-                              <strong>{item.petNome || `Pet ${item.petId}`}</strong>
+                              <strong>
+                                {item.petNome || `Pet ${item.petId}`}
+                              </strong>
                               <small>
-                                {item.tipo} / {item.tempoQuantidade} {item.tempoUnidade} -> {formatCurrency(item.valorDiaria)}
+                                {item.tipo} / {item.tempoQuantidade}{" "}
+                                {item.tempoUnidade} {"->"}{" "}
+                                {formatCurrency(item.valorDiaria)}
                               </small>
                               <small>{formatHostingItemPeriod(item)}</small>
                               <strong>{formatCurrency(itemTotal)}</strong>
@@ -3040,7 +3438,9 @@ export default function MelPetHostel({
                   </>
                 ) : (
                   <p className="melpet-hosting-history-card-summary">
-                    {request.tipo || "Hospedagem"} · {formatHostingRequestPeriod(request)} · {formatCurrency(requestTotal)}
+                    {request.tipo || "Hospedagem"} ·{" "}
+                    {formatHostingRequestPeriod(request)} ·{" "}
+                    {formatCurrency(requestTotal)}
                   </p>
                 )}
               </article>
@@ -3189,7 +3589,7 @@ export default function MelPetHostel({
               </div>
               <div>
                 <dt>Data de nascimento</dt>
-                <dd>{selectedClient.data_nascimento || "-"}</dd>
+                <dd>{formatBrazilDate(selectedClient.data_nascimento)}</dd>
               </div>
               <div>
                 <dt>Telefone</dt>
@@ -3229,7 +3629,18 @@ export default function MelPetHostel({
               {selectedClient.pets?.length ? (
                 <ul>
                   {selectedClient.pets.map((pet) => (
-                    <li key={pet.id}>{pet.nome}</li>
+                    <li className="melpet-client-pet-row" key={pet.id}>
+                      <span>{pet.nome || "Pet sem nome"}</span>
+                      <em
+                        className={`melpet-client-pet-status ${
+                          pet.ativo
+                            ? "melpet-client-pet-status--active"
+                            : "melpet-client-pet-status--inactive"
+                        }`}
+                      >
+                        {pet.ativo ? "Ativo" : "Inativo"}
+                      </em>
+                    </li>
                   ))}
                 </ul>
               ) : (
@@ -3724,10 +4135,90 @@ export default function MelPetHostel({
     </section>
   );
 
+  const petStatusManagementContent = (
+    <section className="melpet-client-search melpet-pet-status-admin">
+      <form
+        className="melpet-client-search-form"
+        onSubmit={loadPetStatusSearch}
+      >
+        <label>
+          Pesquisar cliente, código ou pet
+          <input
+            type="search"
+            value={petStatusSearchTerm}
+            onChange={(event) => setPetStatusSearchTerm(event.target.value)}
+            placeholder="Nome do cliente, código ou nome do pet"
+          />
+        </label>
+        <Button type="submit" disabled={loadingPetStatus}>
+          {loadingPetStatus ? "Pesquisando..." : "Pesquisar"}
+        </Button>
+      </form>
+
+      {petStatusError ? <p className="melpet-error">{petStatusError}</p> : null}
+
+      <div className="melpet-pet-status-results">
+        {loadingPetStatus ? (
+          <p>Carregando clientes e pets...</p>
+        ) : petStatusResults.length ? (
+          petStatusResults.map((cliente) => (
+            <article className="melpet-pet-status-client" key={cliente.id}>
+              <header>
+                <strong>{cliente.nome || "Cliente sem nome"}</strong>
+                <span>Código {cliente.id}</span>
+              </header>
+
+              {cliente.pets?.length ? (
+                <ul>
+                  {cliente.pets.map((pet) => (
+                    <li className="melpet-pet-status-row" key={pet.id}>
+                      <div>
+                        <strong>{pet.nome || "Pet sem nome"}</strong>
+                        <em
+                          className={`melpet-client-pet-status ${
+                            pet.ativo
+                              ? "melpet-client-pet-status--active"
+                              : "melpet-client-pet-status--inactive"
+                          }`}
+                        >
+                          {pet.ativo ? "Ativo" : "Inativo"}
+                        </em>
+                      </div>
+                      <Button
+                        type="button"
+                        variant={pet.ativo ? "danger" : "success"}
+                        size="sm"
+                        onClick={() => toggleAdminPetStatus(pet)}
+                        disabled={savingPetStatusId === pet.id}
+                      >
+                        {savingPetStatusId === pet.id
+                          ? "Salvando..."
+                          : pet.ativo
+                            ? "Inativar"
+                            : "Ativar"}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>Nenhum pet cadastrado para este cliente.</p>
+              )}
+            </article>
+          ))
+        ) : petStatusSubmitted ? (
+          <p>Nenhum cliente encontrado.</p>
+        ) : (
+          <p>Pesquise por cliente, código ou nome do pet.</p>
+        )}
+      </div>
+    </section>
+  );
+
   const petAdminMenus = new Set([
     "cadastroPets",
     "aprovarCarteiraVacinacao",
     "vacinasOutros",
+    "ativarInativarPet",
   ]);
   const isPetAdminMenu =
     petAdminMenus.has(activeMenu) || petAdminMenus.has(initialAdminMenu);
@@ -3740,6 +4231,28 @@ export default function MelPetHostel({
         (card) => getVaccineUserKey(card) === selectedVaccineUser.key,
       )
     : [];
+  const selectedVaccinePetGroups = Array.from(
+    selectedVaccineUserCards
+      .reduce((groups, card) => {
+        const key = String(card?.petId || card?.petNome || card?.id || "");
+        const current = groups.get(key) || {
+          key,
+          petId: card?.petId,
+          petNome: card?.petNome || `Pet ${card?.petId}`,
+          clienteNome: card?.clienteNome || selectedVaccineUser?.nome || "",
+          documentos: {},
+          vacinas: Array.isArray(card?.vacinas) ? card.vacinas : [],
+        };
+        current.documentos[card?.lado === "verso" ? "verso" : "frente"] =
+          card;
+        if (!current.vacinas.length && Array.isArray(card?.vacinas)) {
+          current.vacinas = card.vacinas;
+        }
+        groups.set(key, current);
+        return groups;
+      }, new Map())
+      .values(),
+  );
 
   const adminMenuPanels = [
     {
@@ -3787,6 +4300,19 @@ export default function MelPetHostel({
                 resetVaccineConfigForm();
               },
               content: vaccineManagementContent,
+            },
+            {
+              id: "ativar-inativar-pet",
+              title: "Ativar / Inativar Pet",
+              summary: "Alterar a situação cadastral dos pets.",
+              isOpen: activeMenu === "ativarInativarPet",
+              onAction: () => {
+                setActiveMenu((prev) =>
+                  prev === "ativarInativarPet" ? "" : "ativarInativarPet",
+                );
+                setPetStatusError("");
+              },
+              content: petStatusManagementContent,
             },
           ]
         : isPlanosAdminMenu
@@ -3850,15 +4376,162 @@ export default function MelPetHostel({
     },
   ];
 
+  const deletePetModal = (
+    <Modal
+      isOpen={Boolean(pendingDeletePet)}
+      onClose={closeDeletePetModal}
+      title="Excluir Pet"
+      closeOnBackdropClick={!deletingPetId}
+      showCloseButton={!deletingPetId}
+      containerStyle={{ width: "min(94%, 520px)" }}
+    >
+      <div className="admin-page-delete-modal melpet-delete-pet-modal">
+        <p>
+          Excluir o Pet irá excluir o cadastro e todos os documentos vinculados
+          a ele.
+          <br /> Quer realmente prosseguir?
+        </p>
+
+        {pendingDeletePet?.nome ? (
+          <strong className="melpet-delete-pet-name">
+            {" "}
+            Nome do Pet: <p> {pendingDeletePet.nome} </p>
+          </strong>
+        ) : null}
+
+        <div className="modal-actions">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={closeDeletePetModal}
+            disabled={Boolean(deletingPetId)}
+          >
+            Não
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            onClick={confirmDeletePet}
+            disabled={Boolean(deletingPetId)}
+          >
+            {deletingPetId ? "Excluindo..." : "SIM, EXCLUIR"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+
+  const rejectDocumentModal = (
+    <Modal
+      isOpen={Boolean(rejectDocumentTarget)}
+      onClose={closeRejectDocumentModal}
+      title="Reprovar Documento"
+      closeOnBackdropClick={!rejectingDocumentKey}
+      showCloseButton={!rejectingDocumentKey}
+      containerStyle={{ width: "min(94%, 520px)" }}
+    >
+      <div className="melpet-reject-vaccine-modal melpet-reject-document-modal">
+        <p>
+          Informe o motivo da reprovacao. Esse texto sera exibido ao cliente
+          para orientar o novo envio.
+        </p>
+        <label className="pet-form-field">
+          Motivo da reprovacao
+          <textarea
+            value={rejectDocumentReason}
+            onChange={(event) => setRejectDocumentReason(event.target.value)}
+            rows={4}
+            disabled={Boolean(rejectingDocumentKey)}
+            placeholder="Ex.: documento ilegivel, dados divergentes, arquivo incompleto..."
+          />
+        </label>
+        <div className="modal-actions">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={closeRejectDocumentModal}
+            disabled={Boolean(rejectingDocumentKey)}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            onClick={submitRejectDocument}
+            disabled={Boolean(rejectingDocumentKey)}
+          >
+            {rejectingDocumentKey ? "Reprovando..." : "Reprovar"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+
+  const rejectVaccineCardModal = (
+    <Modal
+      isOpen={Boolean(rejectVaccineCardTarget)}
+      onClose={closeRejectVaccineCardModal}
+      title="Reprovar Carteira de Vacinação"
+      closeOnBackdropClick={!rejectingVaccineCardId}
+      showCloseButton={!rejectingVaccineCardId}
+      containerStyle={{ width: "min(94%, 520px)" }}
+    >
+      <div className="melpet-reject-vaccine-modal">
+        <p>
+          Informe o motivo da reprovação. Esse texto será exibido ao cliente
+          para orientar o novo envio.
+        </p>
+        <label className="pet-form-field">
+          Motivo da reprovação
+          <textarea
+            value={rejectVaccineReason}
+            onChange={(event) => setRejectVaccineReason(event.target.value)}
+            rows={4}
+            disabled={Boolean(rejectingVaccineCardId)}
+            placeholder="Ex.: documento ilegível, data não informada, vacina vencida..."
+          />
+        </label>
+        <div className="modal-actions">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={closeRejectVaccineCardModal}
+            disabled={Boolean(rejectingVaccineCardId)}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            onClick={submitRejectVaccineCard}
+            disabled={Boolean(rejectingVaccineCardId)}
+          >
+            {rejectingVaccineCardId ? "Reprovando..." : "Reprovar"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+
   if (!isAdmin && userMenu === "hospedagem") {
-    return <MenuTemplate panels={hostingPanels} />;
+    return (
+      <>
+        <MenuTemplate panels={hostingPanels} />
+        {deletePetModal}
+      </>
+    );
   }
 
   if (
     shouldRenderPetRegistrationDashboard ||
     shouldRenderUserPetRegistrationDashboard
   ) {
-    return <MenuTemplate panels={userPetRegistrationPanels} />;
+    return (
+      <>
+        <MenuTemplate panels={userPetRegistrationPanels} />
+        {deletePetModal}
+      </>
+    );
   }
 
   return (
@@ -3923,47 +4596,42 @@ export default function MelPetHostel({
                       )}
                     </div>
                   </div>
-                </div>
+                  {selectedVaccineUser ? (
+                    <div className="melpet-user-docs-container">
+                      <div className="melpet-vaccine-review-stack">
+                        {selectedVaccinePetGroups.length ? (
+                          selectedVaccinePetGroups.map((group) => (
+                            <article
+                              className="melpet-vaccine-review-card"
+                              key={group.key}
+                            >
+                            <header className="melpet-vaccine-review-header">
+                              <strong>Cliente {group.clienteNome}</strong>
+                              <span>Pet: {group.petNome}</span>
+                            </header>
 
-                {selectedVaccineUser ? (
-                  <div className="melpet-outer-card melpet-user-docs-container">
-                    <div className="melpet-outer-card-header">
-                      <h3>
-                        Carteiras de vacinação de{" "}
-                        {selectedVaccineUser?.nome || "usuário"}
-                      </h3>
-                    </div>
-
-                    <div className="melpet-categories-card melpet-docs-card-shell">
-                      <div className="melpet-card-body melpet-docs-card-body">
-                        <div className="melpet-docs-table-wrap">
-                          <table className="melpet-docs-table melpet-vaccine-docs-table">
-                            <thead>
-                              <tr>
-                                <th>Nome do documento</th>
-                                <th>Pet</th>
-                                <th>Visualizar</th>
-                                <th>Aprovar</th>
-                                <th>Reprovar</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {selectedVaccineUserCards.length ? (
-                                selectedVaccineUserCards.map((card) => {
-                                  const url = buildFileUrl(card.fileUrl);
-                                  const isApproving =
-                                    approvingVaccineCardId === card.id;
-                                  return (
-                                    <tr key={card.id}>
-                                      <td>{getVaccineDocumentName(card)}</td>
-                                      <td>
-                                        {card.petNome || `Pet ${card.petId}`}
-                                      </td>
-                                      <td>
+                            <div className="melpet-vaccine-review-docs">
+                              {[
+                                ["frente", "Documento frente"],
+                                ["verso", "Documento verso"],
+                              ].map(([side, label]) => {
+                                const card = group.documentos[side];
+                                const isApproving =
+                                  approvingVaccineCardId === card?.id;
+                                const isRejecting =
+                                  rejectingVaccineCardId === card?.id;
+                                return (
+                                  <div
+                                    className="melpet-vaccine-review-doc"
+                                    key={`${group.key}-${side}`}
+                                  >
+                                    <span>{label}</span>
+                                    {card ? (
+                                      <div className="melpet-vaccine-review-actions">
                                         <button
                                           type="button"
                                           className="melpet-view-doc-btn"
-                                          disabled={!url}
+                                          disabled={!buildFileUrl(card.fileUrl)}
                                           onClick={() =>
                                             handleOpenDocumentPreview({
                                               fileUrl: card.fileUrl,
@@ -3975,10 +4643,8 @@ export default function MelPetHostel({
                                             })
                                           }
                                         >
-                                          Visualizar documento
+                                          Visualizar
                                         </button>
-                                      </td>
-                                      <td>
                                         <button
                                           type="button"
                                           className="melpet-review-btn melpet-review-btn--approve"
@@ -3991,36 +4657,78 @@ export default function MelPetHostel({
                                             ? "Aprovando..."
                                             : "Aprovar"}
                                         </button>
-                                      </td>
-                                      <td>
                                         <button
                                           type="button"
                                           className="melpet-review-btn melpet-review-btn--reject"
+                                          disabled={isRejecting}
                                           onClick={() =>
-                                            showToast(
-                                              "Reprovação ainda não integrada.",
-                                              "info",
-                                            )
+                                            openRejectVaccineCardModal(card)
                                           }
                                         >
-                                          Reprovar
+                                          {isRejecting
+                                            ? "Reprovando..."
+                                            : "Reprovar"}
                                         </button>
-                                      </td>
-                                    </tr>
-                                  );
-                                })
+                                      </div>
+                                    ) : (
+                                      <em>Não enviado</em>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            <section className="melpet-vaccine-review-info">
+                              <h4>Informações adicionais</h4>
+                              {group.vacinas.length ? (
+                                <ul>
+                                  {group.vacinas.map((item) => {
+                                    const vencimento = item.duracao
+                                      ? addMonthsToDate(
+                                          item.dataAplicacao,
+                                          item.duracao,
+                                        )
+                                      : "";
+                                    return (
+                                      <li key={`${group.key}-${item.configId}`}>
+                                        <div className="melpet-vaccine-review-vaccine-main">
+                                          <strong>
+                                            {item.descricao || "Vacina"}
+                                          </strong>
+                                          <em>
+                                            {item.tipo || "Tipo não informado"}
+                                          </em>
+                                        </div>
+                                        <div className="melpet-vaccine-review-dates">
+                                          <span>
+                                            Data:{" "}
+                                            {formatBrazilDate(
+                                              item.dataAplicacao,
+                                            )}
+                                          </span>
+                                          <span>
+                                            Vencimento:{" "}
+                                            {vencimento
+                                              ? formatBrazilDate(vencimento)
+                                              : "Não informado"}
+                                          </span>
+                                        </div>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
                               ) : (
-                                <tr>
-                                  <td colSpan={5}>
-                                    Nenhuma carteira de vacinação encontrada.
-                                  </td>
-                                </tr>
+                                <p>Nenhuma informação preenchida.</p>
                               )}
-                            </tbody>
-                          </table>
-                        </div>
+                            </section>
+                            </article>
+                          ))
+                        ) : (
+                          <p className="melpet-validate-message">
+                            Nenhuma carteira de vacinação encontrada.
+                          </p>
+                        )}
                       </div>
-                    </div>
 
                     <div className="melpet-user-docs-actions">
                       <Button
@@ -4031,8 +4739,9 @@ export default function MelPetHostel({
                         Fechar
                       </Button>
                     </div>
-                  </div>
-                ) : null}
+                    </div>
+                  ) : null}
+                </div>
               </section>
             ) : null}
 
@@ -4127,9 +4836,14 @@ export default function MelPetHostel({
                                         const isConferido = Boolean(
                                           file?.conferido,
                                         );
+                                        const itemKey = buildConferirKey(file);
                                         const isConferindo =
-                                          buildConferirKey(file) ===
-                                          conferindoItemKey;
+                                          itemKey === conferindoItemKey;
+                                        const isRejectingDocument =
+                                          itemKey === rejectingDocumentKey;
+                                        const canRejectDocument =
+                                          file?.tipoRegistro === "documento" &&
+                                          Number(file?.documentoId) > 0;
                                         const hasConferirTarget =
                                           file?.tipoRegistro === "contrato"
                                             ? Number(file?.contratoId) > 0 &&
@@ -4179,14 +4893,18 @@ export default function MelPetHostel({
                                               <button
                                                 type="button"
                                                 className="melpet-review-btn melpet-review-btn--reject"
+                                                disabled={
+                                                  isConferido ||
+                                                  isRejectingDocument ||
+                                                  !canRejectDocument
+                                                }
                                                 onClick={() =>
-                                                  showToast(
-                                                    "Reprovação ainda não integrada.",
-                                                    "info",
-                                                  )
+                                                  openRejectDocumentModal(file)
                                                 }
                                               >
-                                                Reprovar
+                                                {isRejectingDocument
+                                                  ? "Reprovando..."
+                                                  : "Reprovar"}
                                               </button>
                                             </td>
                                           </tr>
@@ -4320,19 +5038,39 @@ export default function MelPetHostel({
                           selectedSupportFiles[field.key];
                         const isUploadingThis =
                           uploadingSupportKey === field.key;
-                        const isConcluded =
-                          documentStatusByKey[field.key]?.existsDb &&
-                          documentStatusByKey[field.key]?.existsDisk;
+                        const docStatus =
+                          documentStatusByKey[field.key] || {};
+                        const statusValue = String(
+                          docStatus.status || "pendente",
+                        ).toLowerCase();
+                        const isRejected = statusValue === "reprovado";
+                        const isConcluded = isSupportDocumentSubmitted(
+                          field.key,
+                        );
                         const identifiedCount =
-                          documentStatusByKey[field.key]?.identifiedCount || 0;
+                          docStatus.identifiedCount || 0;
                         const supportActionDisabled =
                           Boolean(uploadingSupportKey) ||
                           (field.required && isConcluded);
+                        const statusClass = isRejected
+                          ? "rejected"
+                          : isConcluded
+                            ? "done"
+                            : "pending";
+                        const statusLabel = isRejected
+                          ? "Reprovado"
+                          : isConcluded
+                            ? "Enviado para conferencia"
+                            : "Pendente";
                         return (
                           <li
                             key={field.key}
                             className={`melpet-upload-doc-item ${
-                              isConcluded ? "is-done" : "is-pending"
+                              isRejected
+                                ? "is-rejected"
+                                : isConcluded
+                                  ? "is-done"
+                                  : "is-pending"
                             }`}
                           >
                             <div className="melpet-upload-doc-main">
@@ -4340,15 +5078,9 @@ export default function MelPetHostel({
                                 <strong>{field.label}</strong>
                                 {field.required ? (
                                   <span
-                                    className={
-                                      isConcluded
-                                        ? "melpet-doc-status melpet-doc-status--done"
-                                        : "melpet-doc-status melpet-doc-status--pending"
-                                    }
+                                    className={`melpet-doc-status melpet-doc-status--${statusClass}`}
                                   >
-                                    {isConcluded
-                                      ? "Enviado para conferência"
-                                      : "Pendente"}
+                                    {statusLabel}
                                   </span>
                                 ) : (
                                   <span>
@@ -4371,6 +5103,29 @@ export default function MelPetHostel({
                                     : "Upload"}
                               </Button>
                             </div>
+
+                            {isRejected ? (
+                                <div className="melpet-vaccine-rejection-notice melpet-document-rejection-notice">
+                                  <strong>Detalhes da reprovacao</strong>
+                                  <dl>
+                                    <div>
+                                      <dt>Documento:</dt>
+                                      <dd>{field.label}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Status:</dt>
+                                      <dd>Reprovado</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Motivo:</dt>
+                                      <dd>
+                                        {docStatus.motivoReprovacao ||
+                                          "Motivo nao informado."}
+                                      </dd>
+                                    </div>
+                                  </dl>
+                                </div>
+                              ) : null}
 
                             <input
                               ref={(el) => {
@@ -4436,6 +5191,10 @@ export default function MelPetHostel({
           await loadContractStatus();
         }}
       />
+
+      {deletePetModal}
+      {rejectDocumentModal}
+      {rejectVaccineCardModal}
 
       <Modal
         isOpen={Boolean(deleteWarningVaccineConfig)}

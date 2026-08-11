@@ -227,6 +227,110 @@
   padding-left: 18px;
 }
 
+.melpet-client-pet-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.melpet-client-pet-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.melpet-client-pet-status {
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.15;
+  padding: 4px 8px;
+}
+
+.melpet-client-pet-status--active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.melpet-client-pet-status--inactive {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.melpet-pet-status-admin {
+  min-width: 0;
+}
+
+.melpet-pet-status-results {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.melpet-pet-status-results > p {
+  margin: 0;
+}
+
+.melpet-pet-status-client {
+  display: grid;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.16);
+  border-radius: 8px;
+  background: var(--cor-branco);
+  padding: var(--spacing-sm);
+}
+
+.melpet-pet-status-client header {
+  display: grid;
+  gap: 2px;
+  color: var(--cor-marrom);
+}
+
+.melpet-pet-status-client header strong,
+.melpet-pet-status-client header span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.melpet-pet-status-client header span {
+  color: var(--cor-marrom-claro);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.melpet-pet-status-client ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.melpet-pet-status-row {
+  display: grid;
+  gap: 8px;
+  align-items: center;
+  border-top: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  padding-top: 8px;
+}
+
+.melpet-pet-status-row > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.melpet-pet-status-row > div strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.melpet-pet-status-row .btn {
+  width: 100%;
+}
+
 .melpet-vaccine-type-row {
   display: grid;
   gap: var(--spacing-sm);
@@ -1351,6 +1455,11 @@
   color: #92400e;
 }
 
+.melpet-vaccine-card-status--rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .melpet-vaccine-card-status--missing {
   background: #fee2e2;
   color: #991b1b;
@@ -1358,6 +1467,77 @@
 
 .melpet-vaccine-card-btn:hover {
   background: var(--cor-areia-claro);
+}
+
+.melpet-vaccine-card-btn:disabled {
+  cursor: default;
+  opacity: 0.82;
+}
+
+.melpet-vaccine-card-btn:disabled:hover {
+  background: #ffffff;
+}
+
+.melpet-pet-delete-btn.btn {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  width: 92px;
+  min-height: 100%;
+  padding: var(--spacing-sm);
+  border: 1px solid rgba(153, 27, 27, 0.22);
+  border-width: 1px 0 1px 1px;
+  border-radius: 0 8px 8px 0;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+}
+
+.melpet-pet-delete-btn.btn:hover:not(:disabled) {
+  background: #fecaca;
+  color: #7f1d1d;
+}
+
+.melpet-pet-delete-btn.btn:disabled {
+  background: #fee2e2;
+}
+
+.admin-page-delete-modal {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.admin-page-delete-modal p {
+  margin: 0;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-weight: 800;
+  line-height: 1.45;
+  padding: var(--spacing-sm);
+}
+
+.melpet-delete-pet-name {
+  display: block;
+  color: var(--cor-marrom);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.modal-actions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.modal-actions .btn {
+  width: 100%;
 }
 
 .melpet-vaccine-card-container {
@@ -1677,10 +1857,20 @@
 
 .melpet-docs-table th:nth-child(3),
 .melpet-docs-table td:nth-child(3),
-.melpet-docs-table th:nth-child(4),
-.melpet-docs-table td:nth-child(4),
 .melpet-docs-table th:nth-child(5),
-.melpet-docs-table td:nth-child(5) {
+.melpet-docs-table td:nth-child(5),
+.melpet-docs-table th:nth-child(4),
+.melpet-docs-table td:nth-child(4) {
+  text-align: center;
+}
+
+.melpet-vaccine-docs-table th:nth-child(3),
+.melpet-vaccine-docs-table td:nth-child(3) {
+  text-align: left;
+}
+
+.melpet-vaccine-docs-table th:nth-child(6),
+.melpet-vaccine-docs-table td:nth-child(6) {
   text-align: center;
 }
 
@@ -1762,12 +1952,279 @@
 
 .melpet-user-docs-container {
   margin-top: 12px;
+  min-width: 0;
 }
 
 .melpet-user-docs-actions {
   margin-top: 12px;
   display: flex;
   justify-content: flex-end;
+}
+
+.melpet-vaccine-review-list {
+  display: grid;
+  gap: 8px;
+  min-width: 220px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.melpet-vaccine-review-list li {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.melpet-vaccine-review-list strong,
+.melpet-vaccine-review-list span {
+  color: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+.melpet-vaccine-review-list strong {
+  font-size: 0.86rem;
+}
+
+.melpet-vaccine-review-list span {
+  font-size: 0.82rem;
+}
+
+.melpet-muted-cell {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.86rem;
+}
+
+.melpet-vaccine-review-stack {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin-top: var(--spacing-sm);
+}
+
+.melpet-vaccine-review-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid #93c5fd;
+  border-radius: 8px;
+  background: #dbeafe;
+  padding: 12px;
+}
+
+.melpet-vaccine-review-header {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #bfdbfe;
+  padding: 10px;
+}
+
+.melpet-vaccine-review-header strong {
+  color: var(--cor-marrom);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.melpet-vaccine-review-header span {
+  color: #1f2937;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.melpet-vaccine-review-docs,
+.melpet-vaccine-review-info ul {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.melpet-vaccine-review-doc {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+}
+
+.melpet-vaccine-review-doc > span {
+  color: var(--cor-marrom);
+  font-weight: 900;
+}
+
+.melpet-vaccine-review-doc em {
+  color: #64748b;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.melpet-vaccine-review-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  min-width: 0;
+}
+
+.melpet-vaccine-review-actions button {
+  width: 100%;
+}
+
+.melpet-vaccine-review-info {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid #e0f2fe;
+  border-radius: 8px;
+  background: #f8fbff;
+  padding: 12px;
+}
+
+.melpet-vaccine-review-info h4,
+.melpet-vaccine-review-info p {
+  margin: 0;
+}
+
+.melpet-vaccine-review-info h4 {
+  color: var(--cor-marrom);
+  font-size: 1rem;
+}
+
+.melpet-vaccine-review-info li {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #d7dee8;
+  background: #ffffff;
+}
+
+.melpet-vaccine-review-vaccine-main,
+.melpet-vaccine-review-dates {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.melpet-vaccine-review-info li strong {
+  color: #1f2937;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.melpet-vaccine-review-info li em {
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #075985;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.2;
+  padding: 5px 8px;
+  overflow-wrap: anywhere;
+}
+
+.melpet-vaccine-review-dates span {
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 7px 8px;
+  overflow-wrap: anywhere;
+}
+
+.melpet-reject-vaccine-modal {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.melpet-reject-vaccine-modal p {
+  margin: 0;
+  color: var(--cor-azul-cinza);
+  line-height: 1.45;
+}
+
+.melpet-vaccine-rejection-notice {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  background: #fff7f7;
+  color: #991b1b;
+  padding: 12px;
+}
+
+.melpet-vaccine-rejection-notice strong {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #7f1d1d;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  padding: 6px 9px;
+}
+
+.melpet-vaccine-rejection-notice dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.melpet-vaccine-rejection-notice dl + dl {
+  margin-top: 4px;
+}
+
+.melpet-vaccine-rejection-notice dl div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.melpet-vaccine-rejection-notice dt {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.melpet-vaccine-rejection-notice dd {
+  margin: 0;
+  color: #1f2937;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.melpet-vaccine-rejection-notice dl div:nth-child(2) dd {
+  width: fit-content;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  padding: 5px 8px;
+}
+
+.melpet-vaccine-rejection-notice dl div:nth-child(3) {
+  border-top: 1px solid #fee2e2;
+  padding-top: 10px;
 }
 
 .melpet-preview-modal-body {
@@ -1781,7 +2238,7 @@
   height: 75vh;
 }
 
-@media (max-width: 381px) {
+@media (max-width: 720px) {
   .melpet-docs-table {
     min-width: 0;
     display: block;
@@ -1841,6 +2298,22 @@
   .melpet-docs-table tbody td:nth-child(5)::before {
     content: "Reprovar: ";
   }
+
+  .melpet-vaccine-docs-table tbody td:nth-child(3)::before {
+    content: "Vacinas: ";
+  }
+
+  .melpet-vaccine-docs-table tbody td:nth-child(4)::before {
+    content: "Visualizar: ";
+  }
+
+  .melpet-vaccine-docs-table tbody td:nth-child(5)::before {
+    content: "Aprovar: ";
+  }
+
+  .melpet-vaccine-docs-table tbody td:nth-child(6)::before {
+    content: "Reprovar: ";
+  }
 }
 
 .page-content p {
@@ -1894,6 +2367,11 @@
 
 .melpet-upload-doc-item.is-pending {
   border-left-color: var(--cor-marrom);
+}
+
+.melpet-upload-doc-item.is-rejected {
+  border-left-color: #dc2626;
+  background: #fff7f7;
 }
 
 .melpet-upload-doc-copy {
@@ -2025,6 +2503,10 @@
 
 .melpet-doc-status--done {
   color: #1d4ed8;
+}
+
+.melpet-doc-status--rejected {
+  color: #b91c1c;
 }
 
 @media (min-width: 640px) {
@@ -2260,6 +2742,38 @@
     width: auto;
     min-width: 150px;
   }
+
+  .modal-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .modal-actions .btn {
+    width: auto;
+    min-width: 140px;
+  }
+
+  .melpet-pet-status-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .melpet-pet-status-row .btn {
+    width: auto;
+    min-width: 110px;
+  }
+
+  .melpet-vaccine-review-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .melpet-vaccine-review-info li {
+    gap: 12px;
+  }
+
+  .melpet-vaccine-review-dates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
 }
 
 @media (min-width: 960px) {

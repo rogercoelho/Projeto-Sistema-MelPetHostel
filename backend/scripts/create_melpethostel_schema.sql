@@ -18,24 +18,24 @@ CREATE TABLE IF NOT EXISTS Grupos (
   Nome_Grupo VARCHAR(191) NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS usuarios (
-  usuario_id INT AUTO_INCREMENT PRIMARY KEY,
-  cliente_id INT NULL,
-  usuario_login VARCHAR(191) NOT NULL UNIQUE,
-  usuario_senha VARCHAR(255) NOT NULL,
-  primeiro_acesso TINYINT(1) NOT NULL DEFAULT 1,
-  ativo TINYINT(1) NOT NULL DEFAULT 1,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  grupo_id INT NOT NULL,
-  INDEX idx_usuarios_cliente_id (cliente_id),
-  INDEX idx_usuarios_grupo_id (grupo_id),
+CREATE TABLE IF NOT EXISTS Usuarios (
+  Usuario_ID INT AUTO_INCREMENT PRIMARY KEY,
+  Cliente_ID INT NULL,
+  Usuario_Login VARCHAR(191) NOT NULL UNIQUE,
+  Usuario_Senha VARCHAR(255) NOT NULL,
+  Primeiro_Acesso TINYINT(1) NOT NULL DEFAULT 1,
+  Ativo TINYINT(1) NOT NULL DEFAULT 1,
+  Created_At DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  Updated_At DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  Grupo_ID INT NOT NULL,
+  INDEX idx_usuarios_cliente_id (Cliente_ID),
+  INDEX idx_usuarios_grupo_id (Grupo_ID),
   CONSTRAINT fk_usuarios_cliente
-    FOREIGN KEY (cliente_id)
+    FOREIGN KEY (Cliente_ID)
     REFERENCES Clientes (id)
     ON DELETE SET NULL,
   CONSTRAINT fk_usuarios_grupo
-    FOREIGN KEY (grupo_id)
+    FOREIGN KEY (Grupo_ID)
     REFERENCES Grupos (id)
     ON DELETE RESTRICT
 );
@@ -75,11 +75,13 @@ CREATE TABLE IF NOT EXISTS Documentos (
   Conferido TINYINT(1) NOT NULL DEFAULT 0,
   Conferido_At DATETIME NULL DEFAULT NULL,
   Conferido_Por VARCHAR(191) NULL DEFAULT NULL,
+  Status VARCHAR(50) NOT NULL DEFAULT 'pendente',
+  motivo_reprovacao TEXT NULL,
   File_Path VARCHAR(1024) NOT NULL,
   Created_At DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   Updated_At DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_mph_doc_usuario FOREIGN KEY (Usuario_ID)
-    REFERENCES usuarios (usuario_id)
+    REFERENCES Usuarios (Usuario_ID)
     ON DELETE CASCADE,
   CONSTRAINT fk_mph_doc_contrato FOREIGN KEY (Contrato_ID)
     REFERENCES Contratos (Contrato_ID)
@@ -88,8 +90,60 @@ CREATE TABLE IF NOT EXISTS Documentos (
     REFERENCES Documentos_Tipo (Id)
     ON DELETE RESTRICT,
   INDEX idx_mph_doc_usuario_contrato_tipo (Usuario_ID, Contrato_ID, Documento_Tipo_ID),
-  INDEX idx_mph_doc_conferido (Conferido)
+  INDEX idx_mph_doc_conferido (Conferido),
+  INDEX idx_mph_doc_status (Status)
 );
+
+SET @documentos_has_status = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'Documentos'
+     AND COLUMN_NAME = 'Status'
+);
+
+SET @sql = IF(
+  @documentos_has_status > 0,
+  'SELECT ''Documentos.Status ja existe'' AS status',
+  'ALTER TABLE `Documentos` ADD COLUMN `Status` VARCHAR(50) NOT NULL DEFAULT ''pendente'' AFTER `Conferido_Por`'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @documentos_has_motivo = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'Documentos'
+     AND LOWER(COLUMN_NAME) = LOWER('motivo_reprovacao')
+);
+
+SET @sql = IF(
+  @documentos_has_motivo > 0,
+  'SELECT ''Documentos.motivo_reprovacao ja existe'' AS status',
+  'ALTER TABLE `Documentos` ADD COLUMN `motivo_reprovacao` TEXT NULL AFTER `Status`'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @documentos_has_status_index = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.STATISTICS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'Documentos'
+     AND INDEX_NAME = 'idx_mph_doc_status'
+);
+
+SET @sql = IF(
+  @documentos_has_status_index > 0,
+  'SELECT ''Documentos.idx_mph_doc_status ja existe'' AS status',
+  'ALTER TABLE `Documentos` ADD INDEX `idx_mph_doc_status` (`Status`)'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 CREATE TABLE IF NOT EXISTS TelegramUsers (
   id INT AUTO_INCREMENT PRIMARY KEY,

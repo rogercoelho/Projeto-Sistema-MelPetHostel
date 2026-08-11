@@ -8,6 +8,7 @@ const {
   buildSupportDocumentFileName,
   checkAllRequiredDocsConcluded,
   dbFor,
+  ensureUserDocumentStorage,
   fileExistsByStoredPath,
   fileExistsOnDisk,
   fs,
@@ -30,10 +31,26 @@ const {
   requireCompleteClienteCadastro,
   resolveTableName,
   resolveUploadsDirToDisk,
-  resolveUserDocumentsRelativeDir,
   toPublicUploadPath,
   uploadContrato,
 } = require("./context");
+
+function clean(value) {
+  return value === undefined || value === null ? "" : String(value).trim();
+}
+
+function normalizeReviewStatus(value) {
+  const status = clean(value).toLowerCase();
+  if (["aprovado", "reprovado", "pendente"].includes(status)) return status;
+  return "";
+}
+
+function isDocumentApproved(row) {
+  const status = normalizeReviewStatus(row?.docStatus);
+  if (status === "reprovado") return false;
+  if (status === "aprovado") return true;
+  return isTruthyFlag(row?.docConferidoFlag) || isValidDbDate(row?.docConferidoAt);
+}
 
 router.get("/documentos/pendentes", async (req, res) => {
   try {
@@ -205,6 +222,14 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
         `d.${qcol(docsMeta.conferidoPorCol)} AS docConferidoPor`,
       );
     }
+    if (docsMeta.statusCol) {
+      docsSelectCols.push(`d.${qcol(docsMeta.statusCol)} AS docStatus`);
+    }
+    if (docsMeta.motivoReprovacaoCol) {
+      docsSelectCols.push(
+        `d.${qcol(docsMeta.motivoReprovacaoCol)} AS docMotivoReprovacao`,
+      );
+    }
 
     const [docRows] = await dbFor(req).query(
       `
@@ -223,9 +248,8 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
       if (!storedPath) continue;
       const existsDisk = await fileExistsByStoredPath(storedPath);
       const fileName = path.basename(storedPath);
-      const conferido =
-        isTruthyFlag(doc?.docConferidoFlag) ||
-        isValidDbDate(doc?.docConferidoAt);
+      const status = normalizeReviewStatus(doc?.docStatus);
+      const conferido = isDocumentApproved(doc);
       arquivos.push({
         tipoRegistro: "documento",
         documentoId: doc?.docId || null,
@@ -235,6 +259,9 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
         fileUrl: existsDisk ? toPublicUploadPath(storedPath) : null,
         existsDisk,
         conferido,
+        status: status || (conferido ? "aprovado" : "pendente"),
+        motivoReprovacao:
+          status === "reprovado" ? clean(doc?.docMotivoReprovacao) : "",
         conferidoAt: doc?.docConferidoAt || null,
         conferidoPor: doc?.docConferidoPor || null,
       });
@@ -271,7 +298,7 @@ router.post("/documentos/:documentoId/conferir", async (req, res) => {
         .json({ status: "erro", mensagem: "documentoId inválido" });
     }
 
-    const docsMeta = await getDocumentosTableMeta(req);
+    let docsMeta = await getDocumentosTableMeta(req);
     if (!docsMeta.exists || !docsMeta.idCol) {
       return res.status(500).json({
         status: "erro",
@@ -288,6 +315,14 @@ router.post("/documentos/:documentoId/conferir", async (req, res) => {
         status: "erro",
         mensagem:
           `Colunas de conferência ausentes em ${TABLE_NAMES.documentos}. Execute o script add_conferido_columns_to_melpethostel_documentos.sql.`,
+      });
+    }
+
+    if (!docsMeta.statusCol || !docsMeta.motivoReprovacaoCol) {
+      return res.status(500).json({
+        status: "erro",
+        mensagem:
+          "Colunas Status e motivo_reprovacao ausentes em Documentos. Execute o schema principal.",
       });
     }
 
@@ -312,7 +347,9 @@ router.post("/documentos/:documentoId/conferir", async (req, res) => {
         UPDATE ${qtable(docsMeta.tableName)}
         SET ${qcol(docsMeta.conferidoCol)} = 1,
             ${qcol(docsMeta.conferidoAtCol)} = NOW(),
-            ${qcol(docsMeta.conferidoPorCol)} = ?
+            ${qcol(docsMeta.conferidoPorCol)} = ?,
+            ${qcol(docsMeta.statusCol)} = 'aprovado',
+            ${qcol(docsMeta.motivoReprovacaoCol)} = NULL
         WHERE ${qcol(docsMeta.idCol)} = ?
       `,
       [login, documentoId],
@@ -330,6 +367,106 @@ router.post("/documentos/:documentoId/conferir", async (req, res) => {
   } catch (error) {
     console.error(
       "Error in POST /melpethostel/documentos/:documentoId/conferir:",
+      error,
+    );
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.post("/documentos/:documentoId/reprovar", async (req, res) => {
+  try {
+    const login = getReqLogin(req);
+    if (!login) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Usuario nao identificado" });
+    }
+
+    const documentoId = Number(req.params.documentoId);
+    if (!Number.isInteger(documentoId) || documentoId <= 0) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "documentoId invalido" });
+    }
+
+    const motivoReprovacao = clean(req.body?.motivoReprovacao);
+    if (!motivoReprovacao) {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Informe o motivo da reprovacao.",
+      });
+    }
+
+    let docsMeta = await getDocumentosTableMeta(req);
+    if (!docsMeta.exists || !docsMeta.idCol) {
+      return res.status(500).json({
+        status: "erro",
+        mensagem: `Tabela ${TABLE_NAMES.documentos} nao esta pronta.`,
+      });
+    }
+
+    if (
+      !docsMeta.conferidoCol ||
+      !docsMeta.conferidoAtCol ||
+      !docsMeta.conferidoPorCol
+    ) {
+      return res.status(500).json({
+        status: "erro",
+        mensagem: `Colunas de conferencia ausentes em ${TABLE_NAMES.documentos}.`,
+      });
+    }
+
+    if (!docsMeta.statusCol || !docsMeta.motivoReprovacaoCol) {
+      return res.status(500).json({
+        status: "erro",
+        mensagem:
+          "Colunas Status e motivo_reprovacao ausentes em Documentos. Execute o schema principal.",
+      });
+    }
+
+    const [existingRows] = await dbFor(req).query(
+      `
+        SELECT ${qcol(docsMeta.idCol)} AS id
+        FROM ${qtable(docsMeta.tableName)}
+        WHERE ${qcol(docsMeta.idCol)} = ?
+        LIMIT 1
+      `,
+      [documentoId],
+    );
+
+    if (!existingRows || !existingRows.length) {
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Documento nao encontrado" });
+    }
+
+    await dbFor(req).query(
+      `
+        UPDATE ${qtable(docsMeta.tableName)}
+        SET ${qcol(docsMeta.conferidoCol)} = 0,
+            ${qcol(docsMeta.conferidoAtCol)} = NOW(),
+            ${qcol(docsMeta.conferidoPorCol)} = ?,
+            ${qcol(docsMeta.statusCol)} = 'reprovado',
+            ${qcol(docsMeta.motivoReprovacaoCol)} = ?
+        WHERE ${qcol(docsMeta.idCol)} = ?
+      `,
+      [login, motivoReprovacao, documentoId],
+    );
+
+    return res.json({
+      status: "sucesso",
+      mensagem: "Documento reprovado com sucesso.",
+      documento: {
+        id: documentoId,
+        status: "reprovado",
+        motivoReprovacao,
+        conferido: false,
+        conferidoPor: login,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "Error in POST /melpethostel/documentos/:documentoId/reprovar:",
       error,
     );
     return res.status(500).json({ status: "erro", mensagem: error.message });
@@ -395,7 +532,11 @@ router.get("/documentos/status", async (req, res) => {
     const [docRows] = await dbFor(req).query(
       `
         SELECT ${qcol(docsMeta.tipoIdCol)} AS tipoId,
-               ${qcol(docsMeta.filePathCol)} AS filePath
+               ${qcol(docsMeta.filePathCol)} AS filePath,
+               ${docsMeta.conferidoCol ? qcol(docsMeta.conferidoCol) : "0"} AS docConferidoFlag,
+               ${docsMeta.conferidoAtCol ? qcol(docsMeta.conferidoAtCol) : "NULL"} AS docConferidoAt,
+               ${docsMeta.statusCol ? qcol(docsMeta.statusCol) : "'pendente'"} AS docStatus,
+               ${docsMeta.motivoReprovacaoCol ? qcol(docsMeta.motivoReprovacaoCol) : "NULL"} AS docMotivoReprovacao
         FROM ${qtable(docsMeta.tableName)}
         WHERE ${qcol(docsMeta.usuarioIdCol)} = ?
           AND ${qcol(docsMeta.contratoIdCol)} = ?
@@ -432,6 +573,10 @@ router.get("/documentos/status", async (req, res) => {
       const existsDisk = identifiedCount > 0;
 
       const requiredKey = mapRequiredDocKey(tipo.Documento_Tipo);
+      const storedStatus = normalizeReviewStatus(doc?.docStatus);
+      const approved = isDocumentApproved(doc);
+      const status = storedStatus || (approved ? "aprovado" : "pendente");
+
       documentos.push({
         tipoId: tipo.Id,
         tipoNome: tipo.Documento_Tipo,
@@ -440,7 +585,9 @@ router.get("/documentos/status", async (req, res) => {
         existsDb,
         existsDisk,
         identifiedCount,
-        status: existsDb && existsDisk ? "concluido" : "pendente",
+        status: existsDb && existsDisk ? status : "pendente",
+        motivoReprovacao:
+          status === "reprovado" ? clean(doc?.docMotivoReprovacao) : "",
         filePath: doc && doc.filePath ? doc.filePath : null,
       });
     }
@@ -529,7 +676,7 @@ router.post(
         });
       }
 
-      const userDirData = await resolveUserDocumentsRelativeDir(req, login);
+      const userDirData = await ensureUserDocumentStorage(req, login);
       if (!userDirData) {
         return res.status(400).json({
           status: "erro",
@@ -540,9 +687,8 @@ router.post(
       const { relativeDir, safeUsuario } = userDirData;
       const docKey = mapRequiredDocKey(tipo.Documento_Tipo);
       const diskDir = resolveUploadsDirToDisk(relativeDir);
-      await fs.mkdir(diskDir, { recursive: true });
 
-      const docsMeta = await getDocumentosTableMeta(req);
+      let docsMeta = await getDocumentosTableMeta(req);
       if (
         !docsMeta.exists ||
         !docsMeta.idCol ||
@@ -556,6 +702,20 @@ router.post(
           mensagem: `Tabela ${TABLE_NAMES.documentos} nao esta pronta para upload (colunas obrigatorias ausentes).`,
         });
       }
+
+      const insertColumnValues = [
+        [docsMeta.usuarioIdCol, userRow.Usuario_ID],
+        [docsMeta.contratoIdCol, contratoId],
+        [docsMeta.tipoIdCol, tipo.Id],
+        [docsMeta.filePathCol, null],
+        [docsMeta.statusCol, "pendente"],
+        [docsMeta.motivoReprovacaoCol, null],
+        [docsMeta.conferidoCol, 0],
+        [docsMeta.conferidoAtCol, null],
+        [docsMeta.conferidoPorCol, null],
+      ].filter(([column]) => Boolean(column));
+      const insertColumns = insertColumnValues.map(([column]) => column);
+      const insertPlaceholders = insertColumns.map(() => "?").join(", ");
 
       const [existingRows] = await dbFor(req).query(
         `
@@ -595,46 +755,53 @@ router.post(
 
       const filePath = `${relativeDir}/${finalFileName}`.replace(/\\/g, "/");
 
+      const insertValues = insertColumnValues.map(([column, value]) =>
+        column === docsMeta.filePathCol ? filePath : value,
+      );
+      const resetAssignments = [`${qcol(docsMeta.filePathCol)} = ?`];
+      const resetValues = [filePath];
+      if (docsMeta.statusCol) {
+        resetAssignments.push(`${qcol(docsMeta.statusCol)} = 'pendente'`);
+      }
+      if (docsMeta.motivoReprovacaoCol) {
+        resetAssignments.push(`${qcol(docsMeta.motivoReprovacaoCol)} = NULL`);
+      }
+      if (docsMeta.conferidoCol) {
+        resetAssignments.push(`${qcol(docsMeta.conferidoCol)} = 0`);
+      }
+      if (docsMeta.conferidoAtCol) {
+        resetAssignments.push(`${qcol(docsMeta.conferidoAtCol)} = NULL`);
+      }
+      if (docsMeta.conferidoPorCol) {
+        resetAssignments.push(`${qcol(docsMeta.conferidoPorCol)} = NULL`);
+      }
+
       if (docKey === "outros") {
         await dbFor(req).query(
           `
             INSERT INTO ${qtable(docsMeta.tableName)}
-              (${[
-                docsMeta.usuarioIdCol,
-                docsMeta.contratoIdCol,
-                docsMeta.tipoIdCol,
-                docsMeta.filePathCol,
-              ]
-                .map(qcol)
-                .join(", ")})
-            VALUES (?, ?, ?, ?)
+              (${insertColumns.map(qcol).join(", ")})
+            VALUES (${insertPlaceholders})
           `,
-          [userRow.Usuario_ID, contratoId, tipo.Id, filePath],
+          insertValues,
         );
       } else if (existingRows && existingRows.length) {
         await dbFor(req).query(
           `
             UPDATE ${qtable(docsMeta.tableName)}
-            SET ${qcol(docsMeta.filePathCol)} = ?
+            SET ${resetAssignments.join(",\n                ")}
             WHERE ${qcol(docsMeta.idCol)} = ?
           `,
-          [filePath, existingRows[0].id],
+          [...resetValues, existingRows[0].id],
         );
       } else {
         await dbFor(req).query(
           `
             INSERT INTO ${qtable(docsMeta.tableName)}
-              (${[
-                docsMeta.usuarioIdCol,
-                docsMeta.contratoIdCol,
-                docsMeta.tipoIdCol,
-                docsMeta.filePathCol,
-              ]
-                .map(qcol)
-                .join(", ")})
-            VALUES (?, ?, ?, ?)
+              (${insertColumns.map(qcol).join(", ")})
+            VALUES (${insertPlaceholders})
           `,
-          [userRow.Usuario_ID, contratoId, tipo.Id, filePath],
+          insertValues,
         );
       }
 

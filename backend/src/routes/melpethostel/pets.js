@@ -6,10 +6,12 @@ const {
 const {
   TABLE_NAMES,
   dbFor,
+  ensureUserDocumentStorage,
   fs,
   getCurrentClienteId,
   getReqLogin,
   getUsuarioByLogin,
+  movePetDocumentsToExpurgo,
   parseJsonArray,
   path,
   qcol,
@@ -17,7 +19,6 @@ const {
   requireCompleteClienteCadastro,
   resolveTableName,
   resolveUploadsDirToDisk,
-  resolveUserDocumentsRelativeDir,
   toPublicUploadPath,
   toJsonText,
   toText,
@@ -101,6 +102,24 @@ async function requireCarteirasTable(req, res) {
   return tableName;
 }
 
+async function ensureCarteiraRejectionReasonColumn(req, tableName) {
+  const [rows] = await dbFor(req).query(
+    `
+      SELECT COUNT(*) AS total
+        FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = ?
+         AND COLUMN_NAME = 'motivo_reprovacao'
+    `,
+    [tableName],
+  );
+  if (Number(rows?.[0]?.total || 0) > 0) return;
+
+  await dbFor(req).query(
+    `ALTER TABLE ${qtable(tableName)} ADD COLUMN motivo_reprovacao TEXT NULL AFTER status`,
+  );
+}
+
 function mapCarteiraRow(row) {
   return {
     id: row.id,
@@ -114,6 +133,7 @@ function mapCarteiraRow(row) {
     conferidoAt: row.conferido_at || null,
     conferidoPor: row.conferido_por || null,
     status: row.status || "pendente",
+    motivoReprovacao: row.motivo_reprovacao || "",
     petNome: row.pet_nome || "",
     clienteNome: row.cliente_nome || "",
   };
@@ -435,6 +455,7 @@ router.get("/pets", async (req, res) => {
           SELECT *
           FROM ${qtable(carteirasTable)}
           WHERE cliente_id = ?
+            AND (status IS NULL OR status <> 'expurgado')
           ORDER BY created_at DESC, id DESC
         `,
         [clienteId],
@@ -540,11 +561,62 @@ router.get("/pets/carteiras-vacinacao/pendentes", async (req, res) => {
         INNER JOIN ${qtable(clientesTable)} c ON c.id = cv.cliente_id
         WHERE (cv.conferido IS NULL OR cv.conferido = 0)
           AND (cv.status IS NULL OR cv.status <> 'aprovado')
+          AND (cv.status IS NULL OR cv.status <> 'expurgado')
+          AND (cv.status IS NULL OR cv.status <> 'reprovado')
+          AND p.ativo = 1
         ORDER BY cv.created_at ASC, cv.id ASC
       `,
     );
 
     const carteiras = (rows || []).map(mapCarteiraRow);
+    const petIds = Array.from(
+      new Set(carteiras.map((item) => Number(item.petId)).filter(Boolean)),
+    );
+
+    if (petIds.length) {
+      const respostasTable = await resolveTableName(
+        req,
+        TABLE_NAMES.petVacinasRespostas,
+      );
+      const configs = await getVaccineConfigs(req);
+      const configById = new Map(
+        configs.map((config) => [Number(config.id), config]),
+      );
+
+      if (respostasTable) {
+        const placeholders = petIds.map(() => "?").join(", ");
+        const [responseRows] = await dbFor(req).query(
+          `
+            SELECT pet_id, config_id, valor, data_aplicacao
+            FROM ${qtable(respostasTable)}
+            WHERE pet_id IN (${placeholders})
+            ORDER BY pet_id ASC, config_id ASC
+          `,
+          petIds,
+        );
+        const responsesByPetId = new Map();
+        for (const row of responseRows || []) {
+          const petId = Number(row.pet_id);
+          const config = configById.get(Number(row.config_id)) || {};
+          const tipo = (Array.isArray(config.tipos) ? config.tipos : []).find(
+            (item) => normalizeText(item.descricao) === normalizeText(row.valor),
+          );
+          const current = responsesByPetId.get(petId) || [];
+          current.push({
+            configId: row.config_id,
+            descricao: config.descricao || "",
+            tipo: row.valor || "",
+            duracao: tipo?.duracao || "",
+            dataAplicacao: row.data_aplicacao || "",
+          });
+          responsesByPetId.set(petId, current);
+        }
+
+        for (const carteira of carteiras) {
+          carteira.vacinas = responsesByPetId.get(Number(carteira.petId)) || [];
+        }
+      }
+    }
 
     return res.json({ status: "sucesso", carteiras });
   } catch (error) {
@@ -580,7 +652,12 @@ async function getPetOnboardingData(req, pet) {
 
   if (carteirasTable) {
     const [rows] = await dbFor(req).query(
-      `SELECT * FROM ${qtable(carteirasTable)} WHERE pet_id = ? ORDER BY id ASC`,
+      `SELECT *
+         FROM ${qtable(carteirasTable)}
+        WHERE pet_id = ?
+          AND (status IS NULL OR status <> 'expurgado')
+          AND (status IS NULL OR status <> 'reprovado')
+        ORDER BY id ASC`,
       [pet.id],
     );
     for (const row of rows || []) {
@@ -827,13 +904,15 @@ router.post("/pets/carteiras-vacinacao/:id/aprovar", async (req, res) => {
     }
 
     const login = getReqLogin(req) || "administrador";
+    await ensureCarteiraRejectionReasonColumn(req, tableName);
     const [result] = await dbFor(req).query(
       `
         UPDATE ${qtable(tableName)}
            SET conferido = 1,
                conferido_at = NOW(),
                conferido_por = ?,
-               status = 'aprovado'
+               status = 'aprovado',
+               motivo_reprovacao = NULL
          WHERE id = ?
       `,
       [login, id],
@@ -905,7 +984,7 @@ router.post(
       const tableName = await requireCarteirasTable(req, res);
       if (!tableName) return;
 
-      const userDirData = await resolveUserDocumentsRelativeDir(req, login);
+      const userDirData = await ensureUserDocumentStorage(req, login);
       if (!userDirData) {
         return res.status(400).json({
           status: "erro",
@@ -915,7 +994,6 @@ router.post(
 
       const relativeDir = userDirData.relativeDir;
       const diskDir = resolveUploadsDirToDisk(relativeDir);
-      await fs.mkdir(diskDir, { recursive: true });
 
       const baseName = normalizeFileNamePart(
         `Carteira de Vacinacao ${normalizeCarteiraSide(req.body?.lado)} - ${pet.nome} ${todayFileDate()}`,
@@ -990,6 +1068,128 @@ router.post(
     }
   },
 );
+
+router.delete("/pets/:petId", async (req, res) => {
+  try {
+    const login = getReqLogin(req);
+    const clienteId = await getCurrentClienteId(req);
+    const petId = Number(req.params.petId);
+    if (!login || !clienteId || !Number.isInteger(petId) || petId <= 0) {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Pet ou cliente invalido para exclusao.",
+      });
+    }
+
+    const pet = await getPetByIdForCliente(req, petId, clienteId);
+    if (!pet) {
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Pet nao encontrado." });
+    }
+
+    const petsTable = await resolveTableName(req, TABLE_NAMES.pets);
+    if (!petsTable) {
+      return res.status(500).json({
+        status: "erro",
+        mensagem: "Tabela Pets nao encontrada.",
+      });
+    }
+
+    const userDirData = await ensureUserDocumentStorage(req, login);
+    if (!userDirData) {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Usuario sem grupo configurado para mover documentos.",
+      });
+    }
+
+    await dbFor(req).beginTransaction();
+    try {
+      await dbFor(req).query(
+        `UPDATE ${qtable(petsTable)} SET ativo = 0 WHERE id = ? AND cliente_id = ?`,
+        [petId, clienteId],
+      );
+
+      const movedDocuments = await movePetDocumentsToExpurgo(req, {
+        petId,
+        clienteId,
+        login,
+      });
+
+      await dbFor(req).commit();
+
+      return res.json({
+        status: "sucesso",
+        mensagem: "Pet excluido com sucesso.",
+        pet: { id: petId, ativo: false },
+        documentosMovidos: movedDocuments,
+      });
+    } catch (error) {
+      await dbFor(req).rollback();
+      throw error;
+    }
+  } catch (error) {
+    console.error("Error in DELETE /melpethostel/pets/:petId:", error);
+    return res.status(500).json({
+      status: "erro",
+      mensagem: error?.message || "Nao foi possivel excluir o pet.",
+    });
+  }
+});
+
+router.post("/pets/carteiras-vacinacao/:id/reprovar", async (req, res) => {
+  try {
+    const tableName = await requireCarteirasTable(req, res);
+    if (!tableName) return;
+
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "ID da carteira invalido." });
+    }
+    const motivoReprovacao = clean(req.body?.motivoReprovacao);
+    if (!motivoReprovacao) {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Informe o motivo da reprovação.",
+      });
+    }
+
+    const login = getReqLogin(req) || "administrador";
+    await ensureCarteiraRejectionReasonColumn(req, tableName);
+    const [result] = await dbFor(req).query(
+      `
+        UPDATE ${qtable(tableName)}
+           SET conferido = 0,
+               conferido_at = NOW(),
+               conferido_por = ?,
+               status = 'reprovado',
+               motivo_reprovacao = ?
+         WHERE id = ?
+      `,
+      [login, motivoReprovacao, id],
+    );
+
+    if (!result || result.affectedRows === 0) {
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Carteira nao encontrada." });
+    }
+
+    return res.json({
+      status: "sucesso",
+      mensagem: "Carteira de vacinação reprovada com sucesso.",
+    });
+  } catch (error) {
+    console.error(
+      "Error in POST /melpethostel/pets/carteiras-vacinacao/:id/reprovar:",
+      error,
+    );
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
 
 router.post("/pets", async (req, res) => {
   let insertedPetId = null;

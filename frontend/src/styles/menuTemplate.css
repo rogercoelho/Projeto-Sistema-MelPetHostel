@@ -79,14 +79,30 @@
 
 .menu-template-item-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
   align-items: stretch;
 }
 
-.menu-template-item-leading {
+.menu-template-item-row.has-leading-action.has-trailing-action {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.menu-template-item-row.has-leading-action:not(.has-trailing-action) {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.menu-template-item-row.has-trailing-action:not(.has-leading-action) {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.menu-template-item-leading,
+.menu-template-item-trailing {
   display: flex;
   align-items: stretch;
   min-width: 0;
+}
+
+.menu-template-item-trailing {
+  padding: 0;
 }
 
 button.menu-template-item-button {

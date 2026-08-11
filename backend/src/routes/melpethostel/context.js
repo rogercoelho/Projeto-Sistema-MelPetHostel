@@ -67,6 +67,12 @@ function sanitizePart(value) {
     .replace(/\s+/g, "_");
 }
 
+function sanitizeStoredPathPart(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[\\/\\\\:?"<>|*]/g, "-");
+}
+
 function normalizeUploadsDir(rawPath) {
   const raw = String(rawPath || "")
     .trim()
@@ -99,7 +105,7 @@ function resolveUploadsDirToDisk(relativeDir) {
   const root = path.resolve(uploadsRootDefault);
   const abs = path.resolve(path.join(uploadsRootDefault, ...parts));
   if (!abs.startsWith(root)) {
-    throw new Error("Caminho de upload inválido");
+    throw new Error("Caminho de upload invÃ¡lido");
   }
   return abs;
 }
@@ -108,11 +114,11 @@ function resolveUploadsFileToDisk(rawPath) {
   const cleaned = String(rawPath || "")
     .replace(/^\/?(?:melpethostel\/)?uploads\/?/i, "")
     .replace(/\\/g, "/");
-  const parts = cleaned.split("/").filter(Boolean).map(sanitizePart);
+  const parts = cleaned.split("/").filter(Boolean).map(sanitizeStoredPathPart);
   const root = path.resolve(uploadsRootDefault);
   const abs = path.resolve(path.join(uploadsRootDefault, ...parts));
   if (!abs.startsWith(root)) {
-    throw new Error("Caminho de upload inválido");
+    throw new Error("Caminho de upload invÃ¡lido");
   }
   return abs;
 }
@@ -491,6 +497,128 @@ async function resolveUserDocumentsRelativeDir(req, login) {
   };
 }
 
+function resolveUserExpurgoRelativeDir(relativeDir) {
+  const normalized = normalizeUploadsDir(relativeDir);
+  if (!normalized) return null;
+
+  return normalized.replace(/\/Documentos\/?$/i, "/expurgo");
+}
+
+async function ensureUserDocumentStorage(req, login) {
+  const userDirData = await resolveUserDocumentsRelativeDir(req, login);
+  if (!userDirData) return null;
+
+  const documentosDir = resolveUploadsDirToDisk(userDirData.relativeDir);
+  await fs.mkdir(documentosDir, { recursive: true });
+
+  const expurgoRelativeDir = resolveUserExpurgoRelativeDir(
+    userDirData.relativeDir,
+  );
+  if (expurgoRelativeDir) {
+    const expurgoDir = resolveUploadsDirToDisk(expurgoRelativeDir);
+    await fs.mkdir(expurgoDir, { recursive: true });
+  }
+
+  return {
+    ...userDirData,
+    expurgoRelativeDir,
+  };
+}
+
+async function moveUploadFileToRelativeDir(rawFilePath, targetRelativeDir) {
+  const sourcePath = String(rawFilePath || "").trim();
+  if (!sourcePath || !targetRelativeDir) return null;
+
+  const sourceDiskPath = resolveUploadsFileToDisk(sourcePath);
+  const fileName = path.basename(sourcePath);
+  if (!fileName) return null;
+
+  const targetDiskDir = resolveUploadsDirToDisk(targetRelativeDir);
+  await fs.mkdir(targetDiskDir, { recursive: true });
+
+  let targetName = fileName;
+  let targetDiskPath = path.join(targetDiskDir, targetName);
+  const parsed = path.parse(fileName);
+  for (let index = 1; ; index += 1) {
+    try {
+      await fs.access(targetDiskPath);
+      targetName = `${parsed.name}-${index}${parsed.ext}`;
+      targetDiskPath = path.join(targetDiskDir, targetName);
+    } catch {
+      break;
+    }
+  }
+
+  try {
+    await fs.rename(sourceDiskPath, targetDiskPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    await fs.copyFile(sourceDiskPath, targetDiskPath);
+    await fs.unlink(sourceDiskPath);
+  }
+
+  return `${targetRelativeDir}/${targetName}`.replace(/\\/g, "/");
+}
+
+async function getUsuarioLoginByClienteId(req, clienteId) {
+  if (!clienteId) return null;
+
+  const usuarios = await Usuario.list(req);
+  const usuario = (usuarios || []).find(
+    (item) => Number(item?.Cliente_ID || item?.clienteId) === Number(clienteId),
+  );
+  return usuario?.Usuario_Login || usuario?.login || null;
+}
+
+async function movePetDocumentsToExpurgo(req, { petId, clienteId, login }) {
+  if (!petId || !clienteId || !login) return 0;
+
+  const carteirasTable = await resolveTableName(
+    req,
+    TABLE_NAMES.petCarteirasVacinacao,
+  );
+  if (!carteirasTable) return 0;
+
+  const userDirData = await ensureUserDocumentStorage(req, login);
+  if (!userDirData) return 0;
+
+  const expurgoRelativeDir =
+    userDirData.expurgoRelativeDir ||
+    resolveUserExpurgoRelativeDir(userDirData.relativeDir);
+  if (!expurgoRelativeDir) return 0;
+
+  const [carteiras] = await dbFor(req).query(
+    `SELECT id, file_path FROM ${qtable(carteirasTable)}
+      WHERE pet_id = ? AND cliente_id = ?`,
+    [petId, clienteId],
+  );
+
+  let movedDocuments = 0;
+  for (const carteira of carteiras || []) {
+    const currentFilePath = String(carteira.file_path || "").trim();
+    const alreadyInExpurgo = /\/expurgo\//i.test(
+      currentFilePath.replace(/\\/g, "/"),
+    );
+    const newFilePath = alreadyInExpurgo
+      ? currentFilePath
+      : await moveUploadFileToRelativeDir(currentFilePath, expurgoRelativeDir);
+
+    await dbFor(req).query(
+      `UPDATE ${qtable(carteirasTable)}
+          SET file_path = ?,
+              conferido = 0,
+              conferido_at = NULL,
+              conferido_por = NULL,
+              status = 'expurgado'
+        WHERE id = ?`,
+      [newFilePath || currentFilePath, carteira.id],
+    );
+    if (newFilePath && !alreadyInExpurgo) movedDocuments += 1;
+  }
+
+  return movedDocuments;
+}
+
 async function ensureDocumentoTiposSeeded(req) {
   const tableName = await resolveTableName(req, TABLE_NAMES.documentosTipo);
   if (!tableName) {
@@ -625,6 +753,11 @@ async function getDocumentosTableMeta(req) {
       "Checked_By",
       "checked_by",
     ]),
+    statusCol: pickColumn(columnsLowerMap, ["Status", "status"]),
+    motivoReprovacaoCol: pickColumn(columnsLowerMap, [
+      "motivo_reprovacao",
+      "Motivo_Reprovacao",
+    ]),
   };
 }
 
@@ -680,7 +813,8 @@ async function checkAllRequiredDocsConcluded(req, userId, contratoId) {
     const [docRows] = await dbFor(req).query(
       `
         SELECT ${qcol(docsMeta.idCol)} AS id,
-               ${qcol(docsMeta.filePathCol)} AS filePath
+               ${qcol(docsMeta.filePathCol)} AS filePath,
+               ${docsMeta.statusCol ? qcol(docsMeta.statusCol) : "'pendente'"} AS status
         FROM ${qtable(docsMeta.tableName)}
         WHERE ${qcol(docsMeta.usuarioIdCol)} = ?
           AND ${qcol(docsMeta.contratoIdCol)} = ?
@@ -697,6 +831,9 @@ async function checkAllRequiredDocsConcluded(req, userId, contratoId) {
     let hasAnyValidFile = false;
     for (const row of docRows) {
       if (!row?.filePath) continue;
+      if (String(row.status || "").trim().toLowerCase() === "reprovado") {
+        continue;
+      }
       if (await fileExistsByStoredPath(row.filePath)) {
         hasAnyValidFile = true;
         break;
@@ -799,6 +936,7 @@ module.exports = {
   fileExistsByStoredPath,
   fileExistsOnDisk,
   fs,
+  ensureUserDocumentStorage,
   getClienteCadastroStatusByLogin,
   getContratosTableMeta,
   getCurrentClienteId,
@@ -810,6 +948,7 @@ module.exports = {
   getReqGrupo,
   getReqLogin,
   getUsuarioById,
+  getUsuarioLoginByClienteId,
   getUsuarioByLogin,
   isAdminUser,
   isContratoConferido,
@@ -819,6 +958,8 @@ module.exports = {
   isValidDbDate,
   listUsuariosForDocuments,
   mapRequiredDocKey,
+  movePetDocumentsToExpurgo,
+  moveUploadFileToRelativeDir,
   normalizeDocumentUser,
   normalizeDocumentoTipo,
   normalizeText,
@@ -832,6 +973,7 @@ module.exports = {
   resolveTableName,
   resolveUploadsDirToDisk,
   resolveUploadsFileToDisk,
+  resolveUserExpurgoRelativeDir,
   resolveUserDocumentsRelativeDir,
   sanitizePart,
   toJsonText,

@@ -12,15 +12,12 @@ const { sanitizePart } = require("../utils/uploadsUtils");
 const {
   notifyMelPetHostelLoginAccess,
 } = require("../utils/moduleAccessNotification");
-const {
-  AdminUsuario,
-  Cliente,
-  Endereco,
-  Grupo,
-  Usuario,
-} = require("../models");
+const { Cliente, Endereco, Grupo, Usuario } = require("../models");
 const dbFor = require("../utils/dbFor");
 const { tableExists } = require("../models/schema");
+const {
+  ensureUserDocumentStorage,
+} = require("./melpethostel/context");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -192,18 +189,6 @@ async function ensureUserDir({ login, grupoNome, admin = false }) {
   if (safeGroup) {
     await fs.mkdir(path.join(root, safeGroup, safeLogin), { recursive: true });
   }
-}
-
-async function resolveMelPetHostelGroupName(req, groupValue) {
-  const value = clean(groupValue);
-  if (!value) return null;
-
-  if (isNumeric(value)) {
-    const group = await Grupo.findById(req, Number(value));
-    return group ? group.Grupo_Nome || group.nome : null;
-  }
-
-  return value;
 }
 
 async function resolveGroupName(req, groupValue) {
@@ -409,13 +394,8 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    let match = await Usuario.findByLogin(req, login);
-    let source = match ? "usuarios" : null;
-
-    if (!match) {
-      match = await AdminUsuario.findByLogin(req, login);
-      source = match ? "legacy-admin" : null;
-    }
+    const match = await Usuario.findByLogin(req, login);
+    const source = match ? "usuarios" : null;
 
     if (!match) {
       return res
@@ -444,22 +424,9 @@ router.post("/login", async (req, res) => {
         .json({ status: "erro", mensagem: "Usuário ou senha inválidos" });
     }
 
-    const grupo =
-      source === "legacy-admin"
-        ? clean(match.Usuario_Grupo) || "Administradores"
-        : match.Grupo_ID || match.grupo || null;
-    let grupoNome;
-
-    if (source === "usuarios") {
-      grupoNome = match.grupoNome || (await resolveGroupName(req, grupo));
-    } else if (source === "legacy-admin") {
-      grupoNome = grupo;
-    } else {
-      grupoNome = await resolveMelPetHostelGroupName(req, grupo);
-    }
-
-    const admin =
-      source === "legacy-admin" || isAdminGroupValue(grupoNome || grupo);
+    const grupo = match.Grupo_ID || match.grupo || null;
+    const grupoNome = match.grupoNome || (await resolveGroupName(req, grupo));
+    const admin = isAdminGroupValue(grupoNome || grupo);
 
     await ensureUserDir({
       login: match.Usuario_Login,
@@ -589,24 +556,7 @@ router.post("/alterar-senha", async (req, res) => {
       });
     }
 
-    let usuario = null;
-    let source = decoded.source || null;
-
-    if (source === "usuarios") {
-      usuario = await Usuario.findById(req, decoded.id);
-    } else if (source === "legacy-admin") {
-      usuario = await AdminUsuario.findById(req, decoded.id);
-    }
-
-    if (!usuario) {
-      usuario = await Usuario.findById(req, decoded.id);
-      source = usuario ? "usuarios" : null;
-    }
-
-    if (!usuario) {
-      usuario = await AdminUsuario.findById(req, decoded.id);
-      source = usuario ? "legacy-admin" : null;
-    }
+    const usuario = await Usuario.findById(req, decoded.id);
 
     if (!usuario) {
       return res
@@ -630,13 +580,9 @@ router.post("/alterar-senha", async (req, res) => {
     }
 
     const senhaHash = await bcrypt.hash(String(novaSenha), 10);
-    if (source === "usuarios") {
-      await Usuario.updatePassword(req, decoded.id, senhaHash, {
-        primeiroAcesso: false,
-      });
-    } else if (source === "legacy-admin") {
-      await AdminUsuario.updatePassword(req, decoded.id, senhaHash);
-    }
+    await Usuario.updatePassword(req, decoded.id, senhaHash, {
+      primeiroAcesso: false,
+    });
 
     res.json({ status: "sucesso", mensagem: "Senha alterada com sucesso" });
   } catch (error) {
@@ -733,6 +679,7 @@ router.put("/me/cliente", async (req, res) => {
     }
 
     await Endereco.replaceForCliente(req, clienteId, enderecos);
+    await ensureUserDocumentStorage(req, usuario.Usuario_Login);
     const cliente = await attachEnderecosToCliente(
       req,
       await Cliente.findById(req, clienteId),
@@ -805,8 +752,7 @@ router.post("/users", async (req, res) => {
     }
 
     const existingUser = await Usuario.findByLogin(req, login);
-    const existingLegacyAdmin = await AdminUsuario.findByLogin(req, login);
-    if (existingUser || existingLegacyAdmin) {
+    if (existingUser) {
       return res
         .status(400)
         .json({ status: "erro", mensagem: "Usuario ja existe" });
@@ -897,23 +843,12 @@ router.put("/users/:id", async (req, res) => {
         .json({ status: "erro", mensagem: "Usuario nao encontrado" });
     }
 
-    const loginChanged = clean(currentUser.Usuario_Login) !== login;
     const existingUser = await Usuario.findByLogin(req, login);
 
     if (existingUser && Number(existingUser.Usuario_ID) !== id) {
       return res
         .status(400)
         .json({ status: "erro", mensagem: "Usuario ja existe" });
-    }
-
-    if (loginChanged) {
-      const existingLegacyAdmin = await AdminUsuario.findByLogin(req, login);
-
-      if (existingLegacyAdmin) {
-        return res
-          .status(400)
-          .json({ status: "erro", mensagem: "Usuario ja existe" });
-      }
     }
 
     const grupoId = await resolveGroupId(req, grupo);

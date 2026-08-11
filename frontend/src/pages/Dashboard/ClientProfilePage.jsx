@@ -9,6 +9,29 @@ function formatValue(value) {
   return text || "-";
 }
 
+function maskSensitiveDocument(value, visibleStart = 3, visibleEnd = 2) {
+  const text = String(value || "").trim();
+  if (!text) return "-";
+
+  const chars = text.replace(/\s/g, "").split("");
+  let visibleSeen = 0;
+  const totalVisible = chars.filter((char) => /[a-zA-Z0-9]/.test(char)).length;
+
+  return chars
+    .map((char) => {
+      if (!/[a-zA-Z0-9]/.test(char)) return char;
+      visibleSeen += 1;
+      if (
+        visibleSeen <= visibleStart ||
+        visibleSeen > totalVisible - visibleEnd
+      ) {
+        return char;
+      }
+      return "*";
+    })
+    .join("");
+}
+
 function formatDate(value) {
   const iso = toISODate(value);
   if (!iso) return "-";
@@ -64,11 +87,19 @@ function ClientProfilePage({ cliente, loading, error, onBack, onReload }) {
               </div>
               <div>
                 <dt>CPF</dt>
-                <dd>{cliente?.cpf ? maskCpf(cliente.cpf) : "-"}</dd>
+                <dd>
+                  {cliente?.cpf
+                    ? maskSensitiveDocument(maskCpf(cliente.cpf), 3, 2)
+                    : "-"}
+                </dd>
               </div>
               <div>
                 <dt>RG</dt>
-                <dd>{cliente?.rg ? maskRg(cliente.rg) : "-"}</dd>
+                <dd>
+                  {cliente?.rg
+                    ? maskSensitiveDocument(maskRg(cliente.rg), 2, 2)
+                    : "-"}
+                </dd>
               </div>
               <div>
                 <dt>Data de nascimento</dt>

@@ -11,7 +11,6 @@
     "check:mojibake": "powershell -ExecutionPolicy Bypass -File ../scripts/check_mojibake.ps1",
     "db:setup": "node scripts/run_sql.js",
     "db:check": "node scripts/check_db_connection.js",
-    "db:fix-documentos-fk": "node scripts/run_sql.js fix_documentos_usuario_fk.sql",
     "uploads:ensure": "node scripts/ensure_group_upload_dirs.js"
   },
   "keywords": [],
