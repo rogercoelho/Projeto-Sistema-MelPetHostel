@@ -1,5 +1,30 @@
 const express = require("express");
 const router = express.Router();
+async function buildUsuarioCadastroResumo(req, user) {
+  const cliente = user?.cliente || {};
+  const clienteId = user?.Cliente_ID || user?.clienteId || cliente?.id || null;
+  const enderecos = clienteId ? await Endereco.listByCliente(req, clienteId) : [];
+  const endereco = (enderecos || []).find((item) => item?.principal) || enderecos?.[0] || null;
+
+  return {
+    nome: cliente.nome || user?.Usuario_Login || user?.login || "",
+    rg: cliente.rg || "",
+    cpf: cliente.cpf || "",
+    endereco: endereco
+      ? [
+          endereco.logradouro,
+          endereco.numero,
+          endereco.complemento,
+          endereco.bairro,
+          endereco.cidade,
+          endereco.uf,
+          endereco.cep,
+        ]
+          .filter(Boolean)
+          .join(", ")
+      : "",
+  };
+}
 const {
   notifyDocumentUploadForReview,
 } = require("../../utils/moduleAccessNotification");
@@ -7,6 +32,7 @@ const {
   TABLE_NAMES,
   buildSupportDocumentFileName,
   dbFor,
+  Endereco,
   ensureUserDocumentStorage,
   fileExistsByStoredPath,
   fileExistsOnDisk,
@@ -113,7 +139,6 @@ router.get("/documentos/pendentes", async (req, res) => {
         .status(400)
         .json({ status: "erro", mensagem: "Usuário não identificado" });
     }
-
     const meta = await getContratosTableMeta(req);
     if (!meta.exists || !meta.idCol) {
       return res.status(500).json({
@@ -202,6 +227,8 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
         .json({ status: "erro", mensagem: "Usuário não encontrado" });
     }
 
+    const cadastro = await buildUsuarioCadastroResumo(req, user);
+
     const meta = await getContratosTableMeta(req);
     if (!meta.exists || !meta.idCol) {
       return res.status(500).json({
@@ -218,7 +245,11 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
     if (!latestContrato || !latestContrato[meta.idCol]) {
       return res.json({
         status: "sucesso",
-        usuario: { id: user.Usuario_ID, nome: user.Usuario_Login },
+        usuario: {
+          id: user.Usuario_ID,
+          nome: cadastro.nome || user.Usuario_Login,
+          cadastro,
+        },
         contratoId: null,
         arquivos: [],
       });
@@ -337,7 +368,11 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
 
     return res.json({
       status: "sucesso",
-      usuario: { id: user.Usuario_ID, nome: user.Usuario_Login },
+      usuario: {
+          id: user.Usuario_ID,
+          nome: cadastro.nome || user.Usuario_Login,
+          cadastro,
+        },
       contratoId,
       arquivos,
     });
@@ -564,7 +599,6 @@ router.get("/documentos/status", async (req, res) => {
         .status(400)
         .json({ status: "erro", mensagem: "Usuário não encontrado" });
     }
-
     const meta = await getContratosTableMeta(req);
     if (!meta.exists || !meta.idCol) {
       return res.status(500).json({
@@ -716,7 +750,6 @@ router.post(
           mensagem: "Usuário não encontrado para vincular o documento.",
         });
       }
-
       const meta = await getContratosTableMeta(req);
       if (!meta.exists || !meta.idCol) {
         return res.status(500).json({

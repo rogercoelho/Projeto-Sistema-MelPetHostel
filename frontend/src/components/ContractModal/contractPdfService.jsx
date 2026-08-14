@@ -15,7 +15,14 @@ function contractFileName(contractorName) {
   return `contrato-mel-pet-hostel-${sanitizeFileName(contractorName) || "cliente"}.pdf`;
 }
 
-async function downloadPdfBlob(blob, fileName) {
+async function downloadPdfBlob(blob, fileName, targetWindow = null) {
+  if (targetWindow && !targetWindow.closed) {
+    const blobUrl = URL.createObjectURL(blob);
+    targetWindow.location.href = blobUrl;
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    return true;
+  }
+
   if (typeof window.showSaveFilePicker === "function") {
     try {
       const handle = await window.showSaveFilePicker({
@@ -62,6 +69,7 @@ export async function saveContractPdf({
   signatureCity,
   signatureDate,
   signatureTime,
+  targetWindow,
 }) {
   const fileName = contractFileName(contractorData?.nome);
   const blob = await pdf(
@@ -75,5 +83,5 @@ export async function saveContractPdf({
     />,
   ).toBlob();
 
-  return downloadPdfBlob(blob, fileName);
+  return downloadPdfBlob(blob, fileName, targetWindow);
 }

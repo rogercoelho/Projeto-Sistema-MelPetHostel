@@ -552,6 +552,12 @@ export default function MelPetHostel({
     setContractModalOpen(true);
   }, [canOpenContractPrompt]);
 
+  function handleSignedContractUploadFromModal() {
+    setContractModalOpen(false);
+    setUploadPanelOpen(true);
+    setActiveMenu("");
+  }
+
   async function loadContractStatus() {
     setLoadingStatus(true);
     setStatusError("");
@@ -675,6 +681,7 @@ export default function MelPetHostel({
           nome: data.usuario.nome,
           usuarioId: data.usuario.id || user.usuarioId,
           contratoId: data?.contratoId || (prev && prev.contratoId) || null,
+          cadastro: data.usuario.cadastro || prev?.cadastro || user?.cadastro || null,
         }));
       }
     } catch (error) {
@@ -4862,6 +4869,37 @@ export default function MelPetHostel({
 
                     <div className="melpet-categories-card melpet-docs-card-shell">
                       <div className="melpet-card-body melpet-docs-card-body">
+                        <div className="melpet-user-registration-card">
+                          <h4>Dados do cadastro</h4>
+                          <dl>
+                            <div>
+                              <dt>Nome</dt>
+                              <dd>
+                                {selectedPendingUser?.cadastro?.nome ||
+                                  selectedPendingUser?.nome ||
+                                  "-"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>RG</dt>
+                              <dd>{selectedPendingUser?.cadastro?.rg || "-"}</dd>
+                            </div>
+                            <div>
+                              <dt>CPF</dt>
+                              <dd>
+                                {selectedPendingUser?.cadastro?.cpf
+                                  ? maskCpf(selectedPendingUser.cadastro.cpf)
+                                  : "-"}
+                              </dd>
+                            </div>
+                            <div className="melpet-user-registration-address">
+                              <dt>Endereço</dt>
+                              <dd>
+                                {selectedPendingUser?.cadastro?.endereco || "-"}
+                              </dd>
+                            </div>
+                          </dl>
+                        </div>
                         {loadingSelectedUserFiles ? (
                           <p className="melpet-validate-message">
                             Carregando documentos...
@@ -5253,6 +5291,7 @@ export default function MelPetHostel({
           setContractModalOpen(false);
           await loadContractStatus();
         }}
+        onSignedContractUpload={handleSignedContractUploadFromModal}
       />
 
       {deletePetModal}

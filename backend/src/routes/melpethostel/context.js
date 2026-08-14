@@ -50,11 +50,10 @@ async function resolveTableName(req, preferredName) {
     `
       SELECT TABLE_NAME
       FROM INFORMATION_SCHEMA.TABLES
-      WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = LOWER(?)
-      ORDER BY CASE WHEN TABLE_NAME = ? THEN 0 ELSE 1 END
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
       LIMIT 1
     `,
-    [preferredName, preferredName],
+    [preferredName],
   );
 
   return rows && rows.length ? rows[0].TABLE_NAME : null;

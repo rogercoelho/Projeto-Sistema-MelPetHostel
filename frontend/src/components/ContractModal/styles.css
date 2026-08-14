@@ -429,6 +429,34 @@
   width: 100%;
 }
 
+.contract-secondary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.contract-secondary-actions .btn {
+  min-width: 0;
+}
+.contract-upload-signed-button.btn {
+  border-color: #0f766e;
+  background: #0f766e;
+  color: #fff;
+}
+
+.contract-upload-signed-button.btn:hover:not(:disabled) {
+  border-color: #115e59;
+  background: #115e59;
+  color: #fff;
+}
+
+.contract-upload-signed-button.btn:focus-visible {
+  outline: 3px solid rgba(20, 184, 166, 0.35);
+  outline-offset: 2px;
+}
+
+
 .contract-reject-dialog {
   display: flex;
   flex-direction: column;
@@ -511,6 +539,10 @@
     min-width: 210px;
   }
 
+  .contract-secondary-actions {
+    display: flex;
+    width: auto;
+  }
   .contract-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;

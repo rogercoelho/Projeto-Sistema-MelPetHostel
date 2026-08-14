@@ -123,6 +123,15 @@ function getBrowserName() {
   return "Navegador não identificado";
 }
 
+function isIOSDevice() {
+  const ua = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  return (
+    /iPad|iPhone|iPod/.test(ua) ||
+    (platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
 function ContractSection({ number, title, children }) {
   const clausePrefix = String(number || "").replace(/\.$/, "");
 
@@ -146,6 +155,7 @@ function ContractModal({
   onClose,
   onGovBrSign,
   onRejectBeforeAccept,
+  onSignedContractUpload,
 }) {
   const govBrSignerUrl = "https://assinador.iti.br/assinatura/index.xhtml";
   const [contractorData, setContractorData] = useState(EMPTY_CONTRACTOR);
@@ -288,6 +298,16 @@ function ContractModal({
     e.preventDefault();
     if (pdfGenerating) return;
 
+    const pdfWindow = isIOSDevice()
+      ? window.open("about:blank", "_blank")
+      : null;
+
+    if (pdfWindow) {
+      pdfWindow.document.title = "Contrato Mel Pet Hostel";
+      pdfWindow.document.body.innerHTML =
+        "<p style=\"font-family: Arial, sans-serif; padding: 24px;\">Gerando contrato...</p>";
+    }
+
     const acceptMoment = new Date();
     setSignatureMoment(acceptMoment);
     setPdfGenerating(true);
@@ -302,9 +322,11 @@ function ContractModal({
         signatureCity: contractorData.cidade?.trim() || "Cidade nao informada",
         signatureDate: formatDateLong(acceptMoment),
         signatureTime: formatTime(acceptMoment),
+        targetWindow: pdfWindow,
       });
       setContractPdfSaved(didSavePdf);
     } catch (error) {
+      if (pdfWindow && !pdfWindow.closed) pdfWindow.close();
       console.error("Erro ao gerar o PDF do contrato:", error);
       window.alert("Nao foi possivel gerar o PDF do contrato.");
     } finally {
@@ -318,6 +340,15 @@ function ContractModal({
     if (onGovBrSign) {
       onGovBrSign();
     }
+  }
+
+  function handleSignedContractUpload() {
+    if (onSignedContractUpload) {
+      onSignedContractUpload();
+      return;
+    }
+
+    onClose();
   }
 
   function handleSecondaryAction() {
@@ -1035,13 +1066,23 @@ function ContractModal({
                 Assinar com Gov.BR (E-CPF)
               </Button>
             )}
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleSecondaryAction}
-            >
-              {contractPdfSaved ? "Vou assinar Depois" : "Sair sem aceitar"}
-            </Button>
+            <div className="contract-secondary-actions">
+              <Button
+                type="button"
+                variant="secondary"
+                className="contract-upload-signed-button"
+                onClick={handleSignedContractUpload}
+              >
+                Enviar contrato assinado
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleSecondaryAction}
+              >
+                {contractPdfSaved ? "Vou assinar Depois" : "Sair sem aceitar"}
+              </Button>
+            </div>
           </footer>
         </form>
       </Modal>

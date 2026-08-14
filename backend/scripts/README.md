@@ -9,6 +9,7 @@ Scripts mantidos para operacao do Sistema MelPetHostel.
 
 ## Schemas principais
 
+- `normalize_clientes_enderecos_table_names.sql`
 - `create_melpethostel_schema.sql`
 - `create_enderecos_schema.sql`
 - `create_pets_schema.sql`

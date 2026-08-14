@@ -2271,6 +2271,45 @@
   padding-top: 10px;
 }
 
+.melpet-user-registration-card {
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.melpet-user-registration-card h4 {
+  margin: 0 0 12px;
+  color: #0f172a;
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.melpet-user-registration-card dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.melpet-user-registration-card dt {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.melpet-user-registration-card dd {
+  margin: 4px 0 0;
+  color: #111827;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.melpet-user-registration-address {
+  grid-column: 1 / -1;
+}
 .melpet-document-rejection-reason {
   display: grid;
   gap: 6px;
@@ -2300,10 +2339,38 @@
   padding: 0;
 }
 
-.melpet-preview-modal-body iframe {
-  display: block;
-  width: 100%;
+.pdf-viewer {
   height: 75vh;
+  overflow: auto;
+  background: #0b2333;
+}
+
+.pdf-viewer-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  min-height: 100%;
+  padding: 18px;
+}
+
+.pdf-viewer-page {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.34);
+}
+
+.pdf-viewer-state {
+  padding: 18px;
+  color: #e5f2f8;
+  font-weight: 900;
+  text-align: center;
+}
+
+.pdf-viewer-state--error {
+  color: #fecaca;
 }
 
 @media (max-width: 720px) {
