@@ -596,6 +596,7 @@
 .melpet-admin-pet-info-grid div {
   display: grid;
   gap: 4px;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.14);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.74);
   padding: 10px;
@@ -640,45 +641,66 @@
 
 .melpet-admin-anamnesis-groups {
   display: grid;
-  gap: var(--spacing-sm);
+  gap: 14px;
 }
 
 .melpet-admin-anamnesis-groups article {
   display: grid;
-  gap: 10px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.13);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.74);
-  padding: var(--spacing-sm);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 26px rgba(var(--cor-marrom-rgb), 0.06);
 }
 
 .melpet-admin-anamnesis-groups h4 {
   margin: 0;
+  border-bottom: 1px solid rgba(var(--cor-marrom-rgb), 0.1);
+  background: rgba(var(--cor-marrom-rgb), 0.055);
   color: var(--cor-marrom);
   font-size: 1rem;
+  font-weight: 900;
+  padding: 12px 14px;
 }
 
 .melpet-admin-anamnesis-groups dl {
   display: grid;
-  gap: 8px;
+  gap: 0;
   margin: 0;
 }
 
 .melpet-admin-anamnesis-groups div {
   display: grid;
-  gap: 3px;
+  gap: 8px;
+  border-bottom: 1px solid rgba(var(--cor-marrom-rgb), 0.08);
+  padding: 12px 14px;
+}
+
+.melpet-admin-anamnesis-groups div:last-child {
+  border-bottom: 0;
 }
 
 .melpet-admin-anamnesis-groups dt {
-  color: var(--cor-marrom-claro);
-  font-size: 0.76rem;
+  color: #7c2d12;
+  font-size: 0.88rem;
   font-weight: 900;
+  line-height: 1.35;
 }
 
 .melpet-admin-anamnesis-groups dd {
+  width: fit-content;
+  max-width: 100%;
   margin: 0;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.13);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
   color: var(--cor-marrom);
+  font-size: 1rem;
   font-weight: 800;
+  line-height: 1.45;
   overflow-wrap: anywhere;
+  padding: 8px 10px;
 }
 
 @media (min-width: 560px) {
@@ -3403,19 +3425,74 @@
 }
 
 .melpet-admin-pet-emergency-section .melpet-admin-pet-info-grid div {
+  border-color: rgba(180, 83, 9, 0.24);
   background: rgba(255, 255, 255, 0.82);
 }
 
-.melpet-admin-anamnesis-groups h4 {
-  font-size: 1.08rem;
+
+@media (min-width: 820px) {
+  .melpet-admin-anamnesis-groups dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .melpet-admin-anamnesis-groups div {
+    border-right: 1px solid rgba(var(--cor-marrom-rgb), 0.08);
+  }
+
+  .melpet-admin-anamnesis-groups div:nth-child(2n) {
+    border-right: 0;
+  }
 }
 
-.melpet-admin-anamnesis-groups dt {
-  font-size: 0.86rem;
+.melpet-admin-pet-anamnesis-section > header span {
+  color: var(--cor-marrom);
+  font-size: 1.18rem;
+  font-weight: 900;
+  text-transform: none;
+}
+
+.melpet-admin-pet-info-section > header,
+.melpet-admin-pet-emergency-section > header,
+.melpet-admin-pet-docs-section > header,
+.melpet-admin-pet-anamnesis-section > header {
+  border-bottom: 1px solid rgba(var(--cor-marrom-rgb), 0.1);
+  margin: calc(var(--spacing-sm) * -1) calc(var(--spacing-sm) * -1) 0;
+  padding: 12px var(--spacing-sm);
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.melpet-admin-pet-info-section > header span,
+.melpet-admin-pet-emergency-section > header span,
+.melpet-admin-pet-docs-section > header span,
+.melpet-admin-pet-anamnesis-section > header span {
+  color: var(--cor-marrom);
+  font-size: 1.08rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-transform: none;
+}
+
+.melpet-admin-pet-overview span,
+.melpet-admin-pet-info-grid dt {
+  color: #7c2d12;
+  font-size: 0.84rem;
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+
+.melpet-admin-pet-overview strong,
+.melpet-admin-pet-info-grid dd {
+  color: var(--cor-marrom);
+  font-size: 1.02rem;
   line-height: 1.35;
 }
 
-.melpet-admin-anamnesis-groups dd {
-  font-size: 0.98rem;
-  line-height: 1.45;
+.melpet-admin-pet-overview small {
+  color: #5f4a3f;
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.melpet-admin-pet-emergency-section > header span {
+  color: #92400e;
 }

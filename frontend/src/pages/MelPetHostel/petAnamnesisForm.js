@@ -328,7 +328,7 @@ export const PET_ANAMNESIS_SECTIONS = [
       },
       {
         name: "comoAcalmar",
-        label: "Como você o acalma em cada caso?",
+        label: "Como você o acalma se estiver com medo ou em cada caso?",
         type: "textarea",
         required: true,
         wide: true,
@@ -364,7 +364,7 @@ export const PET_ANAMNESIS_SECTIONS = [
       },
       {
         name: "ritualDormirComer",
-        label: "Você faz algum ritual para dormir ou comer?",
+        label: "Você faz alguma rotina para dormir ou comer?",
         type: "textarea",
         required: true,
         wide: true,
@@ -374,8 +374,7 @@ export const PET_ANAMNESIS_SECTIONS = [
   {
     number: "9",
     title: "Higiene e manuseio",
-    description:
-      "Comportamento durante higiene, tratamento e contato físico.",
+    description: "Comportamento durante higiene, tratamento e contato físico.",
     fields: [
       {
         name: "aceitaBanhoEscovacao",
@@ -524,6 +523,3 @@ export function findMissingRequiredField(formData) {
 
   return "";
 }
-
-
-

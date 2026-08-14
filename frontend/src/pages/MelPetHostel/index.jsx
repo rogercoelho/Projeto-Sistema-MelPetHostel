@@ -516,11 +516,10 @@ export default function MelPetHostel({
   ).length;
   const pendingUploadItemsCount =
     (contratoEnviado ? 0 : 1) + pendingRequiredDocsCount;
-  const uploadPanelSummary =
-    contratoReprovado
-      ? "Contrato reprovado. Envie o contrato corrigido."
-      : contratoDetectado && requiredDocsComplete
-        ? "Tudo enviado, aguardando conferencia."
+  const uploadPanelSummary = contratoReprovado
+    ? "Contrato reprovado. Envie o contrato corrigido."
+    : contratoDetectado && requiredDocsComplete
+      ? "Tudo enviado, aguardando conferencia."
       : `${pendingUploadItemsCount} item${
           pendingUploadItemsCount === 1 ? "" : "s"
         } pendente${pendingUploadItemsCount === 1 ? "" : "s"}.`;
@@ -688,7 +687,8 @@ export default function MelPetHostel({
           nome: data.usuario.nome,
           usuarioId: data.usuario.id || user.usuarioId,
           contratoId: data?.contratoId || (prev && prev.contratoId) || null,
-          cadastro: data.usuario.cadastro || prev?.cadastro || user?.cadastro || null,
+          cadastro:
+            data.usuario.cadastro || prev?.cadastro || user?.cadastro || null,
         }));
       }
     } catch (error) {
@@ -728,7 +728,9 @@ export default function MelPetHostel({
   function buildDocumentPreviewUrl(file) {
     const tipo = file?.tipoRegistro === "contrato" ? "contrato" : "documento";
     const id =
-      tipo === "contrato" ? Number(file?.contratoId) : Number(file?.documentoId);
+      tipo === "contrato"
+        ? Number(file?.contratoId)
+        : Number(file?.documentoId);
     if (!Number.isInteger(id) || id <= 0) return null;
     const params = new window.URLSearchParams({ tipo, id: String(id) });
     return `/melpethostel/documentos/preview?${params.toString()}`;
@@ -1729,7 +1731,8 @@ export default function MelPetHostel({
   }
 
   async function handleAdminClientDocumentUpload() {
-    if (!selectedClient?.id || !adminUploadFile || adminUploadingDocument) return;
+    if (!selectedClient?.id || !adminUploadFile || adminUploadingDocument)
+      return;
     const originalName = String(adminUploadFile.name || "").toLowerCase();
     if (!originalName.endsWith(".pdf")) {
       showToast("Selecione um arquivo PDF.", "error");
@@ -1746,7 +1749,11 @@ export default function MelPetHostel({
     try {
       const parsed = savedUser ? JSON.parse(savedUser) : null;
       userHeader =
-        parsed?.login || parsed?.id || parsed?.Usuario_Login || parsed?.Usuario_ID || "";
+        parsed?.login ||
+        parsed?.id ||
+        parsed?.Usuario_Login ||
+        parsed?.Usuario_ID ||
+        "";
     } catch {
       userHeader = "";
     }
@@ -1786,7 +1793,10 @@ export default function MelPetHostel({
       setAdminUploadFile(null);
       await loadClientSearch();
     } catch (error) {
-      showToast(error?.message || "Nao foi possivel enviar o documento.", "error");
+      showToast(
+        error?.message || "Nao foi possivel enviar o documento.",
+        "error",
+      );
     } finally {
       setAdminUploadingDocument(false);
     }
@@ -1907,7 +1917,9 @@ export default function MelPetHostel({
     } catch (error) {
       setUploadedPetVaccineSides({ frente: false, verso: false });
       setPetVaccineResponses({});
-      setVaccineCardInfoError(error?.message || "Nao foi possivel carregar os dados do pet.");
+      setVaccineCardInfoError(
+        error?.message || "Nao foi possivel carregar os dados do pet.",
+      );
     } finally {
       setLoadingVaccineCardInfo(false);
     }
@@ -2496,19 +2508,17 @@ export default function MelPetHostel({
         formData.append("tipoUpload", "carteira");
         formData.append("petId", String(pet.id));
       }
-      const uploadUrl = isAdmin && pet.clienteId
-        ? `${String(API_URL).replace(/\/+$/, "")}/melpethostel/documentos/admin-upload`
-        : `${String(API_URL).replace(/\/+$/, "")}/melpethostel/pets/${encodeURIComponent(pet.id)}/carteira-vacinacao/upload`;
-      await fetch(
-        uploadUrl,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-          },
-          body: formData,
+      const uploadUrl =
+        isAdmin && pet.clienteId
+          ? `${String(API_URL).replace(/\/+$/, "")}/melpethostel/documentos/admin-upload`
+          : `${String(API_URL).replace(/\/+$/, "")}/melpethostel/pets/${encodeURIComponent(pet.id)}/carteira-vacinacao/upload`;
+      await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
         },
-      ).then(async (response) => {
+        body: formData,
+      }).then(async (response) => {
         const data = await response.json().catch(() => ({}));
         if (!response.ok || data?.status === "erro") {
           throw new Error(data?.mensagem || "Falha no upload da carteirinha.");
@@ -2918,7 +2928,19 @@ export default function MelPetHostel({
     return PET_ANAMNESIS_SECTIONS.map((section) => ({
       title: section.title,
       items: section.fields
-        .filter((field) => !["nomePet", "raca", "idade", "pesoAproximado", "veterinarioNome", "clinicaNome", "clinicaTelefone", "clinicaEndereco"].includes(field.name))
+        .filter(
+          (field) =>
+            ![
+              "nomePet",
+              "raca",
+              "idade",
+              "pesoAproximado",
+              "veterinarioNome",
+              "clinicaNome",
+              "clinicaTelefone",
+              "clinicaEndereco",
+            ].includes(field.name),
+        )
         .map((field) => ({
           label: field.label,
           value: formatAnamnesisValue(ficha[field.name]),
@@ -2928,7 +2950,11 @@ export default function MelPetHostel({
   }
 
   function getPetCarteiraBySide(side) {
-    return getCurrentPetCarteiras(petDocsPet).find((carteira) => carteira.lado === side) || null;
+    return (
+      getCurrentPetCarteiras(petDocsPet).find(
+        (carteira) => carteira.lado === side,
+      ) || null
+    );
   }
 
   function openPetCarteiraDocument(side) {
@@ -2938,8 +2964,12 @@ export default function MelPetHostel({
       showToast("Carteirinha nao encontrada para visualizacao.", "error");
       return;
     }
-    setDocumentPreviewTitle(`Carteirinha de vacinação - ${side === "verso" ? "Verso" : "Frente"}`);
-    setDocumentPreviewSrc(`/melpethostel/pets/carteiras-vacinacao/${id}/preview`);
+    setDocumentPreviewTitle(
+      `Carteirinha de vacinação - ${side === "verso" ? "Verso" : "Frente"}`,
+    );
+    setDocumentPreviewSrc(
+      `/melpethostel/pets/carteiras-vacinacao/${id}/preview`,
+    );
     setDocumentPreviewOpen(true);
   }
 
@@ -2947,7 +2977,10 @@ export default function MelPetHostel({
     const hasVaccineInfo = vaccineCardItems.length > 0;
     return (
       <div className="melpet-admin-pet-vaccine-content">
-        <div className="melpet-admin-carteira-actions" aria-label="Visualizar carteirinha">
+        <div
+          className="melpet-admin-carteira-actions"
+          aria-label="Visualizar carteirinha"
+        >
           {[
             ["frente", "Frente"],
             ["verso", "Verso"],
@@ -2966,7 +2999,9 @@ export default function MelPetHostel({
             );
           })}
         </div>
-        {hasVaccineInfo ? renderVaccineCardInfoContainer() : renderPetDocumentsContent()}
+        {hasVaccineInfo
+          ? renderVaccineCardInfoContainer()
+          : renderPetDocumentsContent()}
       </div>
     );
   }
@@ -2974,7 +3009,8 @@ export default function MelPetHostel({
     if (!petDocsPet) return null;
     const vaccineStatus = getPetVaccineStatus(petDocsPet);
     const isAdminPetFicha = Boolean(isAdmin && petDocsPet?.clienteId);
-    const isReadOnlyVaccineUpload = !isAdminPetFicha && vaccineStatus.tone === "pending";
+    const isReadOnlyVaccineUpload =
+      !isAdminPetFicha && vaccineStatus.tone === "pending";
     const documentStatuses = [
       ["frente", "Carteirinha de vacinação frente"],
       ["verso", "Carteirinha de vacinação verso"],
@@ -2995,7 +3031,7 @@ export default function MelPetHostel({
           <div className="pet-registration-required-message">
             {rejectedDocumentStatuses.length ? (
               <div className="melpet-vaccine-rejection-notice">
-                <strong>Detalhes da reprovaÃ§Ã£o</strong>
+                <strong>Detalhes da reprovação</strong>
                 {rejectedDocumentStatuses.map((item) => (
                   <dl key={item.side}>
                     <div>
@@ -3009,7 +3045,7 @@ export default function MelPetHostel({
                     {item.tone === "rejected" ? (
                       <div>
                         <dt>Motivo:</dt>
-                        <dd>{item.motivo || "Motivo nÃ£o informado."}</dd>
+                        <dd>{item.motivo || "Motivo não informado."}</dd>
                       </div>
                     ) : null}
                   </dl>
@@ -3017,7 +3053,7 @@ export default function MelPetHostel({
               </div>
             ) : (
               <p>
-                Agora Ã© o momento de vocÃª nos enviar os documentos{" "}
+                Agora é o momento de você nos enviar os documentos{" "}
                 {getPetGenderText(petDocsPet)} {petDocsPet.nome}!
               </p>
             )}
@@ -3032,7 +3068,9 @@ export default function MelPetHostel({
             </div>
             <div>
               <dt>CPF</dt>
-              <dd>{petDocsPet.tutorCpf ? maskCpf(petDocsPet.tutorCpf) : "-"}</dd>
+              <dd>
+                {petDocsPet.tutorCpf ? maskCpf(petDocsPet.tutorCpf) : "-"}
+              </dd>
             </div>
             <div>
               <dt>RG</dt>
@@ -3994,7 +4032,9 @@ export default function MelPetHostel({
                     onChange={(event) => setAdminUploadType(event.target.value)}
                   >
                     <option value="contrato">Contrato assinado</option>
-                    <option value="documento">Documento de identificação</option>
+                    <option value="documento">
+                      Documento de identificação
+                    </option>
                     <option value="comprovante">Comprovante de endereço</option>
                     <option value="outros">Outros documentos</option>
                   </select>
@@ -4006,7 +4046,9 @@ export default function MelPetHostel({
                       <span>Pet</span>
                       <select
                         value={adminUploadPetId}
-                        onChange={(event) => setAdminUploadPetId(event.target.value)}
+                        onChange={(event) =>
+                          setAdminUploadPetId(event.target.value)
+                        }
                       >
                         <option value="">Selecione</option>
                         {(selectedClient.pets || []).map((pet) => (
@@ -4020,7 +4062,9 @@ export default function MelPetHostel({
                       <span>Lado</span>
                       <select
                         value={adminUploadSide}
-                        onChange={(event) => setAdminUploadSide(event.target.value)}
+                        onChange={(event) =>
+                          setAdminUploadSide(event.target.value)
+                        }
                       >
                         <option value="frente">Frente</option>
                         <option value="verso">Verso</option>
@@ -4567,7 +4611,10 @@ export default function MelPetHostel({
           <p>Carregando clientes e pets...</p>
         ) : petStatusResults.length ? (
           petStatusResults.map((cliente) => (
-            <article className="melpet-pet-status-client melpet-admin-pet-result-card" key={cliente.id}>
+            <article
+              className="melpet-pet-status-client melpet-admin-pet-result-card"
+              key={cliente.id}
+            >
               <header>
                 <div>
                   <strong>{cliente.nome || "Cliente sem nome"}</strong>
@@ -4578,7 +4625,10 @@ export default function MelPetHostel({
               {cliente.pets?.length ? (
                 <ul className="melpet-admin-pet-result-list">
                   {cliente.pets.map((pet) => (
-                    <li className="melpet-pet-status-row melpet-admin-pet-result-row" key={pet.id}>
+                    <li
+                      className="melpet-pet-status-row melpet-admin-pet-result-row"
+                      key={pet.id}
+                    >
                       <button
                         type="button"
                         className="melpet-pet-name-button melpet-admin-pet-open-button"
@@ -4756,7 +4806,8 @@ export default function MelPetHostel({
             {
               id: "pesquisar-pets",
               title: "Pesquisar Pets",
-              summary: "Acesse a ficha do pet, envie carteirinha e preencha vacinas.",
+              summary:
+                "Acesse a ficha do pet, envie carteirinha e preencha vacinas.",
               isOpen: activeMenu === "pesquisarPets",
               onAction: () => {
                 resetAdminPetSearch();
@@ -5009,122 +5060,145 @@ export default function MelPetHostel({
     </Modal>
   );
 
-  if (isAdmin && activeMenu === "pesquisarPets" && selectedAdminPet && petDocsPet?.id === selectedAdminPet.id) {
+  if (
+    isAdmin &&
+    activeMenu === "pesquisarPets" &&
+    selectedAdminPet &&
+    petDocsPet?.id === selectedAdminPet.id
+  ) {
     return (
       <>
         <main className="melpet-admin-standalone-screen">
           <section className="melpet-admin-pet-screen">
-          <article className="melpet-admin-pet-card">
-            <header className="melpet-admin-pet-card-header">
-              <div className="melpet-admin-pet-heading">
-                <h3>{selectedAdminPet.nome || "Pet sem nome"}</h3>
-              </div>
-              <em
-                className={`melpet-client-pet-status ${
-                  selectedAdminPet.ativo
-                    ? "melpet-client-pet-status--active"
-                    : "melpet-client-pet-status--inactive"
-                }`}
+            <article className="melpet-admin-pet-card">
+              <header className="melpet-admin-pet-card-header">
+                <div className="melpet-admin-pet-heading">
+                  <h3>{selectedAdminPet.nome || "Pet sem nome"}</h3>
+                </div>
+                <em
+                  className={`melpet-client-pet-status ${
+                    selectedAdminPet.ativo
+                      ? "melpet-client-pet-status--active"
+                      : "melpet-client-pet-status--inactive"
+                  }`}
+                >
+                  {selectedAdminPet.ativo ? "Ativo" : "Inativo"}
+                </em>
+              </header>
+
+              <section
+                className="melpet-admin-pet-overview"
+                aria-label="Resumo do tutor"
               >
-                {selectedAdminPet.ativo ? "Ativo" : "Inativo"}
-              </em>
-            </header>
+                <article>
+                  <span>Tutor</span>
+                  <strong>
+                    {selectedAdminPet.tutorNome || "Tutor nao informado"}
+                  </strong>
+                  <small>
+                    {selectedAdminPet.tutorTelefone || "Telefone nao informado"}
+                  </small>
+                </article>
+                <article>
+                  <span>Documentos do Tutor</span>
+                  <strong>
+                    CPF:{" "}
+                    {selectedAdminPet.tutorCpf
+                      ? maskCpf(selectedAdminPet.tutorCpf)
+                      : "nao informado"}
+                  </strong>
+                  <small>
+                    RG: {selectedAdminPet.tutorRg || "nao informado"}
+                  </small>
+                </article>
+              </section>
 
-            <section className="melpet-admin-pet-overview" aria-label="Resumo do tutor">
-              <article>
-                <span>Tutor</span>
-                <strong>{selectedAdminPet.tutorNome || "Tutor nao informado"}</strong>
-                <small>{selectedAdminPet.tutorTelefone || "Telefone nao informado"}</small>
-              </article>
-              <article>
-                <span>Documentos do Tutor</span>
-                <strong>CPF: {selectedAdminPet.tutorCpf ? maskCpf(selectedAdminPet.tutorCpf) : "nao informado"}</strong>
-                <small>RG: {selectedAdminPet.tutorRg || "nao informado"}</small>
-              </article>
-            </section>
+              <section className="melpet-admin-pet-info-section">
+                <header>
+                  <span>Dados cadastrais</span>
+                </header>
+                <dl className="melpet-admin-pet-info-grid">
+                  <div>
+                    <dt>Idade</dt>
+                    <dd>{selectedAdminPet.idade || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>Peso</dt>
+                    <dd>{selectedAdminPet.pesoAproximado || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>Raça</dt>
+                    <dd>{selectedAdminPet.raca || "-"}</dd>
+                  </div>
+                </dl>
+              </section>
 
-            <section className="melpet-admin-pet-info-section">
-              <header>
-                <span>Dados cadastrais</span>
-              </header>
-              <dl className="melpet-admin-pet-info-grid">
-                <div>
-                  <dt>Idade</dt>
-                  <dd>{selectedAdminPet.idade || "-"}</dd>
-                </div>
-                <div>
-                  <dt>Peso</dt>
-                  <dd>{selectedAdminPet.pesoAproximado || "-"}</dd>
-                </div>
-                <div>
-                  <dt>Raça</dt>
-                  <dd>{selectedAdminPet.raca || "-"}</dd>
-                </div>
-              </dl>
-            </section>
+              <section className="melpet-admin-pet-emergency-section">
+                <header>
+                  <span>Emergência</span>
+                </header>
+                <dl className="melpet-admin-pet-info-grid">
+                  <div>
+                    <dt>Veterinário</dt>
+                    <dd>{selectedAdminPet.ficha?.veterinarioNome || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>Clínica</dt>
+                    <dd>{selectedAdminPet.ficha?.clinicaNome || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>Telefone</dt>
+                    <dd>{selectedAdminPet.ficha?.clinicaTelefone || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>Endereço</dt>
+                    <dd>{selectedAdminPet.ficha?.clinicaEndereco || "-"}</dd>
+                  </div>
+                </dl>
+              </section>
 
-            <section className="melpet-admin-pet-emergency-section">
-              <header>
-                <span>Emergência</span>
-              </header>
-              <dl className="melpet-admin-pet-info-grid">
-                <div>
-                  <dt>Veterinário</dt>
-                  <dd>{selectedAdminPet.ficha?.veterinarioNome || "-"}</dd>
-                </div>
-                <div>
-                  <dt>Clínica</dt>
-                  <dd>{selectedAdminPet.ficha?.clinicaNome || "-"}</dd>
-                </div>
-                <div>
-                  <dt>Telefone</dt>
-                  <dd>{selectedAdminPet.ficha?.clinicaTelefone || "-"}</dd>
-                </div>
-                <div>
-                  <dt>Endereço</dt>
-                  <dd>{selectedAdminPet.ficha?.clinicaEndereco || "-"}</dd>
-                </div>
-              </dl>
-            </section>
+              <section className="melpet-admin-pet-docs-section">
+                <header>
+                  <span>Carteirinha e vacinas</span>
+                </header>
+                {renderAdminPetVaccineContent()}
+              </section>
 
-            <section className="melpet-admin-pet-docs-section">
-              <header>
-                <span>Carteirinha e vacinas</span>
-              </header>
-              {renderAdminPetVaccineContent()}
-            </section>
+              <section className="melpet-admin-pet-anamnesis-section">
+                <header>
+                  <span>Ficha de anamnese</span>
+                </header>
+                {getFilledAnamnesisGroups(selectedAdminPet).length ? (
+                  <div className="melpet-admin-anamnesis-groups">
+                    {getFilledAnamnesisGroups(selectedAdminPet).map((group) => (
+                      <article key={group.title}>
+                        <h4>{group.title}</h4>
+                        <dl>
+                          {group.items.map((item) => (
+                            <div key={item.label}>
+                              <dt>{item.label}</dt>
+                              <dd>{item.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p>Nenhuma informação de anamnese preenchida.</p>
+                )}
+              </section>
 
-            <section className="melpet-admin-pet-anamnesis-section">
-              <header>
-                <span>Ficha de anamnese</span>
-              </header>
-              {getFilledAnamnesisGroups(selectedAdminPet).length ? (
-                <div className="melpet-admin-anamnesis-groups">
-                  {getFilledAnamnesisGroups(selectedAdminPet).map((group) => (
-                    <article key={group.title}>
-                      <h4>{group.title}</h4>
-                      <dl>
-                        {group.items.map((item) => (
-                          <div key={item.label}>
-                            <dt>{item.label}</dt>
-                            <dd>{item.value}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p>Nenhuma informação de anamnese preenchida.</p>
-              )}
-            </section>
-
-            <footer className="melpet-admin-pet-footer">
-              <Button type="button" variant="outline" onClick={handleBackToAdminPetSearch}>
-                Voltar
-              </Button>
-            </footer>
-          </article>
+              <footer className="melpet-admin-pet-footer">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleBackToAdminPetSearch}
+                >
+                  Voltar
+                </Button>
+              </footer>
+            </article>
           </section>
         </main>
         <Modal
@@ -5443,7 +5517,9 @@ export default function MelPetHostel({
                             </div>
                             <div>
                               <dt>RG</dt>
-                              <dd>{selectedPendingUser?.cadastro?.rg || "-"}</dd>
+                              <dd>
+                                {selectedPendingUser?.cadastro?.rg || "-"}
+                              </dd>
                             </div>
                             <div>
                               <dt>CPF</dt>
