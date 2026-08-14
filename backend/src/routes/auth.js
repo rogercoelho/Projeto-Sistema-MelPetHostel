@@ -14,7 +14,7 @@ const {
 } = require("../utils/moduleAccessNotification");
 const { Cliente, Endereco, Grupo, Usuario } = require("../models");
 const dbFor = require("../utils/dbFor");
-const { tableExists } = require("../models/schema");
+const { getTableColumnsMap, tableExists } = require("../models/schema");
 const {
   ensureUserDocumentStorage,
 } = require("./melpethostel/context");
@@ -197,6 +197,157 @@ async function ensureUserDir({ login, grupoNome }) {
   }
 }
 
+async function listFilesRecursive(rootDir) {
+  const files = [];
+  const root = path.resolve(rootDir);
+
+  async function walk(currentDir) {
+    const entries = await fs.readdir(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(fullPath);
+      } else if (entry.isFile()) {
+        const stat = await fs.stat(fullPath);
+        files.push({
+          relativePath: path.relative(root, fullPath),
+          size: stat.size,
+        });
+      }
+    }
+  }
+
+  await walk(root);
+  return files;
+}
+
+async function assertDirectoryCopied(oldDir, newDir) {
+  const oldFiles = await listFilesRecursive(oldDir);
+  for (const file of oldFiles) {
+    const copiedPath = path.join(newDir, file.relativePath);
+    const copiedStat = await fs.stat(copiedPath).catch(() => null);
+    if (!copiedStat || copiedStat.size !== file.size) {
+      throw new Error(`Falha ao validar arquivo movido: ${file.relativePath}`);
+    }
+  }
+}
+
+async function moveUploadsDir(oldDir, newDir) {
+  if (!oldDir || !newDir || oldDir === newDir) return;
+
+  const oldStat = await fs.stat(oldDir).catch(() => null);
+  if (!oldStat) {
+    await fs.mkdir(newDir, { recursive: true });
+    return;
+  }
+
+  await fs.mkdir(path.dirname(newDir), { recursive: true });
+  const newStat = await fs.stat(newDir).catch(() => null);
+  if (!newStat) {
+    await fs.rename(oldDir, newDir);
+    return;
+  }
+
+  await fs.cp(oldDir, newDir, { recursive: true, force: true });
+  await assertDirectoryCopied(oldDir, newDir);
+  await fs.rm(oldDir, { recursive: true, force: true });
+}
+
+async function updateColumnPathPrefix(req, tableName, columnName, oldPrefix, newPrefix) {
+  if (!oldPrefix || !newPrefix || oldPrefix === newPrefix) return;
+  await dbFor(req).query(
+    `UPDATE ${qident(tableName)}
+        SET ${qident(columnName)} = REPLACE(${qident(columnName)}, ?, ?)
+      WHERE ${qident(columnName)} LIKE ?`,
+    [oldPrefix, newPrefix, `${oldPrefix}%`],
+  );
+}
+
+async function updateStoredUploadPaths(req, oldRelativeDir, newRelativeDir) {
+  if (!oldRelativeDir || !newRelativeDir || oldRelativeDir === newRelativeDir) {
+    return;
+  }
+
+  const pathTables = [
+    { table: "Contratos", columns: ["File_Path", "file_path", "caminho", "caminho_arquivo"] },
+    { table: "Documentos", columns: ["File_Path", "file_path", "caminho", "caminho_arquivo"] },
+    { table: "Pet_Carteiras_Vacinacao", columns: ["file_path", "File_Path", "caminho", "caminho_arquivo"] },
+  ];
+
+  const oldPublicDir = `/melpethostel${oldRelativeDir}`;
+  const newPublicDir = `/melpethostel${newRelativeDir}`;
+
+  for (const { table, columns } of pathTables) {
+    if (!(await tableExists(req, table))) continue;
+    const columnsMap = await getTableColumnsMap(req, table);
+    const seen = new Set();
+
+    for (const candidate of columns) {
+      const column = columnsMap.get(String(candidate).toLowerCase());
+      if (!column || seen.has(column)) continue;
+      seen.add(column);
+      await updateColumnPathPrefix(req, table, column, oldRelativeDir, newRelativeDir);
+      await updateColumnPathPrefix(req, table, column, oldPublicDir, newPublicDir);
+    }
+  }
+}
+
+async function updateLoginReferences(req, oldLogin, newLogin) {
+  if (!oldLogin || !newLogin || oldLogin === newLogin) return;
+
+  if (await tableExists(req, "Contratos")) {
+    const columnsMap = await getTableColumnsMap(req, "Contratos");
+    const loginCol = columnsMap.get("usuario_login");
+    if (loginCol) {
+      await dbFor(req).query(
+        `UPDATE ${qident("Contratos")} SET ${qident(loginCol)} = ? WHERE ${qident(loginCol)} = ?`,
+        [newLogin, oldLogin],
+      );
+    }
+  }
+
+  if (await tableExists(req, "TelegramUsers")) {
+    const columnsMap = await getTableColumnsMap(req, "TelegramUsers");
+    const loginCol = columnsMap.get("app_user_login");
+    if (loginCol) {
+      await dbFor(req).query(
+        `UPDATE ${qident("TelegramUsers")} SET ${qident(loginCol)} = ? WHERE ${qident(loginCol)} = ?`,
+        [newLogin, oldLogin],
+      );
+    }
+  }
+}
+
+async function migrateUserStorageAndReferences(req, currentUser, nextLogin, nextGroupName) {
+  const oldLogin = clean(currentUser?.Usuario_Login || currentUser?.login);
+  const oldGroupName = clean(
+    currentUser?.grupoNome ||
+      currentUser?.Grupo_Nome ||
+      (await resolveGroupName(req, currentUser?.Grupo_ID)),
+  );
+  const safeOldLogin = sanitizeSegment(oldLogin, `usuario-${currentUser?.Usuario_ID || currentUser?.id || ""}`);
+  const safeNewLogin = sanitizeSegment(nextLogin, safeOldLogin);
+  const safeOldGroup = sanitizeSegment(oldGroupName);
+  const safeNewGroup = sanitizeSegment(nextGroupName);
+
+  if (!safeOldLogin || !safeNewLogin || !safeOldGroup || !safeNewGroup) {
+    return null;
+  }
+
+  const oldRelativeDir = `/uploads/${safeOldGroup}/${safeOldLogin}`;
+  const newRelativeDir = `/uploads/${safeNewGroup}/${safeNewLogin}`;
+
+  await updateLoginReferences(req, oldLogin, nextLogin);
+  await updateStoredUploadPaths(req, oldRelativeDir, newRelativeDir);
+
+  if (oldRelativeDir === newRelativeDir) return null;
+
+  return {
+    oldDir: path.join(getUploadsRoot(), safeOldGroup, safeOldLogin),
+    newDir: path.join(getUploadsRoot(), safeNewGroup, safeNewLogin),
+  };
+}
+
 async function resolveGroupRecord(req, groupValue) {
   const value = clean(groupValue);
   if (!value) return null;
@@ -372,6 +523,18 @@ function buildReservedClientePayload(login) {
     observacoes: null,
     ativo: true,
   };
+}
+
+function getRenamedReservedClienteName(currentName, oldLogin, newLogin) {
+  const current = clean(currentName);
+  const oldClean = clean(oldLogin);
+  const newClean = clean(newLogin);
+  if (!current || !oldClean || !newClean || oldClean === newClean) return "";
+
+  const oldReservedName = buildReservedClientePayload(oldClean).nome;
+  if (current === oldClean) return newClean;
+  if (current === oldReservedName) return buildReservedClientePayload(newClean).nome;
+  return "";
 }
 
 function requireAuthenticatedUser(req, res) {
@@ -887,47 +1050,87 @@ router.put("/users/:id", async (req, res) => {
     const enderecos = getEnderecoPayloads(req.body || {});
     let clienteId = currentUser.Cliente_ID || null;
 
-    if (isAdministrator) {
-      if ((!clientePayload || !clientePayload.nome) && !clienteId) {
-        return res.status(400).json({
-          status: "erro",
-          mensagem: "Nome do cliente e obrigatorio para administradores",
-        });
-      }
-      if (clientePayload && !requireValidClientePayload(clientePayload, res)) {
-        return;
-      }
-      if (!requireValidEnderecoPayloads(enderecos, res)) return;
-      if (
-        clientePayload &&
-        !requireCompleteClienteCadastro(clientePayload, enderecos, res)
-      ) {
-        return;
+    let pendingUploadMove = null;
+    const db = dbFor(req);
+
+    await db.beginTransaction();
+    try {
+      if (isAdministrator) {
+        if ((!clientePayload || !clientePayload.nome) && !clienteId) {
+          await db.rollback();
+          return res.status(400).json({
+            status: "erro",
+            mensagem: "Nome do cliente e obrigatorio para administradores",
+          });
+        }
+        if (clientePayload && !requireValidClientePayload(clientePayload, res)) {
+          await db.rollback();
+          return;
+        }
+        if (!requireValidEnderecoPayloads(enderecos, res)) {
+          await db.rollback();
+          return;
+        }
+        if (
+          clientePayload &&
+          !requireCompleteClienteCadastro(clientePayload, enderecos, res)
+        ) {
+          await db.rollback();
+          return;
+        }
+
+        if (clienteId && shouldUpdateCliente) {
+          await Cliente.update(req, clienteId, clientePayload);
+        } else if (!clienteId && clientePayload) {
+          const cliente = await Cliente.create(req, clientePayload);
+          clienteId = cliente.id;
+        }
+
+        if (clienteId) {
+          await Endereco.replaceForCliente(req, clienteId, enderecos);
+        }
+      } else if (clienteId) {
+        const cliente = await Cliente.findById(req, clienteId);
+        const renamedClienteName = getRenamedReservedClienteName(
+          cliente?.nome,
+          currentUser.Usuario_Login,
+          login,
+        );
+
+        if (renamedClienteName) {
+          await Cliente.update(req, clienteId, { nome: renamedClienteName });
+        }
       }
 
-      if (clienteId && shouldUpdateCliente) {
-        await Cliente.update(req, clienteId, clientePayload);
-      } else if (!clienteId && clientePayload) {
-        const cliente = await Cliente.create(req, clientePayload);
-        clienteId = cliente.id;
+      pendingUploadMove = await migrateUserStorageAndReferences(
+        req,
+        currentUser,
+        login,
+        grupoNome,
+      );
+
+      const result = await Usuario.update(req, id, {
+        login,
+        grupoId,
+        clienteId,
+        ativo: hasAtivo ? parseDbBoolean(req.body?.ativo, true) : undefined,
+      });
+
+      if (!result || result.affectedRows === 0) {
+        await db.rollback();
+        return res
+          .status(404)
+          .json({ status: "erro", mensagem: "Usuario nao encontrado" });
       }
 
-      if (clienteId) {
-        await Endereco.replaceForCliente(req, clienteId, enderecos);
-      }
+      await db.commit();
+    } catch (error) {
+      await db.rollback();
+      throw error;
     }
 
-    const result = await Usuario.update(req, id, {
-      login,
-      grupoId,
-      clienteId,
-      ativo: hasAtivo ? parseDbBoolean(req.body?.ativo, true) : undefined,
-    });
-
-    if (!result || result.affectedRows === 0) {
-      return res
-        .status(404)
-        .json({ status: "erro", mensagem: "Usuario nao encontrado" });
+    if (pendingUploadMove) {
+      await moveUploadsDir(pendingUploadMove.oldDir, pendingUploadMove.newDir);
     }
 
     await ensureUserDir({

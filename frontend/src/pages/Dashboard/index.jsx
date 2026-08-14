@@ -12,6 +12,7 @@ import api from "../../services/api";
 import MelPetHostel from "../MelPetHostel";
 import melPetLogo from "../MelPetHostel/assets/MelPetHostel_Logo.jpeg";
 import AdminGroupsPage from "./AdminGroupsPage";
+import AdminUserMaintenancePage from "./AdminUserMaintenancePage";
 import AdminPasswordsPage from "./AdminPasswordsPage";
 import AdminUsersPage from "./AdminUsersPage";
 import ChangePasswordModal from "./ChangePasswordModal";
@@ -175,6 +176,10 @@ function Dashboard() {
             {
               label: "Criar Grupo",
               onAction: () => openView("admin-groups"),
+            },
+            {
+              label: "Manutenção de Usuários",
+              onAction: () => openView("admin-user-maintenance"),
             },
             {
               label: "Alteracao de senha administrativa",
@@ -581,6 +586,8 @@ function Dashboard() {
         />
       ) : view === "admin-groups" ? (
         <AdminGroupsPage onBack={() => setView("home")} />
+      ) : view === "admin-user-maintenance" ? (
+        <AdminUserMaintenancePage onBack={() => setView("home")} />
       ) : view === "admin-passwords" ? (
         <AdminPasswordsPage onBack={() => setView("home")} />
       ) : view === "telegram-token" ? (
