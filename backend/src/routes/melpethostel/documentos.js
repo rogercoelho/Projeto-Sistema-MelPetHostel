@@ -81,6 +81,69 @@ function todayFileDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function rejectedDocumentDateStamp() {
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+    .formatToParts(new Date())
+    .reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
+
+  return parts.day + parts.month + parts.year + "-" + parts.hour + parts.minute + parts.second;
+}
+
+async function moveRejectedDocumentFile(rawFilePath) {
+  const storedPath = clean(rawFilePath);
+  if (!storedPath) return null;
+
+  const sourceDiskPath = resolveUploadsFileToDisk(storedPath);
+  try {
+    await fs.access(sourceDiskPath);
+  } catch {
+    return null;
+  }
+
+  const normalizedStoredPath = storedPath.replace(/\\/g, "/");
+  const parts = normalizedStoredPath.split("/").filter(Boolean);
+  const originalName = parts.pop();
+  if (!originalName) return null;
+
+  const sourceRelativeDir = "/" + parts.join("/");
+  const targetRelativeDir = (sourceRelativeDir.replace(/\/+$/, "") + "/reprovados").replace(/\\/g, "/");
+  const targetDiskDir = resolveUploadsDirToDisk(targetRelativeDir);
+  await fs.mkdir(targetDiskDir, { recursive: true });
+
+  const ext = path.extname(originalName) || ".pdf";
+  const baseName = "Reprovado-" + rejectedDocumentDateStamp();
+  let targetName = baseName + ext;
+  let targetDiskPath = path.join(targetDiskDir, targetName);
+  for (let index = 1; ; index += 1) {
+    try {
+      await fs.access(targetDiskPath);
+      targetName = baseName + "_" + index + ext;
+      targetDiskPath = path.join(targetDiskDir, targetName);
+    } catch {
+      break;
+    }
+  }
+
+  try {
+    await fs.rename(sourceDiskPath, targetDiskPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    await fs.copyFile(sourceDiskPath, targetDiskPath);
+    await fs.unlink(sourceDiskPath);
+  }
+
+  return (targetRelativeDir + "/" + targetName).replace(/\\/g, "/");
+}
+
 function normalizeCarteiraSide(value) {
   return clean(value).toLowerCase() === "verso" ? "verso" : "frente";
 }
@@ -551,9 +614,12 @@ router.post("/documentos/:documentoId/conferir", async (req, res) => {
       });
     }
 
+    const selectParts = [`${qcol(docsMeta.idCol)} AS id`];
+    if (docsMeta.filePathCol) selectParts.push(`${qcol(docsMeta.filePathCol)} AS filePath`);
+
     const [existingRows] = await dbFor(req).query(
       `
-        SELECT ${qcol(docsMeta.idCol)} AS id
+        SELECT ${selectParts.join(", ")}
         FROM ${qtable(docsMeta.tableName)}
         WHERE ${qcol(docsMeta.idCol)} = ?
         LIMIT 1
@@ -648,9 +714,12 @@ router.post("/documentos/:documentoId/reprovar", async (req, res) => {
       });
     }
 
+    const selectParts = [`${qcol(docsMeta.idCol)} AS id`];
+    if (docsMeta.filePathCol) selectParts.push(`${qcol(docsMeta.filePathCol)} AS filePath`);
+
     const [existingRows] = await dbFor(req).query(
       `
-        SELECT ${qcol(docsMeta.idCol)} AS id
+        SELECT ${selectParts.join(", ")}
         FROM ${qtable(docsMeta.tableName)}
         WHERE ${qcol(docsMeta.idCol)} = ?
         LIMIT 1
@@ -664,10 +733,19 @@ router.post("/documentos/:documentoId/reprovar", async (req, res) => {
         .json({ status: "erro", mensagem: "Documento nao encontrado" });
     }
 
+    const movedRejectedPath = docsMeta.filePathCol
+      ? await moveRejectedDocumentFile(existingRows[0]?.filePath)
+      : null;
+
     const updateParts = [
       `${qcol(docsMeta.statusCol)} = ?`,
     ];
     const updateParams = ["reprovado"];
+
+    if (movedRejectedPath && docsMeta.filePathCol) {
+      updateParts.push(`${qcol(docsMeta.filePathCol)} = ?`);
+      updateParams.push(movedRejectedPath);
+    }
 
     if (docsMeta.conferidoAtCol) {
       updateParts.push(`${qcol(docsMeta.conferidoAtCol)} = NOW()`);
@@ -697,6 +775,7 @@ router.post("/documentos/:documentoId/reprovar", async (req, res) => {
         motivoReprovacao,
         conferido: false,
         conferidoPor: login,
+        filePath: movedRejectedPath || existingRows[0]?.filePath || null,
       },
     });
   } catch (error) {

@@ -62,15 +62,6 @@ function Dashboard() {
     : ["melpethostel"];
   const hasMelPetHostelAccess = allowedModules.includes("melpethostel");
 
-  function openMelPetClientAdmin() {
-    setMelPetRegistrationOnly(false);
-    setMelComplianceGate(false);
-    setMelInitialAdminMenu("");
-    setMelUserMenu("");
-    setOpenDashboardSection("");
-    setView("mel");
-  }
-
   function openMelPetTutorMaintenance() {
     setMelPetRegistrationOnly(false);
     setMelComplianceGate(false);
@@ -134,10 +125,6 @@ function Dashboard() {
 
   const melPetHostelItems = isAdmin
     ? [
-        {
-          label: "Cadastro de Clientes",
-          onAction: openMelPetClientAdmin,
-        },
         {
           label: "Manutenção de Tutor",
           onAction: openMelPetTutorMaintenance,

@@ -27,9 +27,13 @@ function buildUrl(endpoint) {
   return `${base}/${String(endpoint).replace(/^\/+/, "")}`;
 }
 
+function isFormDataPayload(value) {
+  return typeof FormData !== "undefined" && value instanceof FormData;
+}
+
 function buildRequestKey(url, options) {
   const method = options.method || "GET";
-  const body = typeof options.body === "string" ? options.body : "";
+  const body = typeof options.body === "string" ? options.body : isFormDataPayload(options.body) ? "[FormData]" : "";
   return `${method} ${url} ${body}`;
 }
 
@@ -69,9 +73,10 @@ function timeoutPromise(ms) {
 async function request(endpoint, options = {}, retry = 0) {
   const url = buildUrl(endpoint);
   const requestKey = buildRequestKey(url, options);
+  const canReusePendingRequest = !isFormDataPayload(options.body);
 
   // If there's already an in-flight identical request, reuse its promise.
-  if (retry === 0 && pendingRequests.has(requestKey)) {
+  if (canReusePendingRequest && retry === 0 && pendingRequests.has(requestKey)) {
     log("Reusing pending request:", url);
     try {
       return await pendingRequests.get(requestKey).promise;
@@ -83,8 +88,9 @@ async function request(endpoint, options = {}, retry = 0) {
 
   const controller = new AbortController();
 
+  const isFormData = isFormDataPayload(options.body);
   const headers = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(options.headers || {}),
   };
 
@@ -150,11 +156,11 @@ async function request(endpoint, options = {}, retry = 0) {
 
       throw err;
     } finally {
-      pendingRequests.delete(requestKey);
+      if (canReusePendingRequest) pendingRequests.delete(requestKey);
     }
   })();
 
-  pendingRequests.set(requestKey, { controller, promise: reqPromise });
+  if (canReusePendingRequest) pendingRequests.set(requestKey, { controller, promise: reqPromise });
 
   return await reqPromise;
 }
@@ -201,19 +207,19 @@ export const api = {
   post: (endpoint, data) =>
     request(endpoint, {
       method: "POST",
-      body: JSON.stringify(data),
+      body: isFormDataPayload(data) ? data : JSON.stringify(data),
     }),
 
   put: (endpoint, data) =>
     request(endpoint, {
       method: "PUT",
-      body: JSON.stringify(data),
+      body: isFormDataPayload(data) ? data : JSON.stringify(data),
     }),
 
   patch: (endpoint, data) =>
     request(endpoint, {
       method: "PATCH",
-      body: JSON.stringify(data),
+      body: isFormDataPayload(data) ? data : JSON.stringify(data),
     }),
 
   delete: (endpoint) =>

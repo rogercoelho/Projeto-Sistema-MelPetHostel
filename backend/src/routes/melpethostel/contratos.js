@@ -20,8 +20,91 @@ const {
   qtable,
   requireCompleteClienteCadastro,
   resolveUploadsDirToDisk,
+  resolveUploadsFileToDisk,
   uploadContrato,
 } = require("./context");
+
+function rejectedContractDateStamp() {
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+    .formatToParts(new Date())
+    .reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
+
+  return parts.day + parts.month + parts.year + "-" + parts.hour + parts.minute + parts.second;
+}
+
+async function moveRejectedContractFile(rawDir, rawFileName) {
+  const dir = String(rawDir || "").trim().replace(/\\/g, "/");
+  const fileName = String(rawFileName || "").trim().replace(/\\/g, "/");
+  if (!dir && !fileName) return null;
+
+  const candidates = [];
+  if (dir && fileName) candidates.push((dir.replace(/\/+$/, "") + "/" + fileName.replace(/^\/+/, "")).replace(/\\/g, "/"));
+  if (dir) candidates.push(dir);
+  if (fileName.startsWith("/uploads/") || fileName.startsWith("uploads/")) candidates.push(fileName);
+
+  let sourceStoredPath = null;
+  let sourceDiskPath = null;
+  for (const candidate of candidates) {
+    try {
+      const diskPath = resolveUploadsFileToDisk(candidate);
+      const stat = await fs.stat(diskPath);
+      if (stat && stat.isFile()) {
+        sourceStoredPath = candidate.replace(/\\/g, "/");
+        sourceDiskPath = diskPath;
+        break;
+      }
+    } catch {
+      // Tenta o proximo formato salvo no banco.
+    }
+  }
+  if (!sourceStoredPath || !sourceDiskPath) return null;
+
+  const sourceParts = sourceStoredPath.split("/").filter(Boolean);
+  const originalName = sourceParts.pop();
+  if (!originalName) return null;
+
+  const sourceRelativeDir = "/" + sourceParts.join("/");
+  const targetRelativeDir = (sourceRelativeDir.replace(/\/+$/, "") + "/reprovados").replace(/\\/g, "/");
+  const targetDiskDir = resolveUploadsDirToDisk(targetRelativeDir);
+  await fs.mkdir(targetDiskDir, { recursive: true });
+
+  const ext = path.extname(originalName) || path.extname(fileName) || ".pdf";
+  const baseName = "Reprovado-" + rejectedContractDateStamp();
+  let targetName = baseName + ext;
+  let targetDiskPath = path.join(targetDiskDir, targetName);
+  for (let index = 1; ; index += 1) {
+    try {
+      await fs.access(targetDiskPath);
+      targetName = baseName + "_" + index + ext;
+      targetDiskPath = path.join(targetDiskDir, targetName);
+    } catch {
+      break;
+    }
+  }
+
+  try {
+    await fs.rename(sourceDiskPath, targetDiskPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    await fs.copyFile(sourceDiskPath, targetDiskPath);
+    await fs.unlink(sourceDiskPath);
+  }
+
+  return {
+    relativeDir: targetRelativeDir,
+    fileName: targetName,
+    storedPath: (targetRelativeDir + "/" + targetName).replace(/\\/g, "/"),
+  };
+}
 
 router.get("/contratos/status", async (req, res) => {
   try {
@@ -134,9 +217,13 @@ router.post("/contratos/:contratoId/conferir", async (req, res) => {
       });
     }
 
+    const selectParts = [`${qcol(meta.idCol)} AS id`];
+    if (meta.filePathCol) selectParts.push(`${qcol(meta.filePathCol)} AS filePath`);
+    if (meta.nomeArquivoCol) selectParts.push(`${qcol(meta.nomeArquivoCol)} AS nomeArquivo`);
+
     const [existingRows] = await dbFor(req).query(
       `
-        SELECT ${qcol(meta.idCol)} AS id
+        SELECT ${selectParts.join(", ")}
         FROM ${qtable(meta.tableName)}
         WHERE ${qcol(meta.idCol)} = ?
         LIMIT 1
@@ -249,9 +336,13 @@ router.post("/contratos/:contratoId/reprovar", async (req, res) => {
       });
     }
 
+    const selectParts = [`${qcol(meta.idCol)} AS id`];
+    if (meta.filePathCol) selectParts.push(`${qcol(meta.filePathCol)} AS filePath`);
+    if (meta.nomeArquivoCol) selectParts.push(`${qcol(meta.nomeArquivoCol)} AS nomeArquivo`);
+
     const [existingRows] = await dbFor(req).query(
       `
-        SELECT ${qcol(meta.idCol)} AS id
+        SELECT ${selectParts.join(", ")}
         FROM ${qtable(meta.tableName)}
         WHERE ${qcol(meta.idCol)} = ?
         LIMIT 1
@@ -265,8 +356,20 @@ router.post("/contratos/:contratoId/reprovar", async (req, res) => {
         .json({ status: "erro", mensagem: "Contrato nao encontrado" });
     }
 
+    const movedRejectedContract = meta.filePathCol
+      ? await moveRejectedContractFile(existingRows[0]?.filePath, existingRows[0]?.nomeArquivo)
+      : null;
+
     const updateParts = [`${qcol(meta.statusCol)} = ?`];
     const updateParams = ["reprovado"];
+    if (movedRejectedContract && meta.filePathCol) {
+      updateParts.push(`${qcol(meta.filePathCol)} = ?`);
+      updateParams.push(meta.nomeArquivoCol ? movedRejectedContract.relativeDir : movedRejectedContract.storedPath);
+    }
+    if (movedRejectedContract && meta.nomeArquivoCol) {
+      updateParts.push(`${qcol(meta.nomeArquivoCol)} = ?`);
+      updateParams.push(movedRejectedContract.fileName);
+    }
     if (meta.motivoReprovacaoCol) {
       updateParts.push(`${qcol(meta.motivoReprovacaoCol)} = ?`);
       updateParams.push(motivoReprovacao);
@@ -296,6 +399,7 @@ router.post("/contratos/:contratoId/reprovar", async (req, res) => {
         motivoReprovacao,
         conferido: false,
         conferidoPor: login,
+        filePath: movedRejectedContract?.storedPath || null,
       },
     });
   } catch (error) {

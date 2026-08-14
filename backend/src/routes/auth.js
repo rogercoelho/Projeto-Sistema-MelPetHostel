@@ -1229,6 +1229,8 @@ router.delete("/groups/:id", async (req, res) => {
     }
 
     const users = await Usuario.findByGroup(req, id);
+    const safeGroupName = sanitizeSegment(group.Nome_Grupo || group.Grupo_Nome || group.nome, "grupo");
+    const groupUploadDir = safeGroupName ? path.join(getUploadsRoot(), safeGroupName) : null;
     const db = dbFor(req);
 
     await db.beginTransaction();
@@ -1258,6 +1260,7 @@ router.delete("/groups/:id", async (req, res) => {
     for (const user of users) {
       await removeUserUploadDirs(req, user, user?.Usuario_ID || user?.id);
     }
+    await removeUploadsDirRecursive(groupUploadDir);
 
     res.json({ status: "sucesso", mensagem: "Grupo removido" });
   } catch (error) {

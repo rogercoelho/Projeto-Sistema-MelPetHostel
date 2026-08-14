@@ -1284,6 +1284,26 @@
   gap: 10px;
 }
 
+.melpet-tutor-pending-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.melpet-tutor-pending-summary li {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(45, 128, 164, 0.24);
+  border-radius: 999px;
+  color: #295c75;
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.15;
+  padding: 5px 9px;
+}
+
 .melpet-tutor-pet-card,
 .melpet-tutor-document-card {
   align-items: center;
@@ -1356,11 +1376,84 @@
 }
 
 .melpet-tutor-maintenance-note {
-  border-radius: 12px;
-  background: rgba(216, 199, 170, 0.22);
+  align-items: center;
+  background: linear-gradient(135deg, rgba(45, 128, 164, 0.13), rgba(216, 199, 170, 0.34));
+  border: 1px solid rgba(45, 128, 164, 0.24);
+  border-left: 5px solid #2d80a4;
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(47, 36, 31, 0.07);
+  color: #295c75;
+  display: flex;
+  font-weight: 900;
+  line-height: 1.35;
+  margin: 12px 0 0;
+  min-height: 46px;
+  padding: 11px 14px;
+}
+
+.melpet-tutor-document-card em {
+  border-radius: 999px;
+  font-style: normal;
+  font-weight: 900;
+  justify-self: start;
+  padding: 5px 10px;
+}
+
+.melpet-tutor-document-card em.is-approved {
+  background: #dcfce7;
+  color: var(--cor-sucesso);
+}
+
+.melpet-tutor-document-card em.is-rejected {
+  background: #fee2e2;
+  color: var(--cor-erro);
+}
+
+.melpet-tutor-document-card em.is-pending {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.melpet-tutor-document-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.melpet-tutor-document-actions .btn {
+  border-radius: 999px;
+  min-width: 96px;
+}
+
+.melpet-tutor-reject-modal {
+  display: grid;
+  gap: 14px;
+}
+
+.melpet-tutor-reject-modal p {
+  margin: 0;
   color: var(--cor-marrom-claro);
   font-weight: 800;
-  line-height: 1.35;
-  margin: 14px 0 0;
-  padding: 10px 12px;
+  line-height: 1.4;
+}
+
+.melpet-tutor-reject-modal label {
+  color: var(--cor-marrom);
+  display: grid;
+  gap: 8px;
+  font-weight: 900;
+}
+
+.melpet-tutor-reject-modal textarea {
+  border: 1px solid rgba(147, 181, 207, 0.36);
+  border-radius: 12px;
+  min-height: 110px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.melpet-tutor-approval-card {
+  border-color: rgba(84, 116, 139, 0.5);
+  background: rgba(255, 255, 255, 0.92);
 }
