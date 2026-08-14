@@ -22,6 +22,13 @@ import {
 } from "./adminManagementUtils";
 import AddressFields from "./AddressFields";
 
+function getAccessLabel(grupo) {
+  const tela = String(grupo?.tela || grupo?.Tela || "").toLowerCase();
+  if (tela === "adm") return "Acesso de Administrador";
+  if (tela === "usuario") return "Acesso de Cliente";
+  return isAdminGroup(grupo) ? "Acesso de Administrador" : "Acesso de Cliente";
+}
+
 function createEmptyUserForm() {
   return {
     ...EMPTY_USER_FORM,
@@ -39,6 +46,10 @@ function createEmptyUserForm() {
 function AdminUsersPage({ onBack }) {
   const [grupos, setGrupos] = useState([]);
   const [usuarioForm, setUsuarioForm] = useState(createEmptyUserForm);
+  const [usuarios, setUsuarios] = useState([]);
+  const [userSearchTerm, setUserSearchTerm] = useState("");
+  const [submittedUserSearchTerm, setSubmittedUserSearchTerm] = useState("");
+  const [hasSearchedUsers, setHasSearchedUsers] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
@@ -52,10 +63,15 @@ function AdminUsersPage({ onBack }) {
   async function loadGroups() {
     setLoading(true);
     try {
-      const groupsData = await api.get("/auth/groups");
+      const [groupsData, usersData] = await Promise.all([
+        api.get("/auth/groups"),
+        api.get("/auth/users"),
+      ]);
       setGrupos(Array.isArray(groupsData) ? groupsData : []);
+      setUsuarios(Array.isArray(usersData) ? usersData : []);
     } catch (error) {
       setGrupos([]);
+      setUsuarios([]);
       setMessage({
         type: "erro",
         text: error.message || "Erro ao carregar grupos.",
@@ -118,6 +134,35 @@ function AdminUsersPage({ onBack }) {
     };
   }
 
+  const filteredUsers = useMemo(() => {
+    const search = submittedUserSearchTerm.trim().toLowerCase();
+    if (!hasSearchedUsers) return [];
+    if (!search) return usuarios;
+    return usuarios.filter((user) =>
+      [user.login, user.grupoNome, user.Grupo_Nome, user.cliente?.nome]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(search)),
+    );
+  }, [hasSearchedUsers, usuarios, submittedUserSearchTerm]);
+
+  function searchUsers() {
+    setSubmittedUserSearchTerm(userSearchTerm);
+    setHasSearchedUsers(true);
+  }
+
+  function handleUserSearchKeyDown(event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      searchUsers();
+    }
+  }
+
+  function clearUserSearch() {
+    setUserSearchTerm("");
+    setSubmittedUserSearchTerm("");
+    setHasSearchedUsers(false);
+  }
+
   async function saveUser(event) {
     event.preventDefault();
     const login = usuarioForm.login.trim();
@@ -156,6 +201,7 @@ function AdminUsersPage({ onBack }) {
       await api.post("/auth/users", payload);
       setMessage({ type: "sucesso", text: "Usuario criado." });
       resetForm();
+      await loadGroups();
     } catch (error) {
       setMessage({
         type: "erro",
@@ -203,7 +249,7 @@ function AdminUsersPage({ onBack }) {
             </label>
 
             <label>
-              Grupo
+              Vincular ao Acesso
               <select
                 value={usuarioForm.grupo}
                 onChange={(event) =>
@@ -211,10 +257,10 @@ function AdminUsersPage({ onBack }) {
                 }
                 disabled={loading}
               >
-                <option value="">Selecionar grupo</option>
+                <option value="">Selecionar acesso</option>
                 {grupos.map((grupo) => (
                   <option key={grupo.id || grupo.nome} value={grupo.id}>
-                    {getGroupLabel(grupo)}
+                    {getAccessLabel(grupo)}
                   </option>
                 ))}
               </select>
@@ -251,6 +297,67 @@ function AdminUsersPage({ onBack }) {
             </Button>
           </div>
         </section>
+
+        <section className="admin-user-create-section admin-user-search-section">
+          <div className="admin-user-section-title">
+            <span>Pesquisa</span>
+            <h3>Pesquisar usuários</h3>
+          </div>
+
+          <label className="admin-user-search-field">
+            Buscar usuário
+            <input
+              type="search"
+              value={userSearchTerm}
+              onChange={(event) => setUserSearchTerm(event.target.value)}
+              onKeyDown={handleUserSearchKeyDown}
+              placeholder="Login, grupo ou nome"
+            />
+          </label>
+
+          <div className="admin-page-actions admin-user-search-actions">
+            <Button type="button" onClick={searchUsers} disabled={loading}>
+              Pesquisar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={clearUserSearch}
+              disabled={loading && !hasSearchedUsers}
+            >
+              Limpar
+            </Button>
+          </div>
+        </section>
+
+        {hasSearchedUsers ? (
+          <section className="admin-user-create-section admin-user-search-results-section">
+            <div className="admin-user-section-title">
+            <span>Resultado</span>
+            <h3>Usuários encontrados</h3>
+          </div>
+
+          <div className="admin-user-search-results">
+            {loading ? (
+              <p>Carregando usuários...</p>
+            ) : filteredUsers.length ? (
+              filteredUsers.map((user) => (
+                <article key={user.id || user.login}>
+                  <strong>{user.login}</strong>
+                  <span>
+                    {user.grupoNome ||
+                      user.Grupo_Nome ||
+                      user.grupo ||
+                      "Sem grupo"}
+                  </span>
+                </article>
+              ))
+            ) : (
+              <p>Nenhum usuário encontrado.</p>
+            )}
+          </div>
+          </section>
+        ) : null}
 
         {shouldShowClienteFields ? (
           <fieldset className="admin-page-fieldset admin-user-client-fieldset">
