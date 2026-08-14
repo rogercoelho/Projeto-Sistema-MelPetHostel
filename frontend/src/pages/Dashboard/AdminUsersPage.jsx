@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Modal } from "../../components";
+import { Button } from "../../components";
 import api from "../../services/api";
 import {
   buildAddressesPayload,
@@ -13,15 +13,11 @@ import {
   maskRg,
 } from "../../utils/brFields";
 import { getClientProfileValidationMessage } from "../../utils/clientProfile";
-import { toISODate } from "../../utils/date";
-import AdminPageShell from "./AdminPageShell";
 import {
   EMPTY_CLIENT_FORM,
   EMPTY_USER_FORM,
   findGroupByValue,
   getGroupLabel,
-  getUserGroupLabel,
-  getUserGroupValue,
   isAdminGroup,
 } from "./adminManagementUtils";
 import AddressFields from "./AddressFields";
@@ -29,34 +25,22 @@ import AddressFields from "./AddressFields";
 function createEmptyUserForm() {
   return {
     ...EMPTY_USER_FORM,
-    cliente: { ...EMPTY_CLIENT_FORM },
-  };
-}
-
-function createClienteForm(cliente) {
-  const source = cliente || {};
-
-  return {
-    ...EMPTY_CLIENT_FORM,
-    ...source,
-    cpf: maskCpf(source.cpf),
-    rg: maskRg(source.rg),
-    telefone: maskBrazilPhone(source.telefone),
-    whatsapp: maskBrazilPhone(source.whatsapp),
-    data_nascimento: toISODate(source.data_nascimento),
-    enderecos: createAddressList(source.enderecos),
-    ativo: source.ativo !== false,
+    cliente: {
+      ...EMPTY_CLIENT_FORM,
+      cpf: maskCpf(EMPTY_CLIENT_FORM.cpf),
+      rg: maskRg(EMPTY_CLIENT_FORM.rg),
+      telefone: maskBrazilPhone(EMPTY_CLIENT_FORM.telefone),
+      whatsapp: maskBrazilPhone(EMPTY_CLIENT_FORM.whatsapp),
+      enderecos: createAddressList(EMPTY_CLIENT_FORM.enderecos),
+    },
   };
 }
 
 function AdminUsersPage({ onBack }) {
   const [grupos, setGrupos] = useState([]);
-  const [usuarios, setUsuarios] = useState([]);
   const [usuarioForm, setUsuarioForm] = useState(createEmptyUserForm);
-  const [editingUser, setEditingUser] = useState(null);
-  const [deleteWarningUser, setDeleteWarningUser] = useState(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
   const selectedGroup = useMemo(
@@ -65,21 +49,16 @@ function AdminUsersPage({ onBack }) {
   );
   const shouldShowClienteFields = isAdminGroup(selectedGroup);
 
-  async function loadData() {
+  async function loadGroups() {
     setLoading(true);
     try {
-      const [groupsData, usersData] = await Promise.all([
-        api.get("/auth/groups"),
-        api.get("/auth/users"),
-      ]);
+      const groupsData = await api.get("/auth/groups");
       setGrupos(Array.isArray(groupsData) ? groupsData : []);
-      setUsuarios(Array.isArray(usersData) ? usersData : []);
     } catch (error) {
       setGrupos([]);
-      setUsuarios([]);
       setMessage({
         type: "erro",
-        text: error.message || "Erro ao carregar usuarios.",
+        text: error.message || "Erro ao carregar grupos.",
       });
     } finally {
       setLoading(false);
@@ -87,26 +66,11 @@ function AdminUsersPage({ onBack }) {
   }
 
   useEffect(() => {
-    loadData();
+    loadGroups();
   }, []);
 
   function resetForm() {
-    setEditingUser(null);
     setUsuarioForm(createEmptyUserForm());
-  }
-
-  function startEditUser(user) {
-    setMessage(null);
-    setDeleteWarningUser(null);
-    setConfirmDeleteId(null);
-    setEditingUser(user);
-    setUsuarioForm({
-      login: user.login || "",
-      grupo: getUserGroupValue(user, grupos),
-      senha: "",
-      ativo: user.ativo !== false,
-      cliente: createClienteForm(user.cliente),
-    });
   }
 
   function updateUserField(field, value) {
@@ -164,8 +128,8 @@ function AdminUsersPage({ onBack }) {
       return;
     }
 
-    if (!editingUser && !usuarioForm.senha) {
-      setMessage({ type: "erro", text: "Senha provisória é obrigatória." });
+    if (!usuarioForm.senha) {
+      setMessage({ type: "erro", text: "Senha provisoria e obrigatoria." });
       return;
     }
 
@@ -184,127 +148,106 @@ function AdminUsersPage({ onBack }) {
       grupo,
       ativo: usuarioForm.ativo,
       cliente: shouldShowClienteFields ? buildClientePayload() : undefined,
+      senhaProvisoria: usuarioForm.senha,
     };
 
+    setSaving(true);
     try {
-      if (editingUser) {
-        await api.put(`/auth/users/${editingUser.id}`, payload);
-        setMessage({ type: "sucesso", text: "Usuario atualizado." });
-      } else {
-        await api.post("/auth/users", {
-          ...payload,
-          senhaProvisoria: usuarioForm.senha,
-        });
-        setMessage({ type: "sucesso", text: "Usuario criado." });
-      }
-
+      await api.post("/auth/users", payload);
+      setMessage({ type: "sucesso", text: "Usuario criado." });
       resetForm();
-      await loadData();
     } catch (error) {
       setMessage({
         type: "erro",
-        text: error.message || "Erro ao salvar usuario.",
+        text: error.message || "Erro ao criar usuario.",
       });
+    } finally {
+      setSaving(false);
     }
-  }
-
-  async function deleteUser(user) {
-    try {
-      await api.delete(`/auth/users/${user.id}`);
-      setDeleteWarningUser(null);
-      setConfirmDeleteId(null);
-      setMessage({ type: "sucesso", text: "Usuario excluido." });
-      await loadData();
-    } catch (error) {
-      setMessage({
-        type: "erro",
-        text: error.message || "Erro ao excluir usuario.",
-      });
-    }
-  }
-
-  function startDeleteUser(user) {
-    setMessage(null);
-    setDeleteWarningUser(user);
-    setConfirmDeleteId(null);
-  }
-
-  function acknowledgeDeleteWarning(user) {
-    setDeleteWarningUser(null);
-    setConfirmDeleteId(user.id);
-  }
-
-  function cancelDeleteUser() {
-    setDeleteWarningUser(null);
-    setConfirmDeleteId(null);
   }
 
   return (
-    <AdminPageShell
-      title="Criacao e edicao de usuarios"
-      description="Crie logins, vincule grupos e mantenha os dados cadastrais de administradores."
-      onBack={onBack}
-    >
-      <section className="admin-page-layout">
-        <form className="admin-page-panel admin-page-form" onSubmit={saveUser}>
-          <div className="admin-page-panel-title">
-            <span>{editingUser ? "Editando" : "Novo acesso"}</span>
-            <h3>{editingUser ? editingUser.login : "Criar usuario"}</h3>
+    <main className="admin-page admin-user-create-page">
+      <form
+        className="admin-page-panel admin-page-form admin-user-create-card"
+        onSubmit={saveUser}
+      >
+        <header className="admin-user-create-header">
+          <div className="admin-user-create-heading">
+            <span>Novo acesso</span>
+            <h2>Criar usuário</h2>
           </div>
+          <p className="admin-user-create-subtitle">
+            Configure login, grupo e dados vinculados em um fluxo simples.
+          </p>
+        </header>
 
-          <label>
-            Login
-            <input
-              type="text"
-              value={usuarioForm.login}
-              onChange={(event) => updateUserField("login", event.target.value)}
-              placeholder="Login do usuario"
-            />
-          </label>
-
-          <label>
-            Grupo
-            <select
-              value={usuarioForm.grupo}
-              onChange={(event) => updateUserField("grupo", event.target.value)}
-            >
-              <option value="">-- Selecionar Grupo --</option>
-              {grupos.map((grupo) => (
-                <option key={grupo.id || grupo.nome} value={grupo.id}>
-                  {getGroupLabel(grupo)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {!editingUser ? (
+          <section className="admin-user-create-section">
+            <div className="admin-user-section-title">
+              <span>Acesso</span>
+              <h3>Dados do login</h3>
+            </div>
+            <div className="admin-user-create-grid">
             <label>
-              Senha provisoria
+              Login
+              <input
+                type="text"
+                value={usuarioForm.login}
+                onChange={(event) => updateUserField("login", event.target.value)}
+                placeholder="Login do usuário"
+                autoComplete="username"
+              />
+            </label>
+
+            <label>
+              Grupo
+              <select
+                value={usuarioForm.grupo}
+                onChange={(event) => updateUserField("grupo", event.target.value)}
+                disabled={loading}
+              >
+                <option value="">Selecionar grupo</option>
+                {grupos.map((grupo) => (
+                  <option key={grupo.id || grupo.nome} value={grupo.id}>
+                    {getGroupLabel(grupo)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Senha provisória
               <input
                 type="text"
                 value={usuarioForm.senha}
-                onChange={(event) =>
-                  updateUserField("senha", event.target.value)
-                }
+                onChange={(event) => updateUserField("senha", event.target.value)}
                 placeholder="Senha provisória"
+                autoComplete="new-password"
               />
             </label>
-          ) : null}
 
-          <label className="admin-page-checkbox">
-            <input
-              type="checkbox"
-              checked={usuarioForm.ativo}
-              onChange={(event) =>
-                updateUserField("ativo", event.target.checked)
-              }
-            />
-            Usuario ativo
-          </label>
+            <label className="admin-page-checkbox admin-user-active-toggle">
+              <input
+                type="checkbox"
+                checked={usuarioForm.ativo}
+                onChange={(event) =>
+                  updateUserField("ativo", event.target.checked)
+                }
+              />
+              <span>Usuário ativo</span>
+            </label>
+            </div>
+
+            <div className="admin-page-actions admin-user-create-actions">
+              <Button type="submit" disabled={saving || loading}>
+                {saving ? "Criando..." : "Criar usuário"}
+              </Button>
+            </div>
+          </section>
 
           {shouldShowClienteFields ? (
-            <fieldset className="admin-page-fieldset">
-              <legend>Dados Cadastrais</legend>
+            <fieldset className="admin-page-fieldset admin-user-client-fieldset">
+              <legend>Dados cadastrais</legend>
               <div className="admin-page-form-grid">
                 <label>
                   Nome
@@ -404,13 +347,13 @@ function AdminUsersPage({ onBack }) {
                 </label>
               </div>
               <label>
-                Observacoes
+                Observações
                 <textarea
                   value={usuarioForm.cliente.observacoes}
                   onChange={(event) =>
                     updateClienteField("observacoes", event.target.value)
                   }
-                  placeholder="Observacoes"
+                  placeholder="Observações"
                 />
               </label>
               <AddressFields
@@ -420,138 +363,20 @@ function AdminUsersPage({ onBack }) {
             </fieldset>
           ) : null}
 
-          <div className="admin-page-actions">
-            {editingUser ? (
-              <Button type="button" variant="secondary" onClick={resetForm}>
-                Cancelar edicao
-              </Button>
-            ) : null}
-            <Button type="submit">
-              {editingUser ? "Salvar alteracoes" : "Criar usuario"}
+
+          <div className="admin-user-create-footer">
+            <Button type="button" variant="outline" onClick={onBack}>
+              Voltar
             </Button>
           </div>
 
           {message ? (
-            <p className={`admin-page-message ${message.type}`}>
+            <p className={["admin-page-message", message.type].filter(Boolean).join(" ")}>
               {message.text}
             </p>
           ) : null}
-        </form>
-
-        <section className="admin-page-panel">
-          <div className="admin-page-panel-title">
-            <span>Usuarios</span>
-            <h3>Lista de acessos</h3>
-          </div>
-
-          {loading ? (
-            <p>Carregando...</p>
-          ) : usuarios.length ? (
-            <div className="admin-page-list">
-              {usuarios.map((user) => (
-                <article key={user.id || user.login}>
-                  <div>
-                    <strong>{user.login}</strong>
-                    <span>{getUserGroupLabel(user, grupos)}</span>
-                    {user.cliente?.nome ? (
-                      <span>Cliente: {user.cliente.nome}</span>
-                    ) : null}
-                    <span>{user.ativo === false ? "Inativo" : "Ativo"}</span>
-                  </div>
-                  <div className="admin-page-row-actions">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => startEditUser(user)}
-                    >
-                      Editar
-                    </Button>
-                    {confirmDeleteId === user.id ? (
-                      <>
-                        <Button
-                          type="button"
-                          variant="danger"
-                          size="sm"
-                          onClick={() => deleteUser(user)}
-                        >
-                          Confirmar
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={cancelDeleteUser}
-                        >
-                          Cancelar
-                        </Button>
-                      </>
-                    ) : deleteWarningUser?.id === user.id ? (
-                      <>
-                        <Button
-                          type="button"
-                          variant="danger"
-                          size="sm"
-                          onClick={() => acknowledgeDeleteWarning(user)}
-                        >
-                          OK
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={cancelDeleteUser}
-                        >
-                          Cancelar
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => startDeleteUser(user)}
-                      >
-                        Excluir
-                      </Button>
-                    )}
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p>Nenhum usuario cadastrado.</p>
-          )}
-        </section>
-      </section>
-
-      <Modal
-        isOpen={Boolean(deleteWarningUser)}
-        onClose={cancelDeleteUser}
-        title="Atenção"
-        closeOnBackdropClick={false}
-        showCloseButton={false}
-        containerStyle={{ width: "min(94%, 520px)" }}
-      >
-        <div className="admin-page-delete-modal">
-          <p>
-            Atenção!! Ao clicar em CONFIRMAR, você irá excluir a pasta, os
-            documentos e os registros do banco de dados para esse usuário{" "}
-            <strong>{deleteWarningUser?.login}</strong>. Use apenas para
-            corrigir um problema de criação de usuário.
-          </p>
-
-          <div className="modal-actions">
-            <Button
-              type="button"
-              variant="danger"
-              onClick={() => acknowledgeDeleteWarning(deleteWarningUser)}
-            >
-              OK
-            </Button>
-          </div>
-        </div>
-      </Modal>
-    </AdminPageShell>
+      </form>
+    </main>
   );
 }
 

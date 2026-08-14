@@ -162,14 +162,6 @@ function Dashboard() {
       ];
 
   const dashboardSections = [
-    hasMelPetHostelAccess
-      ? {
-          id: "melpethostel",
-          title: "Mel Pet Hostel",
-          summary: "Acesse o sistema operacional do pet hotel.",
-          items: melPetHostelItems,
-        }
-      : null,
     isAdmin
       ? {
           id: "usuarios",
@@ -177,7 +169,7 @@ function Dashboard() {
           summary: "Cadastre grupos, crie usuarios e altere senhas de acesso.",
           items: [
             {
-              label: "Criacao e edicao de usuarios",
+              label: "Criar Usuário",
               onAction: () => openView("admin-users"),
             },
             {
@@ -189,6 +181,14 @@ function Dashboard() {
               onAction: () => openView("admin-passwords"),
             },
           ],
+        }
+      : null,
+    hasMelPetHostelAccess
+      ? {
+          id: "melpethostel",
+          title: "Mel Pet Hostel",
+          summary: "Acesse o sistema operacional do pet hotel.",
+          items: melPetHostelItems,
         }
       : null,
     isAdmin
