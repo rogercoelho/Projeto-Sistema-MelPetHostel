@@ -54,9 +54,10 @@ async function resolveGroupMeta(req) {
   const columnsMap = await getTableColumnsMap(req, GROUP_TABLE);
   const idCol = pickColumn(columnsMap, ["id", "Grupo_ID"]);
   const nomeCol = pickColumn(columnsMap, ["Nome_Grupo", "Grupo_Nome", "nome"]);
+  const acessoCol = pickColumn(columnsMap, ["Acesso", "acesso"]);
   if (!idCol || !nomeCol) return null;
 
-  return { tableName: GROUP_TABLE, idCol, nomeCol };
+  return { tableName: GROUP_TABLE, idCol, nomeCol, acessoCol };
 }
 
 async function resolveMeta(req) {
@@ -133,6 +134,7 @@ function buildSelect(meta, { includePassword = true } = {}) {
     fields.push(
       aliased(meta.group.idCol, "grupo_ref_id", "g"),
       aliased(meta.group.nomeCol, "grupo_nome", "g"),
+      aliased(meta.group.acessoCol, "grupo_acesso", "g"),
     );
   }
 
@@ -182,6 +184,7 @@ function normalize(row) {
   const senha = row.usuario_senha ?? row.Usuario_Senha;
   const grupoId = row.grupo_id ?? row.Grupo_ID ?? row.grupo;
   const grupoNome = row.grupo_nome ?? row.Grupo_Nome ?? row.grupoNome ?? null;
+  const grupoAcesso = row.grupo_acesso ?? row.Grupo_Acesso ?? row.grupoAcesso ?? null;
   const clienteId = row.cliente_id ?? row.Cliente_ID ?? row.clienteId ?? null;
   const primeiroAcesso = row.primeiro_acesso ?? row.Primeiro_Acesso ?? 0;
   const ativo = row.ativo === undefined || row.ativo === null ? 1 : row.ativo;
@@ -192,6 +195,7 @@ function normalize(row) {
     login,
     grupo: grupoId,
     grupoNome,
+    grupoAcesso,
     clienteId,
     cliente: clienteFromRow(row),
     primeiroAcesso: primeiroAcesso == 1,
@@ -202,6 +206,7 @@ function normalize(row) {
     Primeiro_Acesso: primeiroAcesso,
     Grupo_ID: grupoId,
     Grupo_Nome: grupoNome,
+    Grupo_Acesso: grupoAcesso,
     Cliente_ID: clienteId,
   };
 }

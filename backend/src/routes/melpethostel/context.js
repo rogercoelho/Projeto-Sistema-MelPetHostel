@@ -444,27 +444,22 @@ async function resolveGroupNameForUser(req, login) {
   return groupName ? sanitizePart(groupName) : null;
 }
 
-function isAdminGroupValue(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .includes("admin");
+function isAdminAccessValue(value) {
+  return String(value || "").toLowerCase() === "adm";
 }
 
 async function isAdminUser(req, login) {
   const targetLogin = String(login || "").trim();
   if (targetLogin) {
-    const resolvedGroup = await resolveGroupNameForUser(req, targetLogin);
-    return isAdminGroupValue(resolvedGroup);
+    const userRow = await getUsuarioByLogin(req, targetLogin);
+    return isAdminAccessValue(userRow?.grupoAcesso || userRow?.Grupo_Acesso);
   }
 
-  const fromToken = getReqGrupo(req);
-  if (isAdminGroupValue(fromToken)) return true;
+  if (isAdminAccessValue(req?.user?.grupoAcesso || req?.user?.Grupo_Acesso || req?.user?.acesso)) return true;
 
   const reqLogin = getReqLogin(req);
-  const resolvedGroup = await resolveGroupNameForUser(req, reqLogin);
-  return isAdminGroupValue(resolvedGroup);
+  const userRow = await getUsuarioByLogin(req, reqLogin);
+  return isAdminAccessValue(userRow?.grupoAcesso || userRow?.Grupo_Acesso);
 }
 
 function isNewUsuariosSource(req) {
@@ -502,13 +497,6 @@ async function requireCompleteClienteCadastro(req, res, login) {
 
 async function resolveUserDocumentsRelativeDir(req, login) {
   const safeUsuario = sanitizePart(login) || "usuario";
-
-  if (await isAdminUser(req, login)) {
-    return {
-      relativeDir: `/uploads/Administradores/${safeUsuario}`,
-      safeUsuario,
-    };
-  }
 
   const safeGrupo = await resolveGroupNameForUser(req, login);
   if (!safeGrupo) {

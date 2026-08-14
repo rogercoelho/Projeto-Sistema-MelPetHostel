@@ -31,29 +31,18 @@ function isNumeric(value) {
   return /^\d+$/.test(clean(value));
 }
 
-function isAdminGroupValue(value) {
-  return clean(value)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .includes("admin");
+function isAdminAccessValue(value) {
+  return ["adm", "admin", "administrador"].includes(
+    clean(value)
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase(),
+  );
 }
 
 function isAdminUser(req) {
   const user = (req && req.user) || {};
-  const values = [
-    user.grupoNome,
-    user.grupo,
-    user.perfil,
-    user.role,
-    user.tipo,
-  ];
-
-  return Boolean(
-    user.admin ||
-    user.isAdmin ||
-    values.some((value) => isAdminGroupValue(value)),
-  );
+  return isAdminAccessValue(user.grupoAcesso || user.Grupo_Acesso);
 }
 
 function requireAdmin(req, res) {
@@ -157,9 +146,6 @@ async function removeUserUploadDirs(req, user, id) {
   const uploadsRoot = getUploadsRoot();
   const candidates = new Set();
   if (safeGroup) candidates.add(path.join(uploadsRoot, safeGroup, safeLogin));
-  if (isAdminGroupValue(grupoNome)) {
-    candidates.add(path.join(uploadsRoot, "Administradores", safeLogin));
-  }
 
   for (const dirPath of candidates) {
     await removeUploadsDirRecursive(dirPath);
@@ -173,22 +159,23 @@ async function ensureGroupDirs(groupName) {
   await fs.mkdir(groupDir, { recursive: true });
 }
 
-async function ensureUserDir({ login, grupoNome, admin = false }) {
+async function ensureUserDir({ login, grupoNome }) {
   const safeLogin = sanitizeSegment(login, "usuario");
   if (!safeLogin) return;
 
   const root = getUploadsRoot();
-  if (admin) {
-    await fs.mkdir(path.join(root, "Administradores", safeLogin), {
-      recursive: true,
-    });
-    return;
-  }
 
   const safeGroup = sanitizeSegment(grupoNome);
   if (safeGroup) {
     await fs.mkdir(path.join(root, safeGroup, safeLogin), { recursive: true });
   }
+}
+
+async function resolveGroupRecord(req, groupValue) {
+  const value = clean(groupValue);
+  if (!value) return null;
+  if (isNumeric(value)) return Grupo.findById(req, Number(value));
+  return Grupo.findByName(req, value);
 }
 
 async function resolveGroupName(req, groupValue) {
@@ -334,14 +321,15 @@ function userNeedsFirstAccess(row) {
   );
 }
 
-function createTokenPayload({ row, source, grupo, grupoNome }) {
-  const admin = isAdminGroupValue(grupoNome || grupo);
+function createTokenPayload({ row, source, grupo, grupoNome, grupoAcesso }) {
+  const admin = isAdminAccessValue(grupoAcesso);
 
   return {
     id: row.Usuario_ID,
     login: row.Usuario_Login,
     grupo: grupo || null,
     grupoNome: grupoNome || null,
+    grupoAcesso: grupoAcesso || null,
     admin,
     source,
     modules: [DEFAULT_MODULE],
@@ -425,8 +413,10 @@ router.post("/login", async (req, res) => {
     }
 
     const grupo = match.Grupo_ID || match.grupo || null;
-    const grupoNome = match.grupoNome || (await resolveGroupName(req, grupo));
-    const admin = isAdminGroupValue(grupoNome || grupo);
+    const grupoRec = await resolveGroupRecord(req, grupo);
+    const grupoNome = match.grupoNome || grupoRec?.nome || grupoRec?.Nome_Grupo || (await resolveGroupName(req, grupo));
+    const grupoAcesso = match.grupoAcesso || grupoRec?.acesso || grupoRec?.Acesso || null;
+    const admin = isAdminAccessValue(grupoAcesso);
 
     await ensureUserDir({
       login: match.Usuario_Login,
@@ -447,6 +437,7 @@ router.post("/login", async (req, res) => {
       source,
       grupo,
       grupoNome,
+      grupoAcesso,
     });
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "1h" });
 
@@ -466,6 +457,7 @@ router.post("/login", async (req, res) => {
         login: match.Usuario_Login,
         grupo: grupo || null,
         grupoNome: grupoNome || null,
+        grupoAcesso: grupoAcesso || null,
         clienteId: match.Cliente_ID || match.clienteId || null,
         clienteCadastroPendente: Boolean(cadastro.pendente),
         cadastroCompleto: Boolean(cadastro.completo),
@@ -709,7 +701,7 @@ router.post("/groups", async (req, res) => {
   try {
     if (!requireAdmin(req, res)) return;
     const nome = clean(req.body?.nome);
-    const tela = clean(req.body?.tela || req.body?.modulo || req.body?.tipoTela || "usuario");
+    const acesso = clean(req.body?.acesso || "usuario");
 
     if (!nome) {
       return res
@@ -717,7 +709,7 @@ router.post("/groups", async (req, res) => {
         .json({ status: "erro", mensagem: "Nome e obrigatorio" });
     }
 
-    const group = await Grupo.create(req, nome, tela);
+    const group = await Grupo.create(req, nome, acesso);
     await ensureGroupDirs(group.nome);
     return res.json({ status: "sucesso", mensagem: "Grupo criado", group });
   } catch (error) {
@@ -768,7 +760,7 @@ router.post("/users", async (req, res) => {
 
     const grupoRec = await Grupo.findById(req, grupoId);
     const grupoNome = grupoRec && (grupoRec.nome || grupoRec.Nome_Grupo);
-    const isAdministrator = isAdminGroupValue(grupoNome);
+    const isAdministrator = isAdminAccessGroup(grupoRec);
     const clientePayload = getClientePayload(req.body || {});
     const enderecos = getEnderecoPayloads(req.body || {});
     let cliente;
@@ -861,7 +853,7 @@ router.put("/users/:id", async (req, res) => {
 
     const grupoRec = await Grupo.findById(req, grupoId);
     const grupoNome = grupoRec && (grupoRec.nome || grupoRec.Nome_Grupo);
-    const isAdministrator = isAdminGroupValue(grupoNome);
+    const isAdministrator = isAdminAccessGroup(grupoRec);
     const shouldUpdateCliente = hasClientePayload(req.body || {});
     const clientePayload = shouldUpdateCliente
       ? getClientePayload(req.body || {})

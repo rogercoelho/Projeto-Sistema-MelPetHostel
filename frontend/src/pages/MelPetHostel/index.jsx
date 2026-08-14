@@ -419,15 +419,10 @@ export default function MelPetHostel({
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
-  const usuarioGrupo =
-    (usuario && (usuario.grupoNome || usuario.grupo)) || null;
-  const isAdmin = Boolean(
-    usuario &&
-    (usuario.admin ||
-      usuario.isAdmin ||
-      (usuario.perfil && String(usuario.perfil).toLowerCase() === "admin") ||
-      (usuarioGrupo && String(usuarioGrupo).toLowerCase().includes("admin"))),
-  );
+  const usuarioAcesso = String(
+    (usuario && (usuario.grupoAcesso || usuario.Grupo_Acesso)) || "",
+  ).toLowerCase();
+  const isAdmin = usuarioAcesso === "adm";
 
   useEffect(() => {
     if (isAdmin) {

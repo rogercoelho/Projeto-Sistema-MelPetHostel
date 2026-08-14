@@ -1,17 +1,9 @@
 export function isAdminUser(usuario) {
-  const usuarioGrupo = usuario && (usuario.grupoNome || usuario.grupo);
-  const normalizedGroup = String(usuarioGrupo || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+  if (!usuario) return false;
 
-  return Boolean(
-    usuario &&
-      (usuario.admin ||
-        usuario.isAdmin ||
-        (usuario.perfil && String(usuario.perfil).toLowerCase() === "admin") ||
-        normalizedGroup.includes("admin")),
-  );
+  const acesso = String(usuario.grupoAcesso || usuario.Grupo_Acesso || "").toLowerCase();
+
+  return acesso === "adm";
 }
 
 export function userNeedsPasswordChange(usuario) {

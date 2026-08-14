@@ -1,6 +1,5 @@
 export const MODULES = [
   { value: "melpethostel", label: "Mel Pet Hostel" },
-  { value: "administradores", label: "Administradores" },
 ];
 
 export const EMPTY_CLIENT_FORM = {
@@ -36,12 +35,16 @@ export function normalizeText(value) {
     .trim();
 }
 
+export function isAdminAccessValue(value) {
+  return ["adm", "admin", "administrador"].includes(normalizeText(value));
+}
+
 export function isAdminGroupName(value) {
   return normalizeText(value).includes("admin");
 }
 
 export function isAdminGroup(grupo) {
-  return isAdminGroupName(getGroupLabel(grupo));
+  return isAdminAccessValue(grupo?.acesso || grupo?.Acesso);
 }
 
 function isNumericId(value) {
@@ -79,5 +82,5 @@ export function getUserGroupLabel(user, grupos) {
 
 export function userHasAdminGroup(user, grupos) {
   const group = findGroupForUserValue(String(user?.grupo || ""), grupos);
-  return isAdminGroupName(user?.grupoNome || getGroupLabel(group));
+  return isAdminAccessValue(user?.grupoAcesso || user?.Grupo_Acesso || user?.acesso || group?.acesso || group?.Acesso);
 }

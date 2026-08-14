@@ -33,9 +33,9 @@ function pickColumn(columns, candidates) {
   return null;
 }
 
-function normalizeTela(value) {
-  const tela = clean(value).toLowerCase();
-  if (["adm", "admin", "administracao", "administrador"].includes(tela)) return "adm";
+function normalizeAcesso(value) {
+  const acesso = clean(value).toLowerCase();
+  if (["adm", "admin", "administracao", "administrador"].includes(acesso)) return "adm";
   return "usuario";
 }
 
@@ -43,31 +43,34 @@ function normalize(row) {
   if (!row) return null;
   const id = row.id ?? row.Grupo_ID;
   const nome = row.Nome_Grupo ?? row.Grupo_Nome ?? row.nome;
-  const tela = row.tela ?? row.Tela ?? row.modulo ?? row.Modulo ?? row.Tipo_Tela ?? row.tipo_tela ?? "";
+  const acesso = row.Acesso ?? row.acesso ?? "";
 
   return {
     ...row,
     id,
     nome,
-    tela,
+    acesso,
+    Acesso: acesso,
     Grupo_ID: id,
     Grupo_Nome: nome,
     Nome_Grupo: nome,
   };
 }
 
-async function getTelaColumn(req) {
+async function getAcessoColumn(req) {
   const columns = await getColumns(req);
-  return pickColumn(columns, ["Tela", "tela", "Modulo", "modulo", "Tipo_Tela", "tipo_tela"]);
+  const column = pickColumn(columns, ["Acesso", "acesso"]);
+  if (!column) throw new Error("Coluna Acesso nao encontrada na tabela Grupos.");
+  return column;
 }
 
 async function list(req) {
   if (!(await ensureTable(req))) return [];
 
-  const telaCol = await getTelaColumn(req);
-  const selectTela = telaCol ? ", " + telaCol + " AS tela" : "";
+  const acessoCol = await getAcessoColumn(req);
+  const selectAcesso = ", " + acessoCol + " AS Acesso";
   const [rows] = await dbFor(req).query(
-    "SELECT id, Nome_Grupo, Nome_Grupo AS nome" + selectTela + " FROM " + TABLE + " ORDER BY Nome_Grupo",
+    "SELECT id, Nome_Grupo, Nome_Grupo AS nome" + selectAcesso + " FROM " + TABLE + " ORDER BY Nome_Grupo",
   );
 
   return (rows || []).map(normalize);
@@ -76,10 +79,10 @@ async function list(req) {
 async function findById(req, id) {
   if (!(await ensureTable(req))) return null;
 
-  const telaCol = await getTelaColumn(req);
-  const selectTela = telaCol ? ", " + telaCol + " AS tela" : "";
+  const acessoCol = await getAcessoColumn(req);
+  const selectAcesso = ", " + acessoCol + " AS Acesso";
   const [rows] = await dbFor(req).query(
-    "SELECT id, Nome_Grupo, Nome_Grupo AS nome" + selectTela + " FROM " + TABLE + " WHERE id = ? LIMIT 1",
+    "SELECT id, Nome_Grupo, Nome_Grupo AS nome" + selectAcesso + " FROM " + TABLE + " WHERE id = ? LIMIT 1",
     [id],
   );
 
@@ -89,29 +92,25 @@ async function findById(req, id) {
 async function findByName(req, nome) {
   if (!(await ensureTable(req))) return null;
 
-  const telaCol = await getTelaColumn(req);
-  const selectTela = telaCol ? ", " + telaCol + " AS tela" : "";
+  const acessoCol = await getAcessoColumn(req);
+  const selectAcesso = ", " + acessoCol + " AS Acesso";
   const [rows] = await dbFor(req).query(
-    "SELECT id, Nome_Grupo, Nome_Grupo AS nome" + selectTela + " FROM " + TABLE + " WHERE LOWER(TRIM(Nome_Grupo)) = LOWER(TRIM(?)) LIMIT 1",
+    "SELECT id, Nome_Grupo, Nome_Grupo AS nome" + selectAcesso + " FROM " + TABLE + " WHERE LOWER(TRIM(Nome_Grupo)) = LOWER(TRIM(?)) LIMIT 1",
     [nome],
   );
 
   return normalize(rows && rows.length ? rows[0] : null);
 }
 
-async function create(req, nome, tela = "usuario") {
+async function create(req, nome, acesso = "usuario") {
   if (!(await ensureTable(req))) {
     throw new Error("Tabela Grupos nao encontrada.");
   }
 
   const groupName = clean(nome);
-  const telaCol = await getTelaColumn(req);
-  const insertColumns = ["Nome_Grupo"];
-  const values = [groupName];
-  if (telaCol) {
-    insertColumns.push(telaCol);
-    values.push(normalizeTela(tela));
-  }
+  const acessoCol = await getAcessoColumn(req);
+  const insertColumns = ["Nome_Grupo", acessoCol];
+  const values = [groupName, normalizeAcesso(acesso)];
 
   const [result] = await dbFor(req).query(
     "INSERT INTO " + TABLE + " (" + insertColumns.join(", ") + ") VALUES (" + insertColumns.map(() => "?").join(", ") + ")",

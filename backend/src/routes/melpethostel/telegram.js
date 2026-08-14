@@ -78,14 +78,6 @@ function requireAdmin(req, res) {
   return true;
 }
 
-function isAdminGroupValue(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .includes("admin");
-}
-
 async function getAdminUsersWithTelegram(req, module) {
   const db = dbFor(req);
   const moduleKey = normalizeModule(module);
@@ -93,7 +85,7 @@ async function getAdminUsersWithTelegram(req, module) {
 
   const users = await Usuario.list(req);
   const admins = (users || [])
-    .filter((user) => isAdminGroupValue(user?.grupoNome || user?.Grupo_Nome))
+    .filter((user) => String(user?.grupoAcesso || user?.Grupo_Acesso || user?.acesso || "").toLowerCase() === "adm")
     .map((user) => ({
       id: user.Usuario_ID || user.id,
       login: user.Usuario_Login || user.login,

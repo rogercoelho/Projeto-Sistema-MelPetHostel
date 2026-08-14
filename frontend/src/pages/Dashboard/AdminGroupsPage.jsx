@@ -3,7 +3,7 @@ import { Button } from "../../components";
 import api from "../../services/api";
 
 function AdminGroupsPage({ onBack }) {
-  const [grupoForm, setGrupoForm] = useState({ nome: "", tela: "usuario" });
+  const [grupoForm, setGrupoForm] = useState({ nome: "", acesso: "usuario" });
   const [grupos, setGrupos] = useState([]);
   const [groupSearchTerm, setGroupSearchTerm] = useState("");
   const [submittedGroupSearchTerm, setSubmittedGroupSearchTerm] = useState("");
@@ -34,7 +34,7 @@ function AdminGroupsPage({ onBack }) {
     if (!hasSearchedGroups) return [];
     if (!search) return grupos;
     return grupos.filter((grupo) =>
-      [grupo.nome, grupo.Grupo_Nome, grupo.tela]
+      [grupo.nome, grupo.Grupo_Nome, grupo.acesso, grupo.Acesso]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(search)),
     );
@@ -72,8 +72,8 @@ function AdminGroupsPage({ onBack }) {
 
     setSaving(true);
     try {
-      await api.post("/auth/groups", { nome, tela: grupoForm.tela });
-      setGrupoForm({ nome: "", tela: "usuario" });
+      await api.post("/auth/groups", { nome, acesso: grupoForm.acesso });
+      setGrupoForm({ nome: "", acesso: "usuario" });
       setMessage({ type: "sucesso", text: "Grupo criado." });
       await loadGroups();
     } catch (error) {
@@ -123,8 +123,8 @@ function AdminGroupsPage({ onBack }) {
             <label>
               Vincular ao Acesso
               <select
-                value={grupoForm.tela}
-                onChange={(event) => updateGroupField("tela", event.target.value)}
+                value={grupoForm.acesso}
+                onChange={(event) => updateGroupField("acesso", event.target.value)}
               >
                 <option value="adm">Acesso de Administrador</option>
                 <option value="usuario">Acesso de Cliente</option>
@@ -185,7 +185,7 @@ function AdminGroupsPage({ onBack }) {
               filteredGroups.map((grupo) => (
                 <article key={grupo.id || grupo.nome}>
                   <strong>{grupo.nome || grupo.Grupo_Nome}</strong>
-                  <span>{grupo.tela === "adm" ? "Acesso de Administrador" : "Acesso de Cliente"}</span>
+                  <span>{(grupo.acesso || grupo.Acesso) === "adm" ? "Acesso de Administrador" : "Acesso de Cliente"}</span>
                 </article>
               ))
             ) : (

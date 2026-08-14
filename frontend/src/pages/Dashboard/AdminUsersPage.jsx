@@ -23,10 +23,10 @@ import {
 import AddressFields from "./AddressFields";
 
 function getAccessLabel(grupo) {
-  const tela = String(grupo?.tela || grupo?.Tela || "").toLowerCase();
-  if (tela === "adm") return "Acesso de Administrador";
-  if (tela === "usuario") return "Acesso de Cliente";
-  return isAdminGroup(grupo) ? "Acesso de Administrador" : "Acesso de Cliente";
+  const acesso = String(grupo?.acesso || grupo?.Acesso || grupo?.grupoAcesso || grupo?.Grupo_Acesso || "").toLowerCase();
+  if (acesso === "adm") return "Acesso de Administrador";
+  if (acesso === "usuario") return "Acesso de Cliente";
+  return acesso === "adm" ? "Acesso de Administrador" : "Acesso de Cliente";
 }
 
 function createEmptyUserForm() {

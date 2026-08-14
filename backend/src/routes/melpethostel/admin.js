@@ -24,12 +24,8 @@ function isNumeric(value) {
   return /^\d+$/.test(clean(value));
 }
 
-function isAdminGroupValue(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .includes("admin");
+function isAdminAccessValue(value) {
+  return String(value || "").toLowerCase() === "adm";
 }
 
 function normalizeCliente(row) {
@@ -190,7 +186,7 @@ async function listAdminClienteIds(req, clienteIds) {
     .filter((usuario) => {
       const clienteId = usuario?.Cliente_ID || usuario?.clienteId;
       if (!clienteIdSet.has(String(clienteId))) return false;
-      return isAdminGroupValue(usuario?.grupoNome || usuario?.Grupo_Nome);
+      return isAdminAccessValue(usuario?.grupoAcesso || usuario?.Grupo_Acesso || usuario?.acesso);
     })
     .map((usuario) => usuario?.Cliente_ID || usuario?.clienteId)
     .filter(Boolean);
@@ -210,7 +206,7 @@ async function listUsuariosByClienteIds(req, clienteIds) {
     if (!clienteIdSet.has(String(clienteId))) continue;
 
     const current = byCliente.get(Number(clienteId));
-    const isAdmin = isAdminGroupValue(usuario?.grupoNome || usuario?.Grupo_Nome);
+    const isAdmin = isAdminAccessValue(usuario?.grupoAcesso || usuario?.Grupo_Acesso || usuario?.acesso);
     if (!current || (current.admin && !isAdmin)) {
       byCliente.set(Number(clienteId), {
         usuarioId: usuario?.Usuario_ID || usuario?.id || null,
@@ -409,13 +405,13 @@ router.get("/groups", async (req, res) => {
 router.post("/groups", async (req, res) => {
   try {
     const { nome } = req.body;
-    const tela = clean(req.body?.tela || req.body?.modulo || req.body?.tipoTela || "usuario");
+    const acesso = clean(req.body?.acesso || "usuario");
     if (!nome || !nome.trim())
       return res
         .status(400)
         .json({ status: "erro", mensagem: "Nome é obrigatório" });
 
-    await Grupo.create(req, nome.trim(), tela);
+    await Grupo.create(req, nome.trim(), acesso);
 
     // create upload folders for the group if not present
     try {
