@@ -927,7 +927,19 @@ router.post(
       await fs.writeFile(path.join(diskDir, nomeArquivo), req.file.buffer);
       const filePath = `${relativeDir}/${nomeArquivo}`.replace(/\\/g, "/");
       const [result] = await dbFor(req).query(`INSERT INTO ${qtable(carteirasTable)} (${["pet_id", "cliente_id", "lado", "nome_arquivo", "file_path", "status"].map(qcol).join(", ")}) VALUES (?, ?, ?, ?, ?, 'aprovado')`, [petId, clienteId, lado, nomeArquivo, filePath]);
-      return res.status(201).json({ status: "sucesso", mensagem: "Carteira de vacinacao enviada com sucesso.", carteira: { id: result.insertId } });
+      return res.status(201).json({
+        status: "sucesso",
+        mensagem: "Carteira de vacinacao enviada com sucesso.",
+        carteira: {
+          id: result.insertId,
+          petId,
+          clienteId,
+          lado,
+          nomeArquivo,
+          filePath,
+          status: "aprovado",
+        },
+      });
     } catch (error) {
       console.error("Error in POST /melpethostel/documentos/admin-upload:", error);
       return res.status(500).json({ status: "erro", mensagem: error.message });

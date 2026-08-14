@@ -6,6 +6,7 @@ const {
   dbFor,
   getUsuarioLoginByClienteId,
   movePetDocumentsToExpurgo,
+  parseJsonArray,
   qcol,
   qtable,
   resolveTableName,
@@ -87,14 +88,29 @@ async function listPetsByClienteIds(req, clienteIds) {
   if (!clienteIds.length) return new Map();
   const tableName = await resolveTableName(req, TABLE_NAMES.pets);
   if (!tableName) return new Map();
+  const fichasTable = await resolveTableName(req, TABLE_NAMES.petFichas);
 
   const placeholders = clienteIds.map(() => "?").join(", ");
   const [rows] = await dbFor(req).query(
     `
-      SELECT id, cliente_id, nome, raca, idade, peso_aproximado, ativo
-      FROM ${qtable(tableName)}
-      WHERE ${qcol("cliente_id")} IN (${placeholders})
-      ORDER BY ${qcol("nome")} ASC, ${qcol("id")} ASC
+      SELECT
+        p.id, p.cliente_id, p.nome, p.raca, p.idade, p.peso_aproximado, p.ativo,
+        f.veterinario_nome, f.clinica_nome, f.clinica_telefone, f.clinica_endereco,
+        f.autoriza_atendimento_emergencial, f.autoriza_medicacao, f.sexo, f.castrado,
+        f.doenca_diagnosticada, f.doenca_detalhes, f.cirurgias_historico, f.cirurgias_detalhes,
+        f.medicamento_continuo, f.medicamento_detalhes, f.alimentacao_tipos, f.alimentacao_marca,
+        f.alimentacao_quantidade_horarios, f.restricoes_alimentares, f.deixa_mexer_potinho,
+        f.petiscos, f.comportamento_caes, f.agressividade, f.agressividade_situacoes,
+        f.destroi_objetos, f.ansiedade_separacao, f.medos_especificos, f.reacao_medo,
+        f.como_acalmar, f.fica_sozinho, f.tempo_sozinho, f.local_dormir,
+        f.ritual_dormir_comer, f.aceita_banho_escovacao, f.aceita_roupinha,
+        f.permite_manuseio, f.gosta_colo, f.sensibilidade_fisica, f.sensibilidade_detalhes,
+        f.brinca_piscina, f.brinca_mangueira, f.brinca_bolinha, f.brinca_madeira,
+        f.observacoes_tutor, f.veracidade_informacoes
+      FROM ${qtable(tableName)} p
+      ${fichasTable ? `LEFT JOIN ${qtable(fichasTable)} f ON f.pet_id = p.id` : ""}
+      WHERE p.${qcol("cliente_id")} IN (${placeholders})
+      ORDER BY p.${qcol("nome")} ASC, p.${qcol("id")} ASC
     `,
     clienteIds,
   );
@@ -109,6 +125,56 @@ async function listPetsByClienteIds(req, clienteIds) {
       idade: row.idade || "",
       pesoAproximado: row.peso_aproximado || "",
       ativo: row.ativo === undefined || row.ativo === null ? true : row.ativo == 1,
+      ficha: {
+        nomePet: row.nome || "",
+        raca: row.raca || "",
+        idade: row.idade || "",
+        pesoAproximado: row.peso_aproximado || "",
+        veterinarioNome: row.veterinario_nome || "",
+        clinicaNome: row.clinica_nome || "",
+        clinicaTelefone: row.clinica_telefone || "",
+        clinicaEndereco: row.clinica_endereco || "",
+        autorizaAtendimentoEmergencial: row.autoriza_atendimento_emergencial || "",
+        autorizaMedicacao: row.autoriza_medicacao || "",
+        sexo: row.sexo || "",
+        castrado: row.castrado || "",
+        doencaDiagnosticada: row.doenca_diagnosticada || "",
+        doencaDetalhes: row.doenca_detalhes || "",
+        cirurgiasHistorico: row.cirurgias_historico || "",
+        cirurgiasDetalhes: row.cirurgias_detalhes || "",
+        medicamentoContinuo: row.medicamento_continuo || "",
+        medicamentoDetalhes: row.medicamento_detalhes || "",
+        alimentacaoTipos: parseJsonArray(row.alimentacao_tipos),
+        alimentacaoMarca: row.alimentacao_marca || "",
+        alimentacaoQuantidadeHorarios: row.alimentacao_quantidade_horarios || "",
+        restricoesAlimentares: row.restricoes_alimentares || "",
+        deixaMexerPotinho: row.deixa_mexer_potinho || "",
+        petiscos: row.petiscos || "",
+        comportamentoCaes: row.comportamento_caes || "",
+        agressividade: row.agressividade || "",
+        agressividadeSituacoes: row.agressividade_situacoes || "",
+        destroiObjetos: row.destroi_objetos || "",
+        ansiedadeSeparacao: row.ansiedade_separacao || "",
+        medosEspecificos: row.medos_especificos || "",
+        reacaoMedo: row.reacao_medo || "",
+        comoAcalmar: row.como_acalmar || "",
+        ficaSozinho: row.fica_sozinho || "",
+        tempoSozinho: row.tempo_sozinho || "",
+        localDormir: row.local_dormir || "",
+        ritualDormirComer: row.ritual_dormir_comer || "",
+        aceitaBanhoEscovacao: row.aceita_banho_escovacao || "",
+        aceitaRoupinha: row.aceita_roupinha || "",
+        permiteManuseio: row.permite_manuseio || "",
+        gostaColo: row.gosta_colo || "",
+        sensibilidadeFisica: row.sensibilidade_fisica || "",
+        sensibilidadeDetalhes: row.sensibilidade_detalhes || "",
+        brincaPiscina: row.brinca_piscina || "",
+        brincaMangueira: row.brinca_mangueira || "",
+        brincaBolinha: row.brinca_bolinha || "",
+        brincaMadeira: row.brinca_madeira || "",
+        observacoesTutor: row.observacoes_tutor || "",
+        veracidadeInformacoes: Boolean(row.veracidade_informacoes),
+      },
     });
     byCliente.set(row.cliente_id, list);
   }

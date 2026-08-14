@@ -264,6 +264,49 @@
   min-width: 0;
 }
 
+.melpet-admin-pet-search {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.melpet-admin-pet-search-header {
+  display: grid;
+  gap: 4px;
+}
+
+.melpet-admin-pet-search-header span,
+.melpet-admin-pet-card-header span {
+  color: var(--cor-marrom-claro);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.melpet-admin-pet-search-header h3,
+.melpet-admin-pet-card-header h3 {
+  margin: 0;
+  color: var(--cor-marrom);
+  font-size: clamp(1.35rem, 5vw, 2rem);
+  line-height: 1.05;
+}
+
+.melpet-admin-pet-search-form {
+  align-items: end;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: var(--spacing-sm);
+}
+
+.melpet-admin-pet-search-form label span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--cor-marrom);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
 .melpet-pet-status-results {
   display: grid;
   gap: var(--spacing-sm);
@@ -271,22 +314,33 @@
 
 .melpet-pet-status-results > p {
   margin: 0;
+  color: var(--cor-marrom-claro);
+  font-weight: 800;
 }
 
 .melpet-pet-status-client {
   display: grid;
   gap: var(--spacing-sm);
   min-width: 0;
-  border: 1px solid rgba(var(--cor-marrom-rgb), 0.16);
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.14);
   border-radius: 8px;
-  background: var(--cor-branco);
+  background: rgba(255, 255, 255, 0.9);
   padding: var(--spacing-sm);
+  box-shadow: 0 10px 24px rgba(var(--cor-marrom-rgb), 0.07);
 }
 
-.melpet-pet-status-client header {
+.melpet-admin-pet-result-card header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--spacing-sm);
+  color: var(--cor-marrom);
+}
+
+.melpet-admin-pet-result-card header > div {
   display: grid;
   gap: 2px;
-  color: var(--cor-marrom);
+  min-width: 0;
 }
 
 .melpet-pet-status-client header strong,
@@ -301,7 +355,19 @@
   font-weight: 800;
 }
 
-.melpet-pet-status-client ul {
+.melpet-admin-pet-result-card header em {
+  border-radius: 999px;
+  background: rgba(var(--cor-marrom-rgb), 0.08);
+  color: var(--cor-marrom);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+
+.melpet-pet-status-client ul,
+.melpet-admin-pet-result-list {
   display: grid;
   gap: 8px;
   margin: 0;
@@ -311,21 +377,342 @@
 
 .melpet-pet-status-row {
   display: grid;
-  gap: 8px;
-  align-items: center;
-  border-top: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  min-width: 0;
+}
+
+.melpet-admin-pet-result-row {
+  border-top: 1px solid rgba(var(--cor-marrom-rgb), 0.1);
   padding-top: 8px;
 }
 
-.melpet-pet-status-row > div {
+.melpet-admin-pet-open-button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(var(--cor-marrom-rgb), 0.045);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
 }
 
-.melpet-pet-status-row > div strong {
+.melpet-admin-pet-open-button:hover {
+  border-color: rgba(var(--cor-marrom-rgb), 0.24);
+  background: rgba(var(--cor-marrom-rgb), 0.08);
+  transform: translateY(-1px);
+}
+
+.melpet-admin-pet-open-button span {
+  display: grid;
+  gap: 3px;
   min-width: 0;
+}
+
+.melpet-admin-pet-open-button strong,
+.melpet-admin-pet-open-button small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.melpet-admin-pet-open-button small {
+  color: var(--cor-marrom-claro);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.melpet-pet-name-button {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--cor-marrom);
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.melpet-pet-name-button:focus-visible {
+  outline: 2px solid var(--cor-marrom);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.melpet-admin-standalone-screen {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: clamp(12px, 4vw, 32px);
+}
+
+.melpet-admin-pet-screen {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.melpet-admin-pet-toolbar {
+  display: none;
+}
+
+.melpet-admin-pet-card {
+  display: grid;
+  gap: clamp(16px, 4vw, 24px);
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: clamp(14px, 4vw, 26px);
+  box-shadow: 0 18px 44px rgba(var(--cor-marrom-rgb), 0.11);
+}
+
+.melpet-admin-pet-card-header {
+  display: grid;
+  gap: var(--spacing-sm);
+  align-items: start;
+  border-bottom: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  padding-bottom: var(--spacing-md);
+}
+
+.melpet-admin-pet-heading {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.melpet-admin-pet-card-header span,
+.melpet-admin-pet-info-section > header span,
+.melpet-admin-pet-emergency-section > header span,
+.melpet-admin-pet-docs-section > header span,
+.melpet-admin-pet-anamnesis-section > header span {
+  color: var(--cor-marrom-claro);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.melpet-admin-pet-card-header h3 {
+  margin: 0;
+  color: var(--cor-marrom);
+  font-size: clamp(1.65rem, 8vw, 2.55rem);
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.melpet-admin-pet-card-header p {
+  margin: 0;
+  color: var(--cor-marrom-claro);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.melpet-admin-pet-card-header > .melpet-client-pet-status {
+  justify-self: start;
+  min-height: 34px;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+}
+
+.melpet-admin-pet-footer {
+  display: flex;
+  justify-content: flex-start;
+  border-top: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  padding-top: var(--spacing-md);
+}
+
+.melpet-admin-pet-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--spacing-sm);
+}
+
+.melpet-admin-pet-overview article,
+.melpet-admin-pet-info-section,
+.melpet-admin-pet-emergency-section,
+.melpet-admin-pet-docs-section,
+.melpet-admin-pet-anamnesis-section {
+  min-width: 0;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  border-radius: 8px;
+  background: rgba(var(--cor-marrom-rgb), 0.035);
+}
+
+.melpet-admin-pet-overview article {
+  display: grid;
+  gap: 5px;
+  padding: var(--spacing-sm);
+}
+
+.melpet-admin-pet-overview span {
+  color: var(--cor-marrom-claro);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.melpet-admin-pet-overview strong {
+  color: var(--cor-marrom);
+  font-size: 1.04rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.melpet-admin-pet-overview small {
+  color: var(--cor-marrom-claro);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.melpet-admin-pet-info-section,
+.melpet-admin-pet-emergency-section,
+.melpet-admin-pet-docs-section,
+.melpet-admin-pet-anamnesis-section {
+  display: grid;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+}
+
+.melpet-admin-pet-info-section > header,
+.melpet-admin-pet-emergency-section > header,
+.melpet-admin-pet-docs-section > header,
+.melpet-admin-pet-anamnesis-section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.melpet-admin-pet-info-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+}
+
+.melpet-admin-pet-info-grid div {
+  display: grid;
+  gap: 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.74);
+  padding: 10px;
+}
+
+.melpet-admin-pet-info-grid dt {
+  color: var(--cor-marrom-claro);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.melpet-admin-pet-info-grid dd {
+  margin: 0;
+  color: var(--cor-marrom);
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.melpet-admin-pet-docs-section .melpet-pet-documents {
+  gap: var(--spacing-md);
+}
+
+.melpet-admin-pet-docs-section .pet-registration-required-message {
+  margin: 0;
+}
+
+.melpet-admin-pet-vaccine-content {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.melpet-admin-carteira-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.melpet-admin-carteira-actions .btn {
+  width: 100%;
+}
+
+.melpet-admin-anamnesis-groups {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.melpet-admin-anamnesis-groups article {
+  display: grid;
+  gap: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.74);
+  padding: var(--spacing-sm);
+}
+
+.melpet-admin-anamnesis-groups h4 {
+  margin: 0;
+  color: var(--cor-marrom);
+  font-size: 1rem;
+}
+
+.melpet-admin-anamnesis-groups dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.melpet-admin-anamnesis-groups div {
+  display: grid;
+  gap: 3px;
+}
+
+.melpet-admin-anamnesis-groups dt {
+  color: var(--cor-marrom-claro);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.melpet-admin-anamnesis-groups dd {
+  margin: 0;
+  color: var(--cor-marrom);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 560px) {
+  .melpet-admin-carteira-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.melpet-pet-tutor-card {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.14);
+  border-radius: 8px;
+  background: rgba(var(--cor-marrom-rgb), 0.05);
+}
+
+.melpet-pet-tutor-card div {
+  display: grid;
+  gap: 3px;
+}
+
+.melpet-pet-tutor-card dt {
+  color: var(--cor-texto-secundario);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.melpet-pet-tutor-card dd {
+  margin: 0;
+  color: var(--cor-marrom);
+  font-weight: 800;
   overflow-wrap: anywhere;
 }
 
@@ -2942,6 +3329,10 @@
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
+  .melpet-pet-tutor-card {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .melpet-pet-status-row .btn {
     width: auto;
     min-width: 110px;
@@ -2984,4 +3375,47 @@
   .pet-form-body {
     padding: 22px;
   }
+}
+
+@media (min-width: 720px) {
+  .melpet-admin-pet-card-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .melpet-admin-pet-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .melpet-admin-pet-info-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.melpet-admin-pet-emergency-section {
+  border-color: rgba(180, 83, 9, 0.32);
+  background: rgba(255, 247, 237, 0.92);
+  box-shadow: inset 4px 0 0 rgba(180, 83, 9, 0.72);
+}
+
+.melpet-admin-pet-emergency-section > header span {
+  color: #92400e;
+}
+
+.melpet-admin-pet-emergency-section .melpet-admin-pet-info-grid div {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.melpet-admin-anamnesis-groups h4 {
+  font-size: 1.08rem;
+}
+
+.melpet-admin-anamnesis-groups dt {
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.melpet-admin-anamnesis-groups dd {
+  font-size: 0.98rem;
+  line-height: 1.45;
 }

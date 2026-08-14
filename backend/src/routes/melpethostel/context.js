@@ -417,6 +417,15 @@ function getReqGrupo(req) {
 }
 
 async function resolveGroupNameForUser(req, login) {
+  const targetLogin = String(login || "").trim();
+  if (targetLogin) {
+    const userRow = await getUsuarioByLogin(req, targetLogin);
+    const groupName = userRow
+      ? userRow.Grupo_Nome || userRow.grupoNome || (await getGroupNameById(req, userRow.Grupo_ID))
+      : null;
+    return groupName ? sanitizePart(groupName) : null;
+  }
+
   const fromToken = getReqGrupo(req);
   if (fromToken && String(fromToken).trim()) {
     if (isNumericId(fromToken)) {
@@ -426,9 +435,11 @@ async function resolveGroupNameForUser(req, login) {
     return sanitizePart(fromToken);
   }
 
-  const userRow = await getUsuarioByLogin(req, login);
+  const reqLogin = getReqLogin(req);
+  if (!reqLogin) return null;
+  const userRow = await getUsuarioByLogin(req, reqLogin);
   const groupName = userRow
-    ? await getGroupNameById(req, userRow.Grupo_ID)
+    ? userRow.Grupo_Nome || userRow.grupoNome || (await getGroupNameById(req, userRow.Grupo_ID))
     : null;
   return groupName ? sanitizePart(groupName) : null;
 }
@@ -442,10 +453,17 @@ function isAdminGroupValue(value) {
 }
 
 async function isAdminUser(req, login) {
+  const targetLogin = String(login || "").trim();
+  if (targetLogin) {
+    const resolvedGroup = await resolveGroupNameForUser(req, targetLogin);
+    return isAdminGroupValue(resolvedGroup);
+  }
+
   const fromToken = getReqGrupo(req);
   if (isAdminGroupValue(fromToken)) return true;
 
-  const resolvedGroup = await resolveGroupNameForUser(req, login);
+  const reqLogin = getReqLogin(req);
+  const resolvedGroup = await resolveGroupNameForUser(req, reqLogin);
   return isAdminGroupValue(resolvedGroup);
 }
 
@@ -569,11 +587,19 @@ async function moveUploadFileToRelativeDir(rawFilePath, targetRelativeDir) {
 async function getUsuarioLoginByClienteId(req, clienteId) {
   if (!clienteId) return null;
 
-  const usuarios = await Usuario.list(req);
-  const usuario = (usuarios || []).find(
+  const usuarios = (await Usuario.list(req)) || [];
+  const vinculados = usuarios.filter(
     (item) => Number(item?.Cliente_ID || item?.clienteId) === Number(clienteId),
   );
-  return usuario?.Usuario_Login || usuario?.login || null;
+  if (!vinculados.length) return null;
+
+  for (const usuario of vinculados) {
+    const login = usuario?.Usuario_Login || usuario?.login || null;
+    if (login && !(await isAdminUser(req, login))) return login;
+  }
+
+  const fallback = vinculados[0];
+  return fallback?.Usuario_Login || fallback?.login || null;
 }
 
 async function movePetDocumentsToExpurgo(req, { petId, clienteId, login }) {

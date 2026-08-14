@@ -11,6 +11,7 @@ const {
   getCurrentClienteId,
   getReqLogin,
   getUsuarioByLogin,
+  isAdminUser,
   movePetDocumentsToExpurgo,
   parseJsonArray,
   path,
@@ -19,6 +20,7 @@ const {
   requireCompleteClienteCadastro,
   resolveTableName,
   resolveUploadsDirToDisk,
+  resolveUploadsFileToDisk,
   toPublicUploadPath,
   toJsonText,
   toText,
@@ -773,9 +775,61 @@ router.get("/pets/onboarding-status", async (req, res) => {
   }
 });
 
+
+router.get("/pets/carteiras-vacinacao/:id/preview", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ status: "erro", mensagem: "Carteirinha invalida." });
+    }
+
+    const login = getReqLogin(req);
+    const tableName = await requireCarteirasTable(req, res);
+    if (!tableName) return;
+
+    const [rows] = await dbFor(req).query(
+      `SELECT id, cliente_id, file_path, nome_arquivo
+         FROM ${qtable(tableName)}
+        WHERE id = ?
+          AND (status IS NULL OR status <> 'expurgado')
+        LIMIT 1`,
+      [id],
+    );
+    const carteira = rows && rows[0];
+    if (!carteira?.file_path) {
+      return res.status(404).json({ status: "erro", mensagem: "Carteirinha nao encontrada." });
+    }
+
+    const admin = await isAdminUser(req, login);
+    if (!admin) {
+      const clienteId = await getCurrentClienteId(req);
+      if (!clienteId || Number(clienteId) !== Number(carteira.cliente_id)) {
+        return res.status(403).json({ status: "erro", mensagem: "Sem permissao para visualizar esta carteirinha." });
+      }
+    }
+
+    const diskPath = resolveUploadsFileToDisk(carteira.file_path);
+    const buffer = await fs.readFile(diskPath);
+    return res.json({
+      status: "sucesso",
+      contentType: "application/pdf",
+      fileName: carteira.nome_arquivo || "carteirinha.pdf",
+      base64: buffer.toString("base64"),
+    });
+  } catch (error) {
+    console.error("Error in GET /melpethostel/pets/carteiras-vacinacao/:id/preview:", error);
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
 router.get("/pets/:petId/carteira-vacinacao/info", async (req, res) => {
   try {
-    const clienteId = await getCurrentClienteId(req);
+    const login = getReqLogin(req);
+    const adminClienteId = Number(req.query?.clienteId);
+    const clienteId =
+      adminClienteId > 0 && (await isAdminUser(req, login))
+        ? adminClienteId
+        : await getCurrentClienteId(req);
     const petId = Number(req.params.petId);
     if (!clienteId || !Number.isInteger(petId) || petId <= 0) {
       return res.status(400).json({ status: "erro", mensagem: "Pet inválido." });
@@ -790,11 +844,32 @@ router.get("/pets/:petId/carteira-vacinacao/info", async (req, res) => {
       req,
       TABLE_NAMES.petVacinasRespostas,
     );
+    const carteirasTable = await resolveTableName(
+      req,
+      TABLE_NAMES.petCarteirasVacinacao,
+    );
+    const carteiras = [];
+    if (carteirasTable) {
+      const [carteiraRows] = await dbFor(req).query(
+        `SELECT *
+           FROM ${qtable(carteirasTable)}
+          WHERE pet_id = ?
+            AND (status IS NULL OR status <> 'expurgado')
+            AND (status IS NULL OR status <> 'reprovado')
+          ORDER BY id ASC`,
+        [petId],
+      );
+      for (const row of carteiraRows || []) {
+        carteiras.push(mapCarteiraRow(row));
+      }
+    }
+
     if (!respostasTable) {
       return res.json({
         status: "sucesso",
         pet: { id: pet.id, nome: pet.nome },
         itens: [],
+        carteiras,
       });
     }
 
@@ -828,6 +903,7 @@ router.get("/pets/:petId/carteira-vacinacao/info", async (req, res) => {
       status: "sucesso",
       pet: { id: pet.id, nome: pet.nome },
       itens,
+      carteiras,
     });
   } catch (error) {
     console.error(
@@ -840,7 +916,12 @@ router.get("/pets/:petId/carteira-vacinacao/info", async (req, res) => {
 
 router.post("/pets/:petId/vacinas-respostas", async (req, res) => {
   try {
-    const clienteId = await getCurrentClienteId(req);
+    const login = getReqLogin(req);
+    const adminClienteId = Number(req.body?.clienteId);
+    const clienteId =
+      adminClienteId > 0 && (await isAdminUser(req, login))
+        ? adminClienteId
+        : await getCurrentClienteId(req);
     const petId = Number(req.params.petId);
     if (!clienteId || !Number.isInteger(petId) || petId <= 0) {
       return res.status(400).json({ status: "erro", mensagem: "Pet inválido." });
