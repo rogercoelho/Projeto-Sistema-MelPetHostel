@@ -342,8 +342,7 @@
   background: rgba(84, 116, 139, 0.42);
 }
 
-.admin-user-create-section,
-.admin-user-client-fieldset {
+.admin-user-create-section {
   border: 1px solid rgba(var(--cor-marrom-rgb), 0.1);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.88);
@@ -363,8 +362,7 @@
   margin-bottom: 14px;
 }
 
-.admin-user-section-title span,
-.admin-user-client-fieldset legend {
+.admin-user-section-title span {
   color: #54748b;
   font-size: 0.72rem;
   font-weight: 900;
@@ -385,8 +383,7 @@
   gap: 12px;
 }
 
-.admin-user-create-grid label,
-.admin-user-client-fieldset label {
+.admin-user-create-grid label label {
   color: #3c2b25;
   font-weight: 850;
 }
@@ -429,13 +426,6 @@
   height: 18px;
 }
 
-.admin-user-client-fieldset {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.76),
-    rgba(255, 247, 237, 0.78)
-  );
-}
 
 .admin-user-create-section {
   border: 2px solid rgba(84, 116, 139, 0.42);
@@ -500,9 +490,6 @@
   margin: 0;
 }
 
-.admin-user-client-fieldset legend {
-  padding: 0 8px;
-}
 
 .admin-user-create-actions {
   justify-content: flex-end;
@@ -533,7 +520,7 @@
   }
 
   .admin-user-create-section,
-  .admin-user-client-fieldset {
+  .admin-user-client-section {
     margin: 18px;
     padding: 20px;
   }
@@ -1019,7 +1006,7 @@
   color: var(--cor-erro);
 }
 
-/* Nome do usuário clicável */
+/* Nome do usuÃ¡rio clicÃ¡vel */
 .user-name {
   cursor: pointer;
   transition: opacity 0.2s ease;
@@ -1037,7 +1024,7 @@
   opacity: 0.9;
 }
 
-/* Formulário de senha no modal */
+/* FormulÃ¡rio de senha no modal */
 .form-senha {
   display: flex;
   flex-direction: column;

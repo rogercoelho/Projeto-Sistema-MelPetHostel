@@ -18,16 +18,10 @@ import {
   EMPTY_USER_FORM,
   findGroupByValue,
   getGroupLabel,
-  isAdminGroup,
+  isAdminAccessGroup,
 } from "./adminManagementUtils";
 import AddressFields from "./AddressFields";
 
-function getAccessLabel(grupo) {
-  const acesso = String(grupo?.acesso || grupo?.Acesso || grupo?.grupoAcesso || grupo?.Grupo_Acesso || "").toLowerCase();
-  if (acesso === "adm") return "Acesso de Administrador";
-  if (acesso === "usuario") return "Acesso de Cliente";
-  return acesso === "adm" ? "Acesso de Administrador" : "Acesso de Cliente";
-}
 
 function createEmptyUserForm() {
   return {
@@ -58,7 +52,7 @@ function AdminUsersPage({ onBack }) {
     () => findGroupByValue(usuarioForm.grupo, grupos),
     [grupos, usuarioForm.grupo],
   );
-  const shouldShowClienteFields = isAdminGroup(selectedGroup);
+  const shouldShowClienteFields = isAdminAccessGroup(selectedGroup);
 
   async function loadGroups() {
     setLoading(true);
@@ -249,7 +243,7 @@ function AdminUsersPage({ onBack }) {
             </label>
 
             <label>
-              Vincular ao Acesso
+              Vincular ao Grupo
               <select
                 value={usuarioForm.grupo}
                 onChange={(event) =>
@@ -257,10 +251,10 @@ function AdminUsersPage({ onBack }) {
                 }
                 disabled={loading}
               >
-                <option value="">Selecionar acesso</option>
+                <option value="">Selecionar grupo</option>
                 {grupos.map((grupo) => (
                   <option key={grupo.id || grupo.nome} value={grupo.id}>
-                    {getAccessLabel(grupo)}
+                    {getGroupLabel(grupo)}
                   </option>
                 ))}
               </select>
@@ -298,71 +292,14 @@ function AdminUsersPage({ onBack }) {
           </div>
         </section>
 
-        <section className="admin-user-create-section admin-user-search-section">
-          <div className="admin-user-section-title">
-            <span>Pesquisa</span>
-            <h3>Pesquisar usuários</h3>
-          </div>
-
-          <label className="admin-user-search-field">
-            Buscar usuário
-            <input
-              type="search"
-              value={userSearchTerm}
-              onChange={(event) => setUserSearchTerm(event.target.value)}
-              onKeyDown={handleUserSearchKeyDown}
-              placeholder="Login, grupo ou nome"
-            />
-          </label>
-
-          <div className="admin-page-actions admin-user-search-actions">
-            <Button type="button" onClick={searchUsers} disabled={loading}>
-              Pesquisar
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={clearUserSearch}
-              disabled={loading && !hasSearchedUsers}
-            >
-              Limpar
-            </Button>
-          </div>
-        </section>
-
-        {hasSearchedUsers ? (
-          <section className="admin-user-create-section admin-user-search-results-section">
-            <div className="admin-user-section-title">
-            <span>Resultado</span>
-            <h3>Usuários encontrados</h3>
-          </div>
-
-          <div className="admin-user-search-results">
-            {loading ? (
-              <p>Carregando usuários...</p>
-            ) : filteredUsers.length ? (
-              filteredUsers.map((user) => (
-                <article key={user.id || user.login}>
-                  <strong>{user.login}</strong>
-                  <span>
-                    {user.grupoNome ||
-                      user.Grupo_Nome ||
-                      user.grupo ||
-                      "Sem grupo"}
-                  </span>
-                </article>
-              ))
-            ) : (
-              <p>Nenhum usuário encontrado.</p>
-            )}
-          </div>
-          </section>
-        ) : null}
-
         {shouldShowClienteFields ? (
-          <fieldset className="admin-page-fieldset admin-user-client-fieldset">
-            <legend>Dados cadastrais</legend>
-            <div className="admin-page-form-grid">
+          <section className="admin-user-create-section admin-user-client-section">
+          <div className="admin-user-section-title">
+            <span>Cadastro</span>
+            <h3>Dados cadastrais</h3>
+          </div>
+
+          <div className="admin-page-form-grid">
               <label>
                 Nome
                 <input
@@ -474,8 +411,70 @@ function AdminUsersPage({ onBack }) {
               addresses={usuarioForm.cliente.enderecos}
               onChange={updateClienteAddresses}
             />
-          </fieldset>
+          </section>
         ) : null}
+
+        <section className="admin-user-create-section admin-user-search-section">
+          <div className="admin-user-section-title">
+            <span>Pesquisa</span>
+            <h3>Pesquisar usuários</h3>
+          </div>
+
+          <label className="admin-user-search-field">
+            Buscar usuário
+            <input
+              type="search"
+              value={userSearchTerm}
+              onChange={(event) => setUserSearchTerm(event.target.value)}
+              onKeyDown={handleUserSearchKeyDown}
+              placeholder="Login, grupo ou nome"
+            />
+          </label>
+
+          <div className="admin-page-actions admin-user-search-actions">
+            <Button type="button" onClick={searchUsers} disabled={loading}>
+              Pesquisar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={clearUserSearch}
+              disabled={loading && !hasSearchedUsers}
+            >
+              Limpar
+            </Button>
+          </div>
+        </section>
+
+        {hasSearchedUsers ? (
+          <section className="admin-user-create-section admin-user-search-results-section">
+            <div className="admin-user-section-title">
+              <span>Resultado</span>
+              <h3>Usuários encontrados</h3>
+            </div>
+
+          <div className="admin-user-search-results">
+            {loading ? (
+              <p>Carregando usuários...</p>
+            ) : filteredUsers.length ? (
+              filteredUsers.map((user) => (
+                <article key={user.id || user.login}>
+                  <strong>{user.login}</strong>
+                  <span>
+                    {user.grupoNome ||
+                      user.Grupo_Nome ||
+                      user.grupo ||
+                      "Sem grupo"}
+                  </span>
+                </article>
+              ))
+            ) : (
+              <p>Nenhum usuário encontrado.</p>
+            )}
+          </div>
+          </section>
+        ) : null}
+
 
         <div className="admin-user-create-footer">
           <Button type="button" variant="outline" onClick={onBack}>

@@ -47,6 +47,10 @@ export function isAdminGroup(grupo) {
   return isAdminAccessValue(grupo?.acesso || grupo?.Acesso);
 }
 
+export function isAdminAccessGroup(grupo) {
+  return isAdminAccessValue(grupo?.acesso || grupo?.Acesso);
+}
+
 function isNumericId(value) {
   return /^\d+$/.test(String(value || "").trim());
 }

@@ -32,12 +32,11 @@ function isNumeric(value) {
 }
 
 function isAdminAccessValue(value) {
-  return ["adm", "admin", "administrador"].includes(
-    clean(value)
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .toLowerCase(),
-  );
+  return clean(value).toLowerCase() === "adm";
+}
+
+function isAdminAccessGroup(grupo) {
+  return isAdminAccessValue(grupo?.acesso || grupo?.Acesso);
 }
 
 function isAdminUser(req) {
@@ -769,7 +768,7 @@ router.post("/users", async (req, res) => {
       if (!clientePayload.nome) {
         return res.status(400).json({
           status: "erro",
-          mensagem: "Nome do cliente e obrigatorio para administradores",
+          mensagem: "Nome do cliente e obrigatorio para administradores.",
         });
       }
       if (!requireValidClientePayload(clientePayload, res)) return;
