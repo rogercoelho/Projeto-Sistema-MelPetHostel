@@ -304,6 +304,7 @@ export default function MelPetHostel({
   const [deletingPetId, setDeletingPetId] = useState(null);
   const [petVaccineConfigs, setPetVaccineConfigs] = useState([]);
   const [petVaccineResponses, setPetVaccineResponses] = useState({});
+  const [petVaccineResponsesSaved, setPetVaccineResponsesSaved] = useState(false);
   const [vaccineCardItems, setVaccineCardItems] = useState([]);
   const [editingAdminPetVaccines, setEditingAdminPetVaccines] = useState(false);
   const [loadingVaccineCardInfo, setLoadingVaccineCardInfo] = useState(false);
@@ -2002,6 +2003,7 @@ export default function MelPetHostel({
     setPetVaccineFiles({ frente: null, verso: null });
     setUploadedPetVaccineSides({ frente: false, verso: false });
     setPetVaccineResponses({});
+    setPetVaccineResponsesSaved(false);
     setEditingAdminPetVaccines(false);
   }
 
@@ -2450,6 +2452,7 @@ export default function MelPetHostel({
     setSelectedPet(createdPet);
     setPetDocsPet(createdPet);
     setPetVaccineResponses({});
+    setPetVaccineResponsesSaved(false);
     setPetVaccineFiles({ frente: null, verso: null });
     setUploadedPetVaccineSides({ frente: false, verso: false });
     setPetFormMode("vaccineUpload");
@@ -2513,11 +2516,13 @@ export default function MelPetHostel({
     setPetFormMode(targetMode);
     setPetDocsPet(pet);
     setPetVaccineFiles({ frente: null, verso: null });
+    setPetVaccineResponsesSaved(false);
     const activeCarteiras = getCurrentPetCarteiras(pet);
-    setUploadedPetVaccineSides({
+    const hasUploadedVaccineSides = {
       frente: activeCarteiras.some((item) => item.lado === "frente"),
       verso: activeCarteiras.some((item) => item.lado === "verso"),
-    });
+    };
+    setUploadedPetVaccineSides(hasUploadedVaccineSides);
 
     if (targetMode === "vaccineUpload") {
       setVaccineCardItems([]);
@@ -2528,6 +2533,12 @@ export default function MelPetHostel({
           `/melpethostel/pets/${pet.id}/carteira-vacinacao/info`,
         );
         const respostas = Array.isArray(data?.itens) ? data.itens : [];
+        const hasSavedVaccineResponses = respostas.some(
+          (item) => item?.tipo && item?.dataAplicacao,
+        );
+        setPetVaccineResponsesSaved(
+          Boolean(hasUploadedVaccineSides.frente && hasUploadedVaccineSides.verso && hasSavedVaccineResponses),
+        );
         setPetVaccineResponses(
           respostas.reduce(
             (acc, item) => ({
@@ -2542,6 +2553,7 @@ export default function MelPetHostel({
         );
       } catch {
         setPetVaccineResponses({});
+        setPetVaccineResponsesSaved(false);
       }
       return;
     }
@@ -2699,6 +2711,7 @@ export default function MelPetHostel({
         }
       });
       setUploadedPetVaccineSides((current) => ({ ...current, [side]: true }));
+      setPetVaccineResponsesSaved(false);
       clearPetVaccineFile(side);
       showToast("Carteirinha enviada com sucesso.", "success");
     } catch (error) {
@@ -2764,6 +2777,7 @@ export default function MelPetHostel({
         clienteId: petDocsPet.clienteId,
         respostas,
       });
+      setPetVaccineResponsesSaved(true);
       showToast("Vacinas e outros salvos com sucesso.", "success");
       if (isAdmin && petDocsPet.clienteId) {
         await refreshAdminPetVaccineInfo(petDocsPet);
@@ -3420,10 +3434,14 @@ export default function MelPetHostel({
         {petVaccineConfigs.length ? (
           <Button
             type="button"
-            disabled={savingPetVaccines || isReadOnlyVaccineUpload}
+            disabled={savingPetVaccines || petVaccineResponsesSaved}
             onClick={savePetVaccineResponses}
           >
-            {savingPetVaccines ? "Salvando..." : "Salvar vacinas e outros"}
+            {savingPetVaccines
+              ? "Salvando..."
+              : petVaccineResponsesSaved
+                ? "Vacinas e outros salvos"
+                : "Salvar vacinas e outros"}
           </Button>
         ) : null}
       </section>
