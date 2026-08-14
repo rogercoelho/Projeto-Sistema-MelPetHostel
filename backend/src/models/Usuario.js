@@ -257,6 +257,22 @@ async function list(req) {
   return (rows || []).map(normalize);
 }
 
+async function findByGroup(req, grupoId) {
+  const meta = await resolveMeta(req);
+  if (!meta) return [];
+
+  const [rows] = await dbFor(req).query(
+    `SELECT ${buildSelect(meta)}
+       FROM ${qid(meta.tableName)} u
+       ${buildJoins(meta)}
+      WHERE u.${qid(meta.groupIdCol)} = ?
+      ORDER BY u.${qid(meta.loginCol)}`,
+    [grupoId],
+  );
+
+  return (rows || []).map(normalize);
+}
+
 async function create(
   req,
   {
@@ -381,6 +397,7 @@ async function removeByGroup(req, grupoId) {
 module.exports = {
   TABLE,
   create,
+  findByGroup,
   findById,
   findByLogin,
   list,

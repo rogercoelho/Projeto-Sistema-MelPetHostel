@@ -14,7 +14,7 @@ export function ToastProvider({ children }) {
     (text, type = "success") => {
       const id = Date.now() + Math.random();
       setToasts((t) => [...t, { id, text, type }]);
-      setTimeout(() => removeToast(id), 1500);
+      setTimeout(() => removeToast(id), 2500);
     },
     [removeToast],
   );

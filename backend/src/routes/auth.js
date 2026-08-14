@@ -109,6 +109,32 @@ async function deletePetFichasByCliente(req, clienteId) {
   return result;
 }
 
+async function deleteHospedagensByCliente(req, clienteId) {
+  if (!clienteId || !(await tableExists(req, "Hospedagem_Solicitacoes"))) {
+    return { affectedRows: 0 };
+  }
+
+  if (await tableExists(req, "Hospedagem_Solicitacao_Itens")) {
+    await dbFor(req).query(
+      `
+        DELETE FROM ${qident("Hospedagem_Solicitacao_Itens")}
+        WHERE solicitacao_id IN (
+          SELECT id
+          FROM ${qident("Hospedagem_Solicitacoes")}
+          WHERE cliente_id = ?
+        )
+      `,
+      [clienteId],
+    );
+  }
+
+  const [result] = await dbFor(req).query(
+    `DELETE FROM ${qident("Hospedagem_Solicitacoes")} WHERE cliente_id = ?`,
+    [clienteId],
+  );
+  return result;
+}
+
 async function removeMelPetHostelUserData(req, user, clienteId) {
   const usuarioId = user?.Usuario_ID || user?.id || null;
   const login = user?.Usuario_Login || user?.login || null;
@@ -129,6 +155,7 @@ async function removeMelPetHostelUserData(req, user, clienteId) {
   }
 
   if (clienteId) {
+    await deleteHospedagensByCliente(req, clienteId);
     await deletePetFichasByCliente(req, clienteId);
     await deleteFromExistingTable(req, "Pets", "cliente_id = ?", [clienteId]);
   }
@@ -970,11 +997,36 @@ router.delete("/groups/:id", async (req, res) => {
         .json({ status: "erro", mensagem: "Grupo nao encontrado" });
     }
 
-    await Usuario.removeByGroup(req, id);
-    await Grupo.remove(req, id);
-    await removeUploadsDirRecursive(
-      path.join(getUploadsRoot(), sanitizeSegment(group.nome)),
-    );
+    const users = await Usuario.findByGroup(req, id);
+    const db = dbFor(req);
+
+    await db.beginTransaction();
+    try {
+      for (const user of users) {
+        const userId = user?.Usuario_ID || user?.id;
+        const clienteId = user?.Cliente_ID || user?.clienteId || null;
+
+        await removeMelPetHostelUserData(req, user, clienteId);
+        if (userId) {
+          await Usuario.remove(req, userId);
+        }
+
+        if (clienteId) {
+          await Endereco.removeByCliente(req, clienteId);
+          await Cliente.remove(req, clienteId);
+        }
+      }
+
+      await Grupo.remove(req, id);
+      await db.commit();
+    } catch (error) {
+      await db.rollback();
+      throw error;
+    }
+
+    for (const user of users) {
+      await removeUserUploadDirs(req, user, user?.Usuario_ID || user?.id);
+    }
 
     res.json({ status: "sucesso", mensagem: "Grupo removido" });
   } catch (error) {

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../../components";
+import { useToast } from "../../components/Toast/ToastContext";
 import api from "../../services/api";
 import {
   buildAddressesPayload,
@@ -46,7 +47,7 @@ function AdminUsersPage({ onBack }) {
   const [hasSearchedUsers, setHasSearchedUsers] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState(null);
+  const { showToast } = useToast();
 
   const selectedGroup = useMemo(
     () => findGroupByValue(usuarioForm.grupo, grupos),
@@ -54,7 +55,7 @@ function AdminUsersPage({ onBack }) {
   );
   const shouldShowClienteFields = isAdminAccessGroup(selectedGroup);
 
-  async function loadGroups() {
+  const loadGroups = useCallback(async function loadGroups() {
     setLoading(true);
     try {
       const [groupsData, usersData] = await Promise.all([
@@ -66,18 +67,15 @@ function AdminUsersPage({ onBack }) {
     } catch (error) {
       setGrupos([]);
       setUsuarios([]);
-      setMessage({
-        type: "erro",
-        text: error.message || "Erro ao carregar grupos.",
-      });
+      showToast(error.message || "Erro ao carregar grupos.", "error");
     } finally {
       setLoading(false);
     }
-  }
+  }, [showToast]);
 
   useEffect(() => {
     loadGroups();
-  }, []);
+  }, [loadGroups]);
 
   function resetForm() {
     setUsuarioForm(createEmptyUserForm());
@@ -163,12 +161,12 @@ function AdminUsersPage({ onBack }) {
     const grupo = usuarioForm.grupo;
 
     if (!login || !grupo) {
-      setMessage({ type: "erro", text: "Login e grupo sao obrigatorios." });
+      showToast("Login e grupo sao obrigatorios.", "error");
       return;
     }
 
     if (!usuarioForm.senha) {
-      setMessage({ type: "erro", text: "Senha provisoria e obrigatoria." });
+      showToast("Senha provisoria e obrigatoria.", "error");
       return;
     }
 
@@ -177,7 +175,7 @@ function AdminUsersPage({ onBack }) {
         usuarioForm.cliente,
       );
       if (validationMessage) {
-        setMessage({ type: "erro", text: validationMessage });
+        showToast(validationMessage, "error");
         return;
       }
     }
@@ -193,14 +191,11 @@ function AdminUsersPage({ onBack }) {
     setSaving(true);
     try {
       await api.post("/auth/users", payload);
-      setMessage({ type: "sucesso", text: "Usuario criado." });
+      showToast("Usuario criado.", "success");
       resetForm();
       await loadGroups();
     } catch (error) {
-      setMessage({
-        type: "erro",
-        text: error.message || "Erro ao criar usuario.",
-      });
+      showToast(error.message || "Erro ao criar usuario.", "error");
     } finally {
       setSaving(false);
     }
@@ -481,16 +476,6 @@ function AdminUsersPage({ onBack }) {
             Voltar
           </Button>
         </div>
-
-        {message ? (
-          <p
-            className={["admin-page-message", message.type]
-              .filter(Boolean)
-              .join(" ")}
-          >
-            {message.text}
-          </p>
-        ) : null}
       </form>
     </main>
   );

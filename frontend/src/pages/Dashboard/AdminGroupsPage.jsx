@@ -1,6 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
-import { Button } from "../../components";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button, Modal } from "../../components";
+import { useToast } from "../../components/Toast/ToastContext";
 import api from "../../services/api";
+
+function getGroupId(grupo) {
+  return grupo?.id ?? grupo?.grupo_id ?? grupo?.Grupo_ID;
+}
+
+function getGroupName(grupo) {
+  return grupo?.nome || grupo?.Nome_Grupo || grupo?.Grupo_Nome || "Grupo";
+}
+
+function getGroupAccessLabel(grupo) {
+  return (grupo?.acesso || grupo?.Acesso) === "adm"
+    ? "Acesso de Administrador"
+    : "Acesso de Cliente";
+}
 
 function AdminGroupsPage({ onBack }) {
   const [grupoForm, setGrupoForm] = useState({ nome: "", acesso: "usuario" });
@@ -10,31 +25,34 @@ function AdminGroupsPage({ onBack }) {
   const [hasSearchedGroups, setHasSearchedGroups] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState(null);
+  const [deleteWarningGroup, setDeleteWarningGroup] = useState(null);
+  const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState(null);
+  const [deletingGroupId, setDeletingGroupId] = useState(null);
+  const { showToast } = useToast();
 
-  async function loadGroups() {
+  const loadGroups = useCallback(async function loadGroups() {
     setLoading(true);
     try {
       const groupsData = await api.get("/auth/groups");
       setGrupos(Array.isArray(groupsData) ? groupsData : []);
     } catch (error) {
       setGrupos([]);
-      setMessage({ type: "erro", text: error.message || "Erro ao carregar grupos." });
+      showToast(error.message || "Erro ao carregar grupos.", "error");
     } finally {
       setLoading(false);
     }
-  }
+  }, [showToast]);
 
   useEffect(() => {
     loadGroups();
-  }, []);
+  }, [loadGroups]);
 
   const filteredGroups = useMemo(() => {
     const search = submittedGroupSearchTerm.trim().toLowerCase();
     if (!hasSearchedGroups) return [];
     if (!search) return grupos;
     return grupos.filter((grupo) =>
-      [grupo.nome, grupo.Grupo_Nome, grupo.acesso, grupo.Acesso]
+      [grupo.nome, grupo.Nome_Grupo, grupo.Grupo_Nome, grupo.acesso, grupo.Acesso]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(search)),
     );
@@ -62,11 +80,46 @@ function AdminGroupsPage({ onBack }) {
     setGrupoForm((state) => ({ ...state, [field]: value }));
   }
 
+  function startDeleteGroup(grupo) {
+    setDeleteWarningGroup(grupo);
+  }
+
+  function acknowledgeDeleteGroup(grupo) {
+    const groupId = getGroupId(grupo);
+    setDeleteWarningGroup(null);
+    setConfirmDeleteGroupId(groupId);
+  }
+
+  function cancelDeleteGroup() {
+    setDeleteWarningGroup(null);
+    setConfirmDeleteGroupId(null);
+  }
+
+  async function deleteGroup(grupo) {
+    const groupId = getGroupId(grupo);
+    if (!groupId) {
+      showToast("ID do grupo nao encontrado.", "error");
+      return;
+    }
+
+    setDeletingGroupId(groupId);
+    try {
+      await api.delete(`/auth/groups/${groupId}`);
+      setConfirmDeleteGroupId(null);
+      showToast("Grupo excluido.", "success");
+      await loadGroups();
+    } catch (error) {
+      showToast(error.message || "Erro ao excluir grupo.", "error");
+    } finally {
+      setDeletingGroupId(null);
+    }
+  }
+
   async function createGroup(event) {
     event.preventDefault();
     const nome = grupoForm.nome.trim();
     if (!nome) {
-      setMessage({ type: "erro", text: "Nome do grupo e obrigatorio." });
+      showToast("Nome do grupo e obrigatorio.", "error");
       return;
     }
 
@@ -74,13 +127,10 @@ function AdminGroupsPage({ onBack }) {
     try {
       await api.post("/auth/groups", { nome, acesso: grupoForm.acesso });
       setGrupoForm({ nome: "", acesso: "usuario" });
-      setMessage({ type: "sucesso", text: "Grupo criado." });
+      showToast("Grupo criado.", "success");
       await loadGroups();
     } catch (error) {
-      setMessage({
-        type: "erro",
-        text: error.message || "Erro ao criar grupo.",
-      });
+      showToast(error.message || "Erro ao criar grupo.", "error");
     } finally {
       setSaving(false);
     }
@@ -182,12 +232,55 @@ function AdminGroupsPage({ onBack }) {
             {loading ? (
               <p>Carregando grupos...</p>
             ) : filteredGroups.length ? (
-              filteredGroups.map((grupo) => (
-                <article key={grupo.id || grupo.nome}>
-                  <strong>{grupo.nome || grupo.Grupo_Nome}</strong>
-                  <span>{(grupo.acesso || grupo.Acesso) === "adm" ? "Acesso de Administrador" : "Acesso de Cliente"}</span>
-                </article>
-              ))
+              filteredGroups.map((grupo) => {
+                const groupId = getGroupId(grupo);
+                const isConfirmingDelete = confirmDeleteGroupId === groupId;
+                const isDeleting = deletingGroupId === groupId;
+
+                return (
+                  <article key={groupId || getGroupName(grupo)}>
+                    <div className="admin-user-search-result-info">
+                      <strong>{getGroupName(grupo)}</strong>
+                      <span>{getGroupAccessLabel(grupo)}</span>
+                    </div>
+
+                    <div className="admin-user-search-result-actions">
+                      {isConfirmingDelete ? (
+                        <>
+                          <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            onClick={() => deleteGroup(grupo)}
+                            disabled={isDeleting}
+                          >
+                            {isDeleting ? "Excluindo..." : "Confirmar"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={cancelDeleteGroup}
+                            disabled={isDeleting}
+                          >
+                            Cancelar
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => startDeleteGroup(grupo)}
+                          disabled={isDeleting}
+                        >
+                          Excluir
+                        </Button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })
             ) : (
               <p>Nenhum grupo encontrado.</p>
             )}
@@ -195,17 +288,37 @@ function AdminGroupsPage({ onBack }) {
           </section>
         ) : null}
 
+        <Modal
+          isOpen={Boolean(deleteWarningGroup)}
+          onClose={cancelDeleteGroup}
+          title="Atenção"
+          closeOnBackdropClick={false}
+          showCloseButton={false}
+          containerStyle={{ width: "min(94%, 520px)" }}
+        >
+          <div className="admin-page-delete-modal">
+            <p>
+              Atenção, excluir um grupo irá excluir todos os usuarios vinculados
+              a ele. Faça com muita cautela!
+            </p>
+
+            <div className="modal-actions">
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => acknowledgeDeleteGroup(deleteWarningGroup)}
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        </Modal>
+
         <div className="admin-user-create-footer">
           <Button type="button" variant="outline" onClick={onBack}>
             Voltar
           </Button>
         </div>
-
-        {message ? (
-          <p className={["admin-page-message", message.type].filter(Boolean).join(" ")}>
-            {message.text}
-          </p>
-        ) : null}
       </form>
     </main>
   );

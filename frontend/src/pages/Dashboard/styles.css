@@ -466,13 +466,33 @@
 }
 
 .admin-user-search-results article {
+  align-items: center;
   border: 1px solid rgba(84, 116, 139, 0.24);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.72);
   box-shadow: 0 8px 22px rgba(77, 50, 39, 0.07);
   display: grid;
-  gap: 4px;
+  gap: 12px;
+  grid-template-columns: 1fr;
   padding: 12px 14px;
+}
+
+.admin-user-search-result-info {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-user-search-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.admin-user-search-result-actions .btn {
+  border-radius: 999px;
+  min-width: 104px;
 }
 
 .admin-user-search-results strong {
@@ -509,6 +529,10 @@
 }
 
 @media (min-width: 760px) {
+  .admin-user-search-results article {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
   .admin-user-create-page {
     padding: 24px;
   }
