@@ -63,6 +63,20 @@ function buildSelectedUserForm(user, grupos) {
   };
 }
 
+function hasClienteData(cliente) {
+  if (!cliente) return false;
+  return [
+    cliente.nome,
+    cliente.cpf,
+    cliente.rg,
+    cliente.data_nascimento,
+    cliente.telefone,
+    cliente.whatsapp,
+    cliente.email,
+    cliente.observacoes,
+  ].some(Boolean) || Boolean(cliente.enderecos?.length);
+}
+
 function AdminUserMaintenancePage({ onBack }) {
   const [grupos, setGrupos] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -87,6 +101,8 @@ function AdminUserMaintenancePage({ onBack }) {
     [grupos, userForm?.grupo],
   );
   const shouldShowClienteFields = isAdminAccessGroup(selectedGroup);
+  const selectedCliente = userForm?.cliente || null;
+  const shouldEditClienteFields = shouldShowClienteFields || hasClienteData(selectedCliente);
 
   const loadData = useCallback(async function loadData() {
     setLoading(true);
@@ -197,7 +213,7 @@ function AdminUserMaintenancePage({ onBack }) {
     };
   }
 
-  async function saveUser(event) {
+  async function saveUser(event, { includeCliente = false } = {}) {
     event.preventDefault();
     if (!selectedUser || !userForm) {
       showToast("Selecione um usuario.", "error");
@@ -210,7 +226,7 @@ function AdminUserMaintenancePage({ onBack }) {
       return;
     }
 
-    if (shouldShowClienteFields) {
+    if (includeCliente && shouldEditClienteFields) {
       const validationMessage = getClientProfileValidationMessage(
         userForm.cliente,
       );
@@ -224,13 +240,13 @@ function AdminUserMaintenancePage({ onBack }) {
       login,
       grupo: userForm.grupo,
       ativo: userForm.ativo,
-      cliente: shouldShowClienteFields ? buildClientePayload() : undefined,
+      cliente: includeCliente && shouldEditClienteFields ? buildClientePayload() : undefined,
     };
 
     setSavingUser(true);
     try {
       const response = await api.put("/auth/users/" + selectedUser.id, payload);
-      showToast("Usuario atualizado.", "success");
+      showToast(includeCliente ? "Dados cadastrais atualizados." : "Usuario atualizado.", "success");
       await loadData();
       selectUser(response?.user || { ...selectedUser, ...payload });
     } catch (error) {
@@ -390,11 +406,19 @@ function AdminUserMaintenancePage({ onBack }) {
         ) : null}
 
         {selectedUser && userForm ? (
-          <>
-            <form className="admin-user-create-section" onSubmit={saveUser}>
+          <section className="admin-user-maintenance-selected">
+            <div className="admin-user-section-title admin-user-maintenance-selected-title">
+              <span>Usuário selecionado</span>
+              <h3>{selectedUser.login}</h3>
+            </div>
+
+            <form
+              className="admin-user-create-section"
+              onSubmit={(event) => saveUser(event)}
+            >
               <div className="admin-user-section-title">
                 <span>Acesso</span>
-                <h3>{selectedUser.login}</h3>
+                <h3>Dados do acesso</h3>
               </div>
 
               <div className="admin-user-create-grid">
@@ -440,9 +464,96 @@ function AdminUserMaintenancePage({ onBack }) {
                 </label>
               </div>
 
-              {shouldShowClienteFields ? (
-                <div className="admin-user-maintenance-subsection">
-                  <div className="admin-user-section-title">
+              <div className="admin-page-actions admin-user-maintenance-actions">
+                {confirmDeleteUserId === selectedUser.id ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      onClick={() => deleteUser(selectedUser)}
+                      disabled={deletingUserId === selectedUser.id}
+                    >
+                      {deletingUserId === selectedUser.id
+                        ? "Excluindo..."
+                        : "Confirmar"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={cancelDeleteUser}
+                      disabled={deletingUserId === selectedUser.id}
+                    >
+                      Cancelar
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => startDeleteUser(selectedUser)}
+                    disabled={savingUser || deletingUserId === selectedUser.id}
+                  >
+                    Excluir usuário
+                  </Button>
+                )}
+                <Button type="submit" disabled={savingUser || loading}>
+                  {savingUser ? "Salvando..." : "Salvar alterações"}
+                </Button>
+              </div>
+            </form>
+
+            <form className="admin-user-create-section" onSubmit={savePassword}>
+              <div className="admin-user-section-title">
+                <span>Senha</span>
+                <h3>Alteração de senha</h3>
+              </div>
+
+              <div className="admin-user-create-grid">
+                <label>
+                  Nova senha
+                  <input
+                    type="password"
+                    value={novaSenha}
+                    onChange={(event) => setNovaSenha(event.target.value)}
+                    placeholder="Nova senha"
+                    autoComplete="new-password"
+                  />
+                </label>
+
+                <label>
+                  Confirmar senha
+                  <input
+                    type="password"
+                    value={confirmarSenha}
+                    onChange={(event) => setConfirmarSenha(event.target.value)}
+                    placeholder="Confirmar senha"
+                    autoComplete="new-password"
+                  />
+                </label>
+
+                <label className="admin-page-checkbox admin-user-active-toggle admin-first-access-toggle">
+                  <input
+                    type="checkbox"
+                    checked={primeiroAcesso}
+                    onChange={(event) => setPrimeiroAcesso(event.target.checked)}
+                  />
+                  <span>Marcar como primeiro acesso</span>
+                </label>
+              </div>
+
+              <div className="admin-page-actions admin-user-create-actions">
+                <Button type="submit" disabled={savingPassword}>
+                  {savingPassword ? "Alterando..." : "Alterar senha"}
+                </Button>
+              </div>
+            </form>
+
+            {shouldEditClienteFields ? (
+              <form
+                className="admin-user-create-section admin-user-maintenance-client-form"
+                onSubmit={(event) => saveUser(event, { includeCliente: true })}
+              >
+                <div className="admin-user-section-title">
                     <span>Cadastro</span>
                     <h3>Dados cadastrais</h3>
                   </div>
@@ -528,7 +639,7 @@ function AdminUserMaintenancePage({ onBack }) {
                         required
                       />
                     </label>
-                    <label className="admin-page-checkbox admin-page-checkbox-field">
+                    <label className="admin-page-checkbox admin-page-checkbox-field admin-client-active-toggle">
                       <input
                         type="checkbox"
                         checked={userForm.cliente.ativo}
@@ -554,93 +665,15 @@ function AdminUserMaintenancePage({ onBack }) {
                     addresses={userForm.cliente.enderecos}
                     onChange={updateClienteAddresses}
                   />
-                </div>
-              ) : null}
 
-              <div className="admin-page-actions admin-user-maintenance-actions">
-                {confirmDeleteUserId === selectedUser.id ? (
-                  <>
-                    <Button
-                      type="button"
-                      variant="danger"
-                      onClick={() => deleteUser(selectedUser)}
-                      disabled={deletingUserId === selectedUser.id}
-                    >
-                      {deletingUserId === selectedUser.id
-                        ? "Excluindo..."
-                        : "Confirmar"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={cancelDeleteUser}
-                      disabled={deletingUserId === selectedUser.id}
-                    >
-                      Cancelar
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => startDeleteUser(selectedUser)}
-                    disabled={savingUser || deletingUserId === selectedUser.id}
-                  >
-                    Excluir usuário
+                <div className="admin-page-actions admin-user-create-actions admin-user-maintenance-client-actions">
+                  <Button type="submit" disabled={savingUser || loading}>
+                    {savingUser ? "Salvando..." : "Salvar dados cadastrais"}
                   </Button>
-                )}
-                <Button type="submit" disabled={savingUser || loading}>
-                  {savingUser ? "Salvando..." : "Salvar alterações"}
-                </Button>
-              </div>
-            </form>
-
-            <form className="admin-user-create-section" onSubmit={savePassword}>
-              <div className="admin-user-section-title">
-                <span>Senha</span>
-                <h3>Alteração de senha</h3>
-              </div>
-
-              <div className="admin-user-create-grid">
-                <label>
-                  Nova senha
-                  <input
-                    type="password"
-                    value={novaSenha}
-                    onChange={(event) => setNovaSenha(event.target.value)}
-                    placeholder="Nova senha"
-                    autoComplete="new-password"
-                  />
-                </label>
-
-                <label>
-                  Confirmar senha
-                  <input
-                    type="password"
-                    value={confirmarSenha}
-                    onChange={(event) => setConfirmarSenha(event.target.value)}
-                    placeholder="Confirmar senha"
-                    autoComplete="new-password"
-                  />
-                </label>
-
-                <label className="admin-page-checkbox admin-user-active-toggle">
-                  <input
-                    type="checkbox"
-                    checked={primeiroAcesso}
-                    onChange={(event) => setPrimeiroAcesso(event.target.checked)}
-                  />
-                  <span>Marcar como primeiro acesso</span>
-                </label>
-              </div>
-
-              <div className="admin-page-actions admin-user-create-actions">
-                <Button type="submit" disabled={savingPassword}>
-                  {savingPassword ? "Alterando..." : "Alterar senha"}
-                </Button>
-              </div>
-            </form>
-          </>
+                </div>
+              </form>
+            ) : null}
+          </section>
         ) : null}
 
         <Modal

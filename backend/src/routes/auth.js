@@ -1089,6 +1089,34 @@ router.put("/users/:id", async (req, res) => {
         if (clienteId) {
           await Endereco.replaceForCliente(req, clienteId, enderecos);
         }
+      } else if (shouldUpdateCliente) {
+        if (!clientePayload?.nome) {
+          await db.rollback();
+          return res.status(400).json({
+            status: "erro",
+            mensagem: "Nome do cliente e obrigatorio",
+          });
+        }
+        if (!requireValidClientePayload(clientePayload, res)) {
+          await db.rollback();
+          return;
+        }
+        if (!requireValidEnderecoPayloads(enderecos, res)) {
+          await db.rollback();
+          return;
+        }
+        if (!requireCompleteClienteCadastro(clientePayload, enderecos, res)) {
+          await db.rollback();
+          return;
+        }
+
+        if (clienteId) {
+          await Cliente.update(req, clienteId, clientePayload);
+        } else {
+          const cliente = await Cliente.create(req, clientePayload);
+          clienteId = cliente.id;
+        }
+        await Endereco.replaceForCliente(req, clienteId, enderecos);
       } else if (clienteId) {
         const cliente = await Cliente.findById(req, clienteId);
         const renamedClienteName = getRenamedReservedClienteName(
