@@ -241,6 +241,48 @@
   overflow-wrap: anywhere;
 }
 
+.melpet-client-documents-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.melpet-client-documents-list li {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 10px;
+}
+
+.melpet-client-documents-list div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.melpet-client-documents-list strong,
+.melpet-client-documents-list span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.melpet-client-documents-list span {
+  color: #475569;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 560px) {
+  .melpet-client-documents-list li {
+    grid-template-columns: 1fr;
+  }
+}
+
 .melpet-client-pet-status {
   border-radius: 999px;
   font-size: 0.74rem;

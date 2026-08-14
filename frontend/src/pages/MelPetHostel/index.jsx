@@ -305,6 +305,7 @@ export default function MelPetHostel({
   const [petVaccineConfigs, setPetVaccineConfigs] = useState([]);
   const [petVaccineResponses, setPetVaccineResponses] = useState({});
   const [vaccineCardItems, setVaccineCardItems] = useState([]);
+  const [editingAdminPetVaccines, setEditingAdminPetVaccines] = useState(false);
   const [loadingVaccineCardInfo, setLoadingVaccineCardInfo] = useState(false);
   const [vaccineCardInfoError, setVaccineCardInfoError] = useState("");
   const [petVaccineFiles, setPetVaccineFiles] = useState({
@@ -337,6 +338,10 @@ export default function MelPetHostel({
   const [clientSearchOrder, setClientSearchOrder] = useState("codigo_asc");
   const [clientSearchResults, setClientSearchResults] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
+  const [selectedClientFiles, setSelectedClientFiles] = useState([]);
+  const [loadingSelectedClientFiles, setLoadingSelectedClientFiles] =
+    useState(false);
+  const [selectedClientFilesError, setSelectedClientFilesError] = useState("");
   const [loadingClientSearch, setLoadingClientSearch] = useState(false);
   const [clientSearchSubmitted, setClientSearchSubmitted] = useState(false);
   const [clientSearchError, setClientSearchError] = useState("");
@@ -725,6 +730,48 @@ export default function MelPetHostel({
     setSelectedUserFilesError("");
   }
 
+  async function loadSelectedClientFiles(cliente) {
+    if (!cliente?.usuarioId) {
+      setSelectedClientFiles([]);
+      setSelectedClientFilesError("Usuario do cliente nao encontrado.");
+      return;
+    }
+
+    setLoadingSelectedClientFiles(true);
+    setSelectedClientFilesError("");
+    try {
+      const data = await api.get(
+        "/melpethostel/documentos/usuario/" +
+          encodeURIComponent(cliente.usuarioId) +
+          "/arquivos?incluirConferidos=1",
+      );
+      setSelectedClientFiles(Array.isArray(data?.arquivos) ? data.arquivos : []);
+    } catch (error) {
+      console.error("Erro ao carregar documentos do cliente:", error);
+      setSelectedClientFiles([]);
+      setSelectedClientFilesError(
+        error?.message || "Nao foi possivel carregar os documentos do cliente.",
+      );
+    } finally {
+      setLoadingSelectedClientFiles(false);
+    }
+  }
+
+  function handleSelectClient(cliente) {
+    setSelectedClient((current) => {
+      const shouldClose = current?.id === cliente.id;
+      if (shouldClose) {
+        setSelectedClientFiles([]);
+        setSelectedClientFilesError("");
+        return null;
+      }
+
+      setSelectedClientFiles([]);
+      setSelectedClientFilesError("");
+      loadSelectedClientFiles(cliente);
+      return cliente;
+    });
+  }
   function buildDocumentPreviewUrl(file) {
     const tipo = file?.tipoRegistro === "contrato" ? "contrato" : "documento";
     const id =
@@ -1819,7 +1866,9 @@ export default function MelPetHostel({
       setClientSearchResults(clientes);
       setSelectedClient((current) => {
         if (!current) return null;
-        return clientes.find((cliente) => cliente.id === current.id) || null;
+        const updated = clientes.find((cliente) => cliente.id === current.id) || null;
+        if (updated) loadSelectedClientFiles(updated);
+        return updated;
       });
     } catch (error) {
       setClientSearchResults([]);
@@ -1865,6 +1914,7 @@ export default function MelPetHostel({
     setPetVaccineFiles({ frente: null, verso: null });
     setUploadedPetVaccineSides({ frente: false, verso: false });
     setPetVaccineResponses({});
+    setEditingAdminPetVaccines(false);
   }
 
   function buildAdminPetFicha(cliente, pet) {
@@ -2629,6 +2679,7 @@ export default function MelPetHostel({
       showToast("Vacinas e outros salvos com sucesso.", "success");
       if (isAdmin && petDocsPet.clienteId) {
         await refreshAdminPetVaccineInfo(petDocsPet);
+        setEditingAdminPetVaccines(false);
       } else {
         setPetDocsPet(null);
         onPetRegistered?.();
@@ -2973,6 +3024,17 @@ export default function MelPetHostel({
     );
   }
 
+  async function startAdminPetVaccineEdit() {
+    if (!petDocsPet?.id) return;
+    await loadPetVaccineConfigs();
+    setEditingAdminPetVaccines(true);
+  }
+
+  async function cancelAdminPetVaccineEdit() {
+    setEditingAdminPetVaccines(false);
+    await refreshAdminPetVaccineInfo(petDocsPet);
+  }
+
   function openPetCarteiraDocument(side) {
     const carteira = getPetCarteiraBySide(side);
     const id = Number(carteira?.id);
@@ -2992,6 +3054,7 @@ export default function MelPetHostel({
   function renderAdminPetVaccineContent() {
     const hasVaccineInfo = vaccineCardItems.length > 0;
     const hasCarteiraFiles = hasCompletePetCarteira(petDocsPet);
+    const canEditVaccineInfo = isAdmin && hasVaccineInfo && hasCarteiraFiles;
     return (
       <div className="melpet-admin-pet-vaccine-content">
         <div
@@ -3016,11 +3079,31 @@ export default function MelPetHostel({
             );
           })}
         </div>
-        {hasVaccineInfo && hasCarteiraFiles ? (
+        {canEditVaccineInfo ? (
+          <div className="melpet-admin-pet-vaccine-edit-actions">
+            {editingAdminPetVaccines ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={savingPetVaccines}
+                onClick={cancelAdminPetVaccineEdit}
+              >
+                Cancelar edição
+              </Button>
+            ) : (
+              <Button type="button" onClick={startAdminPetVaccineEdit}>
+                Editar informações
+              </Button>
+            )}
+          </div>
+        ) : null}
+        {hasVaccineInfo && hasCarteiraFiles && !editingAdminPetVaccines ? (
           renderVaccineCardInfoContainer()
         ) : (
           <>
-            {hasVaccineInfo ? renderVaccineCardInfoContainer() : null}
+            {hasVaccineInfo && !editingAdminPetVaccines
+              ? renderVaccineCardInfoContainer()
+              : null}
             {renderPetDocumentsContent()}
           </>
         )}
@@ -3110,9 +3193,10 @@ export default function MelPetHostel({
             const isUploadingThis = uploadingPetVaccineSide === side;
             const sideStatus = getPetCarteiraSideStatus(petDocsPet, side);
             const isConcluded = Boolean(uploadedPetVaccineSides[side]);
+            const canReplaceCarteira = isAdminPetFicha && editingAdminPetVaccines;
             const actionDisabled =
               Boolean(uploadingPetVaccineSide) ||
-              isConcluded ||
+              (isConcluded && !canReplaceCarteira) ||
               isReadOnlyVaccineUpload;
 
             return (
@@ -3143,8 +3227,12 @@ export default function MelPetHostel({
                     {isUploadingThis
                       ? "Enviando..."
                       : selectedPetFile
-                        ? "Enviar"
-                        : "Upload"}
+                        ? isConcluded && canReplaceCarteira
+                          ? "Substituir"
+                          : "Enviar"
+                        : isConcluded && canReplaceCarteira
+                          ? "Substituir"
+                          : "Upload"}
                   </Button>
                 </div>
 
@@ -3936,11 +4024,7 @@ export default function MelPetHostel({
                     ? "melpet-client-list-item is-selected"
                     : "melpet-client-list-item"
                 }
-                onClick={() =>
-                  setSelectedClient((current) =>
-                    current?.id === cliente.id ? null : cliente,
-                  )
-                }
+                onClick={() => handleSelectClient(cliente)}
               >
                 <strong>{cliente.id}</strong>
                 <span>
@@ -4042,6 +4126,41 @@ export default function MelPetHostel({
                 </ul>
               ) : (
                 <p>Nenhum pet cadastrado.</p>
+              )}
+            </div>
+            <div className="melpet-client-detail-block melpet-client-documents-card">
+              <h4>Contrato e documentos</h4>
+              {loadingSelectedClientFiles ? (
+                <p>Carregando documentos...</p>
+              ) : selectedClientFilesError ? (
+                <p className="melpet-error">{selectedClientFilesError}</p>
+              ) : selectedClientFiles.length ? (
+                <ul className="melpet-client-documents-list">
+                  {selectedClientFiles.map((file, index) => {
+                    const key =
+                      String(file.tipoRegistro || "documento") +
+                      "-" +
+                      String(file.contratoId || file.documentoId || index);
+                    return (
+                      <li key={key}>
+                        <div>
+                          <strong>{file.tipoDocumento || "Documento"}</strong>
+                          <span>{file.nomeDocumento || "Arquivo PDF"}</span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={!file.existsDisk}
+                          onClick={() => handleOpenDocumentPreview(file)}
+                        >
+                          Visualizar
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p>Nenhum contrato ou documento encontrado.</p>
               )}
             </div>
             <div className="melpet-client-detail-block melpet-admin-upload-card">

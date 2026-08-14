@@ -198,6 +198,31 @@ async function listAdminClienteIds(req, clienteIds) {
   return new Set(adminClienteIds);
 }
 
+async function listUsuariosByClienteIds(req, clienteIds) {
+  if (!clienteIds.length) return new Map();
+
+  const clienteIdSet = new Set(clienteIds.map((id) => String(id)));
+  const usuarios = await Usuario.list(req);
+  const byCliente = new Map();
+
+  for (const usuario of usuarios || []) {
+    const clienteId = usuario?.Cliente_ID || usuario?.clienteId;
+    if (!clienteIdSet.has(String(clienteId))) continue;
+
+    const current = byCliente.get(Number(clienteId));
+    const isAdmin = isAdminGroupValue(usuario?.grupoNome || usuario?.Grupo_Nome);
+    if (!current || (current.admin && !isAdmin)) {
+      byCliente.set(Number(clienteId), {
+        usuarioId: usuario?.Usuario_ID || usuario?.id || null,
+        usuarioLogin: usuario?.Usuario_Login || usuario?.login || "",
+        admin: isAdmin,
+      });
+    }
+  }
+
+  return byCliente;
+}
+
 router.get("/clientes", async (req, res) => {
   try {
     const tableName = await resolveTableName(req, TABLE_NAMES.clientes);
@@ -250,12 +275,15 @@ router.get("/clientes", async (req, res) => {
     const enderecosByCliente = await listEnderecosByClienteIds(req, clienteIds);
     const petsByCliente = await listPetsByClienteIds(req, clienteIds);
     const adminClienteIds = await listAdminClienteIds(req, clienteIds);
+    const usuariosByCliente = await listUsuariosByClienteIds(req, clienteIds);
 
     return res.json({
       status: "sucesso",
       clientes: clientes.map((cliente) => ({
         ...cliente,
         admin: adminClienteIds.has(cliente.id),
+        usuarioId: usuariosByCliente.get(cliente.id)?.usuarioId || null,
+        usuarioLogin: usuariosByCliente.get(cliente.id)?.usuarioLogin || "",
         enderecos: enderecosByCliente.get(cliente.id) || [],
         pets: petsByCliente.get(cliente.id) || [],
       })),

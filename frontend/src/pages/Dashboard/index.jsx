@@ -173,7 +173,7 @@ function Dashboard() {
     isAdmin
       ? {
           id: "usuarios",
-          title: "Gerenciar Grupos e Usuarios",
+          title: "Administração de Usuários",
           summary: "Cadastre grupos, crie usuarios e altere senhas de acesso.",
           items: [
             {

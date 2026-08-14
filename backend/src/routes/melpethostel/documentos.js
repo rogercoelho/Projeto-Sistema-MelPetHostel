@@ -362,6 +362,8 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
         .json({ status: "erro", mensagem: "usuarioId inválido" });
     }
 
+    const incluirConferidos = isTruthyFlag(req.query?.incluirConferidos);
+
     const user = await getUsuarioById(req, usuarioId);
     if (!user) {
       return res
@@ -490,7 +492,7 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
       const fileName = path.basename(storedPath);
       const status = normalizeReviewStatus(doc?.docStatus);
       const conferido = isDocumentApproved(doc);
-      if (conferido) continue;
+      if (conferido && !incluirConferidos) continue;
       arquivos.push({
         tipoRegistro: "documento",
         documentoId: doc?.docId || null,
