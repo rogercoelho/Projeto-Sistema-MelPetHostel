@@ -173,7 +173,7 @@ function Dashboard() {
               onAction: () => openView("admin-users"),
             },
             {
-              label: "Vinculo de grupos e permissoes",
+              label: "Criar Grupo",
               onAction: () => openView("admin-groups"),
             },
             {

@@ -409,12 +409,13 @@ router.get("/groups", async (req, res) => {
 router.post("/groups", async (req, res) => {
   try {
     const { nome } = req.body;
+    const tela = clean(req.body?.tela || req.body?.modulo || req.body?.tipoTela || "usuario");
     if (!nome || !nome.trim())
       return res
         .status(400)
         .json({ status: "erro", mensagem: "Nome é obrigatório" });
 
-    await Grupo.create(req, nome.trim());
+    await Grupo.create(req, nome.trim(), tela);
 
     // create upload folders for the group if not present
     try {

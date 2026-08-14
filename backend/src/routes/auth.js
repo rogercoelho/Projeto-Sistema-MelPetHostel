@@ -709,6 +709,7 @@ router.post("/groups", async (req, res) => {
   try {
     if (!requireAdmin(req, res)) return;
     const nome = clean(req.body?.nome);
+    const tela = clean(req.body?.tela || req.body?.modulo || req.body?.tipoTela || "usuario");
 
     if (!nome) {
       return res
@@ -716,7 +717,7 @@ router.post("/groups", async (req, res) => {
         .json({ status: "erro", mensagem: "Nome e obrigatorio" });
     }
 
-    const group = await Grupo.create(req, nome);
+    const group = await Grupo.create(req, nome, tela);
     await ensureGroupDirs(group.nome);
     return res.json({ status: "sucesso", mensagem: "Grupo criado", group });
   } catch (error) {

@@ -1,246 +1,105 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "../../components";
 import api from "../../services/api";
-import AdminPageShell from "./AdminPageShell";
-import { userBelongsToGroup } from "./utils";
-import {
-  getGroupLabel,
-  getUserGroupLabel,
-  getUserGroupValue,
-} from "./adminManagementUtils";
 
 function AdminGroupsPage({ onBack }) {
-  const [grupos, setGrupos] = useState([]);
-  const [usuarios, setUsuarios] = useState([]);
-  const [novoGrupoNome, setNovoGrupoNome] = useState("");
-  const [userGroupDrafts, setUserGroupDrafts] = useState({});
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [grupoForm, setGrupoForm] = useState({ nome: "", tela: "usuario" });
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
-  async function loadData() {
-    setLoading(true);
-    try {
-      const [groupsData, usersData] = await Promise.all([
-        api.get("/auth/groups"),
-        api.get("/auth/users"),
-      ]);
-      const nextGroups = Array.isArray(groupsData) ? groupsData : [];
-      const nextUsers = Array.isArray(usersData) ? usersData : [];
-      setGrupos(nextGroups);
-      setUsuarios(nextUsers);
-      setUserGroupDrafts(
-        nextUsers.reduce((acc, user) => {
-          acc[user.id] = getUserGroupValue(user, nextGroups);
-          return acc;
-        }, {}),
-      );
-    } catch (error) {
-      setGrupos([]);
-      setUsuarios([]);
-      setMessage({
-        type: "erro",
-        text: error.message || "Erro ao carregar grupos.",
-      });
-    } finally {
-      setLoading(false);
-    }
+  function updateGroupField(field, value) {
+    setGrupoForm((state) => ({ ...state, [field]: value }));
   }
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   async function createGroup(event) {
     event.preventDefault();
-    const nome = novoGrupoNome.trim();
-    if (!nome) return;
+    const nome = grupoForm.nome.trim();
+    if (!nome) {
+      setMessage({ type: "erro", text: "Nome do grupo e obrigatorio." });
+      return;
+    }
 
+    setSaving(true);
     try {
-      await api.post("/auth/groups", { nome });
-      setNovoGrupoNome("");
+      await api.post("/auth/groups", { nome, tela: grupoForm.tela });
+      setGrupoForm({ nome: "", tela: "usuario" });
       setMessage({ type: "sucesso", text: "Grupo criado." });
-      await loadData();
     } catch (error) {
       setMessage({
         type: "erro",
         text: error.message || "Erro ao criar grupo.",
       });
-    }
-  }
-
-  async function deleteGroup(group) {
-    try {
-      await api.delete(`/auth/groups/${group.id}`);
-      setConfirmDeleteId(null);
-      setMessage({ type: "sucesso", text: "Grupo excluido." });
-      await loadData();
-    } catch (error) {
-      setMessage({
-        type: "erro",
-        text: error.message || "Erro ao excluir grupo.",
-      });
-    }
-  }
-
-  async function saveUserGroup(user) {
-    const grupo = userGroupDrafts[user.id];
-    if (!grupo) {
-      setMessage({ type: "erro", text: "Selecione um grupo para o usuario." });
-      return;
-    }
-
-    try {
-      await api.put(`/auth/users/${user.id}`, {
-        login: user.login,
-        grupo,
-        ativo: user.ativo !== false,
-      });
-      setMessage({ type: "sucesso", text: "Vinculo atualizado." });
-      await loadData();
-    } catch (error) {
-      setMessage({
-        type: "erro",
-        text: error.message || "Erro ao atualizar vinculo.",
-      });
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
-    <AdminPageShell
-      title="Vinculo de grupos e permissoes"
-      description="Crie grupos, confira usuarios vinculados e altere o grupo de cada usuario."
-      onBack={onBack}
-    >
-      <section className="admin-page-layout">
-        <section className="admin-page-panel">
-          <div className="admin-page-panel-title">
-            <span>Grupos</span>
-            <h3>Criar e acompanhar</h3>
+    <main className="admin-page admin-user-create-page">
+      <form
+        className="admin-page-panel admin-page-form admin-user-create-card"
+        onSubmit={createGroup}
+      >
+        <header className="admin-user-create-header">
+          <div className="admin-user-create-heading">
+            <span>Administração de Usuários</span>
+            <h2>Criar grupo</h2>
+          </div>
+          <p className="admin-user-create-subtitle">
+            Cadastre um grupo e defina se ele pertence ao fluxo administrativo
+            ou ao fluxo do usuário.
+          </p>
+        </header>
+
+        <section className="admin-user-create-section admin-group-create-section">
+          <div className="admin-user-section-title">
+            <span>Grupo</span>
+            <h3>Dados do grupo</h3>
           </div>
 
-          <form className="admin-page-form compact" onSubmit={createGroup}>
+          <div className="admin-user-create-grid admin-group-create-grid">
             <label>
-              Novo grupo
+              Nome do grupo
               <input
                 type="text"
-                value={novoGrupoNome}
-                onChange={(event) => setNovoGrupoNome(event.target.value)}
+                value={grupoForm.nome}
+                onChange={(event) => updateGroupField("nome", event.target.value)}
                 placeholder="Nome do grupo"
               />
             </label>
-            <Button type="submit">Criar grupo</Button>
-          </form>
 
-          {message ? (
-            <p className={`admin-page-message ${message.type}`}>
-              {message.text}
-            </p>
-          ) : null}
-
-          {loading ? (
-            <p>Carregando...</p>
-          ) : grupos.length ? (
-            <div className="admin-page-list">
-              {grupos.map((grupo) => {
-                const linkedUsers = usuarios.filter((user) =>
-                  userBelongsToGroup(user, grupo),
-                );
-
-                return (
-                  <article key={grupo.id || grupo.nome}>
-                    <div>
-                      <strong>{getGroupLabel(grupo)}</strong>
-                      <span>{linkedUsers.length} usuario(s) vinculado(s)</span>
-                    </div>
-                    <div className="admin-page-row-actions">
-                      {confirmDeleteId === grupo.id ? (
-                        <>
-                          <Button
-                            type="button"
-                            variant="danger"
-                            size="sm"
-                            onClick={() => deleteGroup(grupo)}
-                          >
-                            Confirmar
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setConfirmDeleteId(null)}
-                          >
-                            Cancelar
-                          </Button>
-                        </>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setConfirmDeleteId(grupo.id)}
-                        >
-                          Excluir
-                        </Button>
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          ) : (
-            <p>Nenhum grupo cadastrado.</p>
-          )}
-        </section>
-
-        <section className="admin-page-panel">
-          <div className="admin-page-panel-title">
-            <span>Permissoes</span>
-            <h3>Vincular usuarios</h3>
+            <label>
+              Vincular à tela
+              <select
+                value={grupoForm.tela}
+                onChange={(event) => updateGroupField("tela", event.target.value)}
+              >
+                <option value="adm">Tela de adm</option>
+                <option value="usuario">Tela de usuário</option>
+              </select>
+            </label>
           </div>
 
-          {usuarios.length ? (
-            <div className="admin-page-list">
-              {usuarios.map((user) => (
-                <article key={user.id || user.login}>
-                  <div>
-                    <strong>{user.login}</strong>
-                    <span>Atual: {getUserGroupLabel(user, grupos)}</span>
-                  </div>
-                  <div className="admin-page-row-actions inline-select">
-                    <select
-                      value={userGroupDrafts[user.id] || ""}
-                      onChange={(event) =>
-                        setUserGroupDrafts((state) => ({
-                          ...state,
-                          [user.id]: event.target.value,
-                        }))
-                      }
-                    >
-                      <option value="">-- Grupo --</option>
-                      {grupos.map((grupo) => (
-                        <option key={grupo.id || grupo.nome} value={grupo.id}>
-                          {getGroupLabel(grupo)}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => saveUserGroup(user)}
-                    >
-                      Salvar
-                    </Button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p>Nenhum usuario cadastrado.</p>
-          )}
+          <div className="admin-page-actions admin-user-create-actions">
+            <Button type="submit" disabled={saving}>
+              {saving ? "Criando..." : "Criar grupo"}
+            </Button>
+          </div>
         </section>
-      </section>
-    </AdminPageShell>
+
+        <div className="admin-user-create-footer">
+          <Button type="button" variant="outline" onClick={onBack}>
+            Voltar
+          </Button>
+        </div>
+
+        {message ? (
+          <p className={["admin-page-message", message.type].filter(Boolean).join(" ")}>
+            {message.text}
+          </p>
+        ) : null}
+      </form>
+    </main>
   );
 }
 
