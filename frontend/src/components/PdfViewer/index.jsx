@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist/build/pdf.mjs";
+import api from "../../services/api";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+
 
 export default function PdfViewer({ src, title, style }) {
   const pagesRef = useRef(null);
@@ -23,12 +25,12 @@ export default function PdfViewer({ src, title, style }) {
       setErrorMessage("");
 
       try {
-        const response = await fetch(src, { credentials: "include" });
-        if (!response.ok) {
-          throw new Error(`Nao foi possivel carregar o PDF (${response.status}).`);
+        const preview = await api.get(src);
+        const binary = window.atob(preview?.base64 || "");
+        const data = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) {
+          data[index] = binary.charCodeAt(index);
         }
-
-        const data = await response.arrayBuffer();
         if (canceled) return;
 
         const loadingTask = pdfjsLib.getDocument({ data });

@@ -344,6 +344,11 @@ export default function MelPetHostel({
   const [loadingPetStatus, setLoadingPetStatus] = useState(false);
   const [petStatusSubmitted, setPetStatusSubmitted] = useState(false);
   const [petStatusError, setPetStatusError] = useState("");
+  const [adminUploadType, setAdminUploadType] = useState("contrato");
+  const [adminUploadPetId, setAdminUploadPetId] = useState("");
+  const [adminUploadSide, setAdminUploadSide] = useState("frente");
+  const [adminUploadFile, setAdminUploadFile] = useState(null);
+  const [adminUploadingDocument, setAdminUploadingDocument] = useState(false);
   const [savingPetStatusId, setSavingPetStatusId] = useState(null);
   const [pendingUsers, setPendingUsers] = useState([]);
   const [loadingPendingUsers, setLoadingPendingUsers] = useState(false);
@@ -718,16 +723,27 @@ export default function MelPetHostel({
     setSelectedUserFilesError("");
   }
 
+  function buildDocumentPreviewUrl(file) {
+    const tipo = file?.tipoRegistro === "contrato" ? "contrato" : "documento";
+    const id =
+      tipo === "contrato" ? Number(file?.contratoId) : Number(file?.documentoId);
+    if (!Number.isInteger(id) || id <= 0) return null;
+    const params = new window.URLSearchParams({ tipo, id: String(id) });
+    return `/melpethostel/documentos/preview?${params.toString()}`;
+  }
+
   function handleOpenDocumentPreview(file) {
-    const url = buildFileUrl(file?.fileUrl);
-    if (!url) return;
+    const url = buildDocumentPreviewUrl(file);
+    if (!url) {
+      showToast("Nao foi possivel abrir este documento.", "error");
+      return;
+    }
     setDocumentPreviewTitle(
       `${file?.nomeDocumento || "Documento"} - ${file?.tipoDocumento || "Arquivo"}`,
     );
     setDocumentPreviewSrc(url);
     setDocumentPreviewOpen(true);
   }
-
   function handleCloseDocumentPreview() {
     setDocumentPreviewOpen(false);
     setDocumentPreviewTitle("");
@@ -1710,6 +1726,69 @@ export default function MelPetHostel({
     }
   }
 
+  async function handleAdminClientDocumentUpload() {
+    if (!selectedClient?.id || !adminUploadFile || adminUploadingDocument) return;
+    const originalName = String(adminUploadFile.name || "").toLowerCase();
+    if (!originalName.endsWith(".pdf")) {
+      showToast("Selecione um arquivo PDF.", "error");
+      return;
+    }
+    if (adminUploadType === "carteira" && !adminUploadPetId) {
+      showToast("Selecione o pet da carteirinha.", "error");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    const savedUser = localStorage.getItem("usuario");
+    let userHeader = "";
+    try {
+      const parsed = savedUser ? JSON.parse(savedUser) : null;
+      userHeader =
+        parsed?.login || parsed?.id || parsed?.Usuario_Login || parsed?.Usuario_ID || "";
+    } catch {
+      userHeader = "";
+    }
+
+    const formData = new FormData();
+    formData.append("arquivo", adminUploadFile);
+    formData.append("clienteId", String(selectedClient.id));
+    formData.append("tipoUpload", adminUploadType);
+    if (adminUploadType === "documento") formData.append("tipoId", "1");
+    if (adminUploadType === "comprovante") formData.append("tipoId", "2");
+    if (adminUploadType === "outros") {
+      formData.append("tipoId", String(documentTypeIds.outros || 3));
+    }
+    if (adminUploadType === "carteira") {
+      formData.append("petId", String(adminUploadPetId));
+      formData.append("lado", adminUploadSide);
+    }
+
+    setAdminUploadingDocument(true);
+    try {
+      const response = await fetch(
+        `${String(API_URL).replace(/\/+$/, "")}/melpethostel/documentos/admin-upload`,
+        {
+          method: "POST",
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(userHeader ? { "x-user": userHeader } : {}),
+          },
+          body: formData,
+        },
+      );
+      const data = await response.json().catch(() => null);
+      if (!response.ok || data?.status === "erro") {
+        throw new Error(data?.mensagem || "Falha no upload do documento.");
+      }
+      showToast(data?.mensagem || "Documento enviado com sucesso.", "success");
+      setAdminUploadFile(null);
+      await loadClientSearch();
+    } catch (error) {
+      showToast(error?.message || "Nao foi possivel enviar o documento.", "error");
+    } finally {
+      setAdminUploadingDocument(false);
+    }
+  }
   async function loadClientSearch(event) {
     event?.preventDefault();
     setClientSearchSubmitted(true);
@@ -3711,6 +3790,71 @@ export default function MelPetHostel({
               ) : (
                 <p>Nenhum pet cadastrado.</p>
               )}
+            </div>
+            <div className="melpet-client-detail-block melpet-admin-upload-card">
+              <h4>Upload de documentos pelo administrador</h4>
+              <div className="melpet-admin-upload-grid">
+                <label>
+                  <span>Tipo</span>
+                  <select
+                    value={adminUploadType}
+                    onChange={(event) => setAdminUploadType(event.target.value)}
+                  >
+                    <option value="contrato">Contrato assinado</option>
+                    <option value="documento">Documento de identificação</option>
+                    <option value="comprovante">Comprovante de endereço</option>
+                    <option value="outros">Outros documentos</option>
+                    <option value="carteira">Carteirinha de vacinação do pet</option>
+                  </select>
+                </label>
+
+                {adminUploadType === "carteira" ? (
+                  <>
+                    <label>
+                      <span>Pet</span>
+                      <select
+                        value={adminUploadPetId}
+                        onChange={(event) => setAdminUploadPetId(event.target.value)}
+                      >
+                        <option value="">Selecione</option>
+                        {(selectedClient.pets || []).map((pet) => (
+                          <option key={pet.id} value={pet.id}>
+                            {pet.nome || `Pet ${pet.id}`}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Lado</span>
+                      <select
+                        value={adminUploadSide}
+                        onChange={(event) => setAdminUploadSide(event.target.value)}
+                      >
+                        <option value="frente">Frente</option>
+                        <option value="verso">Verso</option>
+                      </select>
+                    </label>
+                  </>
+                ) : null}
+
+                <label className="melpet-admin-upload-file">
+                  <span>Arquivo PDF</span>
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    onChange={(event) =>
+                      setAdminUploadFile(event.target.files?.[0] || null)
+                    }
+                  />
+                </label>
+              </div>
+              <Button
+                type="button"
+                onClick={handleAdminClientDocumentUpload}
+                disabled={adminUploadingDocument || !adminUploadFile}
+              >
+                {adminUploadingDocument ? "Enviando..." : "Enviar documento"}
+              </Button>
             </div>
           </article>
         ) : null}

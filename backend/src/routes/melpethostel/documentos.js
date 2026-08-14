@@ -43,6 +43,8 @@ const {
   getDocumentoTipos,
   getLatestContratoRow,
   getReqLogin,
+  getUsuarioLoginByClienteId,
+  isAdminUser,
   getUsuarioById,
   getUsuarioByLogin,
   isTruthyFlag,
@@ -56,6 +58,7 @@ const {
   requireCompleteClienteCadastro,
   resolveTableName,
   resolveUploadsDirToDisk,
+  resolveUploadsFileToDisk,
   toPublicUploadPath,
   uploadContrato,
 } = require("./context");
@@ -64,6 +67,23 @@ function clean(value) {
   return value === undefined || value === null ? "" : String(value).trim();
 }
 
+function normalizeFileNamePart(value) {
+  return clean(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 120);
+}
+
+function todayFileDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeCarteiraSide(value) {
+  return clean(value).toLowerCase() === "verso" ? "verso" : "frente";
+}
 function normalizeReviewStatus(value) {
   const status = clean(value).toLowerCase();
   if (["aprovado", "reprovado", "pendente"].includes(status)) return status;
@@ -204,6 +224,90 @@ router.get("/documentos/pendentes", async (req, res) => {
   }
 });
 
+router.get("/documentos/preview", async (req, res) => {
+  try {
+    const login = getReqLogin(req);
+    if (!(await isAdminUser(req, login))) {
+      return res.status(403).json({
+        status: "erro",
+        mensagem: "Apenas administradores podem visualizar este documento.",
+      });
+    }
+
+    const tipo = clean(req.query.tipo).toLowerCase();
+    const id = Number(req.query.id);
+    if (!["contrato", "documento"].includes(tipo) || !Number.isInteger(id) || id <= 0) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Documento invalido." });
+    }
+
+    let storedPath = "";
+
+    if (tipo === "contrato") {
+      const meta = await getContratosTableMeta(req);
+      if (!meta.exists || !meta.idCol || !meta.filePathCol || !meta.nomeArquivoCol) {
+        return res.status(500).json({
+          status: "erro",
+          mensagem: "Tabela Contratos nao esta pronta para preview.",
+        });
+      }
+
+      const [rows] = await dbFor(req).query(
+        `SELECT ${qcol(meta.filePathCol)} AS filePath, ${qcol(meta.nomeArquivoCol)} AS fileName
+           FROM ${qtable(meta.tableName)}
+          WHERE ${qcol(meta.idCol)} = ?
+          LIMIT 1`,
+        [id],
+      );
+      const row = rows && rows[0];
+      storedPath = row?.filePath && row?.fileName
+        ? `${String(row.filePath).replace(/\/+$/, "")}/${row.fileName}`
+        : "";
+    } else {
+      const meta = await getDocumentosTableMeta(req);
+      if (!meta.exists || !meta.idCol || !meta.filePathCol) {
+        return res.status(500).json({
+          status: "erro",
+          mensagem: "Tabela Documentos nao esta pronta para preview.",
+        });
+      }
+
+      const [rows] = await dbFor(req).query(
+        `SELECT ${qcol(meta.filePathCol)} AS filePath
+           FROM ${qtable(meta.tableName)}
+          WHERE ${qcol(meta.idCol)} = ?
+          LIMIT 1`,
+        [id],
+      );
+      storedPath = rows && rows[0] ? clean(rows[0].filePath) : "";
+    }
+
+    if (!storedPath || !/\.pdf$/i.test(storedPath)) {
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "PDF nao encontrado." });
+    }
+
+    const exists = await fileExistsByStoredPath(storedPath);
+    if (!exists) {
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Arquivo nao encontrado." });
+    }
+
+    const diskPath = resolveUploadsFileToDisk(storedPath);
+    const buffer = await fs.readFile(diskPath);
+    return res.json({
+      status: "sucesso",
+      contentType: "application/pdf",
+      base64: buffer.toString("base64"),
+    });
+  } catch (error) {
+    console.error("Error in GET /melpethostel/documentos/preview:", error);
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
 router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
   try {
     const login = getReqLogin(req);
@@ -699,6 +803,137 @@ router.get("/documentos/status", async (req, res) => {
   }
 });
 
+router.post(
+  "/documentos/admin-upload",
+  uploadContrato.single("arquivo"),
+  async (req, res) => {
+    try {
+      const adminLogin = getReqLogin(req);
+      if (!(await isAdminUser(req, adminLogin))) {
+        return res.status(403).json({
+          status: "erro",
+          mensagem: "Apenas administradores podem enviar documentos por cliente.",
+        });
+      }
+
+      const clienteId = Number(req.body?.clienteId);
+      const tipoUpload = clean(req.body?.tipoUpload).toLowerCase();
+      if (!Number.isInteger(clienteId) || clienteId <= 0) {
+        return res.status(400).json({ status: "erro", mensagem: "Cliente invalido." });
+      }
+      if (!["contrato", "documento", "comprovante", "outros", "carteira"].includes(tipoUpload)) {
+        return res.status(400).json({ status: "erro", mensagem: "Tipo de upload invalido." });
+      }
+      if (!req.file || !req.file.buffer) {
+        return res.status(400).json({ status: "erro", mensagem: "Arquivo e obrigatorio." });
+      }
+
+      const originalName = String(req.file.originalname || "").toLowerCase();
+      const mime = String(req.file.mimetype || "").toLowerCase();
+      const isPdf = originalName.endsWith(".pdf") || mime === "application/pdf";
+      if (!isPdf) {
+        return res.status(400).json({ status: "erro", mensagem: "Envie um arquivo PDF." });
+      }
+
+      const targetLogin = await getUsuarioLoginByClienteId(req, clienteId);
+      if (!targetLogin) {
+        return res.status(404).json({ status: "erro", mensagem: "Usuario do cliente nao encontrado." });
+      }
+      if (!(await requireCompleteClienteCadastro(req, res, targetLogin))) return;
+
+      const userRow = await getUsuarioByLogin(req, targetLogin);
+      const userDirData = await ensureUserDocumentStorage(req, targetLogin);
+      if (!userRow?.Usuario_ID || !userDirData) {
+        return res.status(400).json({ status: "erro", mensagem: "Usuario sem estrutura para salvar documento." });
+      }
+
+      const { relativeDir, safeUsuario } = userDirData;
+      const diskDir = resolveUploadsDirToDisk(relativeDir);
+
+      if (tipoUpload === "contrato") {
+        const meta = await getContratosTableMeta(req);
+        if (!meta.exists || !meta.loginCol || !meta.nomeArquivoCol || !meta.filePathCol) {
+          return res.status(500).json({ status: "erro", mensagem: "Tabela Contratos nao esta pronta para upload." });
+        }
+        const finalFileName = `${safeUsuario}_Contrato_Assinado.pdf`;
+        await fs.writeFile(path.join(diskDir, finalFileName), req.file.buffer);
+        const existingRow = await getLatestContratoRow(req, meta, targetLogin);
+        if (existingRow && meta.idCol) {
+          const setParts = [`${qcol(meta.nomeArquivoCol)} = ?`, `${qcol(meta.filePathCol)} = ?`];
+          const params = [finalFileName, relativeDir];
+          if (meta.statusCol) { setParts.push(`${qcol(meta.statusCol)} = ?`); params.push("aprovado"); }
+          if (meta.conferidoCol) setParts.push(`${qcol(meta.conferidoCol)} = 1`);
+          if (meta.conferidoAtCol) setParts.push(`${qcol(meta.conferidoAtCol)} = NOW()`);
+          if (meta.conferidoPorCol) { setParts.push(`${qcol(meta.conferidoPorCol)} = ?`); params.push(adminLogin); }
+          if (meta.motivoReprovacaoCol) setParts.push(`${qcol(meta.motivoReprovacaoCol)} = NULL`);
+          params.push(existingRow[meta.idCol]);
+          await dbFor(req).query(`UPDATE ${qtable(meta.tableName)} SET ${setParts.join(", ")} WHERE ${qcol(meta.idCol)} = ?`, params);
+        } else {
+          const cols = [meta.loginCol, meta.nomeArquivoCol, meta.filePathCol];
+          const vals = [targetLogin, finalFileName, relativeDir];
+          if (meta.statusCol) { cols.push(meta.statusCol); vals.push("aprovado"); }
+          if (meta.conferidoCol) { cols.push(meta.conferidoCol); vals.push(1); }
+          if (meta.conferidoAtCol) { cols.push(meta.conferidoAtCol); vals.push(new Date()); }
+          if (meta.conferidoPorCol) { cols.push(meta.conferidoPorCol); vals.push(adminLogin); }
+          if (meta.motivoReprovacaoCol) { cols.push(meta.motivoReprovacaoCol); vals.push(null); }
+          await dbFor(req).query(`INSERT INTO ${qtable(meta.tableName)} (${cols.map(qcol).join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`, vals);
+        }
+        return res.json({ status: "sucesso", mensagem: "Contrato enviado com sucesso." });
+      }
+
+      if (["documento", "comprovante", "outros"].includes(tipoUpload)) {
+        const tipoId = tipoUpload === "comprovante" ? 2 : Number(req.body?.tipoId || (tipoUpload === "outros" ? 3 : 1));
+        const tipo = await getDocumentoTipoById(req, tipoId);
+        if (!tipo) return res.status(400).json({ status: "erro", mensagem: "Tipo de documento invalido." });
+        const contratosMeta = await getContratosTableMeta(req);
+        const latestContrato = await getLatestContratoRow(req, contratosMeta, targetLogin);
+        const contratoId = latestContrato && contratosMeta.idCol ? latestContrato[contratosMeta.idCol] : null;
+        if (!contratoId) return res.status(400).json({ status: "erro", mensagem: "Envie primeiro o contrato do cliente." });
+        const docsMeta = await getDocumentosTableMeta(req);
+        if (!docsMeta.exists || !docsMeta.idCol || !docsMeta.usuarioIdCol || !docsMeta.contratoIdCol || !docsMeta.tipoIdCol || !docsMeta.filePathCol) {
+          return res.status(500).json({ status: "erro", mensagem: "Tabela Documentos nao esta pronta para upload." });
+        }
+        const docKey = mapRequiredDocKey(tipo.Documento_Tipo);
+        const finalFileName = buildSupportDocumentFileName(safeUsuario, docKey || "outros");
+        await fs.writeFile(path.join(diskDir, finalFileName), req.file.buffer);
+        const filePath = `${relativeDir}/${finalFileName}`.replace(/\\/g, "/");
+        const [existingRows] = await dbFor(req).query(`SELECT ${qcol(docsMeta.idCol)} AS id FROM ${qtable(docsMeta.tableName)} WHERE ${qcol(docsMeta.usuarioIdCol)} = ? AND ${qcol(docsMeta.contratoIdCol)} = ? AND ${qcol(docsMeta.tipoIdCol)} = ? ORDER BY ${qcol(docsMeta.idCol)} LIMIT 1`, [userRow.Usuario_ID, contratoId, tipo.Id]);
+        if (existingRows?.length && docKey !== "outros") {
+          const assignments = [`${qcol(docsMeta.filePathCol)} = ?`];
+          if (docsMeta.statusCol) assignments.push(`${qcol(docsMeta.statusCol)} = 'aprovado'`);
+          if (docsMeta.conferidoCol) assignments.push(`${qcol(docsMeta.conferidoCol)} = 1`);
+          if (docsMeta.motivoReprovacaoCol) assignments.push(`${qcol(docsMeta.motivoReprovacaoCol)} = NULL`);
+          if (docsMeta.conferidoAtCol) assignments.push(`${qcol(docsMeta.conferidoAtCol)} = NOW()`);
+          if (docsMeta.conferidoPorCol) assignments.push(`${qcol(docsMeta.conferidoPorCol)} = ${dbFor(req).escape(adminLogin)}`);
+          await dbFor(req).query(`UPDATE ${qtable(docsMeta.tableName)} SET ${assignments.join(", ")} WHERE ${qcol(docsMeta.idCol)} = ?`, [filePath, existingRows[0].id]);
+        } else {
+          const pairs = [[docsMeta.usuarioIdCol, userRow.Usuario_ID], [docsMeta.contratoIdCol, contratoId], [docsMeta.tipoIdCol, tipo.Id], [docsMeta.filePathCol, filePath], [docsMeta.statusCol, "aprovado"], [docsMeta.conferidoCol, 1], [docsMeta.conferidoAtCol, new Date()], [docsMeta.conferidoPorCol, adminLogin], [docsMeta.motivoReprovacaoCol, null]].filter(([col]) => Boolean(col));
+          await dbFor(req).query(`INSERT INTO ${qtable(docsMeta.tableName)} (${pairs.map(([col]) => qcol(col)).join(", ")}) VALUES (${pairs.map(() => "?").join(", ")})`, pairs.map(([, value]) => value));
+        }
+        return res.json({ status: "sucesso", mensagem: "Documento enviado com sucesso." });
+      }
+
+      const petId = Number(req.body?.petId);
+      if (!Number.isInteger(petId) || petId <= 0) return res.status(400).json({ status: "erro", mensagem: "Pet invalido." });
+      const petsTable = await resolveTableName(req, TABLE_NAMES.pets);
+      const carteirasTable = await resolveTableName(req, TABLE_NAMES.petCarteirasVacinacao);
+      if (!petsTable || !carteirasTable) return res.status(500).json({ status: "erro", mensagem: "Tabelas de pets/carteiras nao estao prontas." });
+      const [petRows] = await dbFor(req).query(`SELECT id, nome FROM ${qtable(petsTable)} WHERE id = ? AND cliente_id = ? LIMIT 1`, [petId, clienteId]);
+      const pet = petRows && petRows[0];
+      if (!pet) return res.status(404).json({ status: "erro", mensagem: "Pet nao encontrado para este cliente." });
+      const lado = normalizeCarteiraSide(req.body?.lado);
+      const baseName = normalizeFileNamePart(`Carteira de Vacinacao ${lado} - ${pet.nome} ${todayFileDate()}`);
+      const nomeArquivo = `${baseName || `Carteira de Vacinacao - Pet ${petId}`}.pdf`;
+      await fs.writeFile(path.join(diskDir, nomeArquivo), req.file.buffer);
+      const filePath = `${relativeDir}/${nomeArquivo}`.replace(/\\/g, "/");
+      const [result] = await dbFor(req).query(`INSERT INTO ${qtable(carteirasTable)} (${["pet_id", "cliente_id", "lado", "nome_arquivo", "file_path", "status"].map(qcol).join(", ")}) VALUES (?, ?, ?, ?, ?, 'aprovado')`, [petId, clienteId, lado, nomeArquivo, filePath]);
+      return res.status(201).json({ status: "sucesso", mensagem: "Carteira de vacinacao enviada com sucesso.", carteira: { id: result.insertId } });
+    } catch (error) {
+      console.error("Error in POST /melpethostel/documentos/admin-upload:", error);
+      return res.status(500).json({ status: "erro", mensagem: error.message });
+    }
+  },
+);
 router.post(
   "/documentos/upload",
   uploadContrato.single("arquivo"),
