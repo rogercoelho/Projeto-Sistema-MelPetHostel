@@ -22,6 +22,8 @@ function SessionWarningModal() {
       isOpen={showSessionWarning}
       onClose={fecharAlertaSessao}
       title="Sessão expirando"
+      closeOnBackdropClick={false}
+      showCloseButton={false}
       containerStyle={{ maxWidth: 400 }}
     >
       <div style={{ padding: "4px 0" }}>
