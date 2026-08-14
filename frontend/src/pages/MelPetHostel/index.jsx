@@ -331,6 +331,17 @@ export default function MelPetHostel({
   const [hostingRequests, setHostingRequests] = useState([]);
   const [loadingHostingRequests, setLoadingHostingRequests] = useState(false);
   const [hostingRequestsError, setHostingRequestsError] = useState("");
+  const [pendingHostingRequests, setPendingHostingRequests] = useState([]);
+  const [loadingPendingHostingRequests, setLoadingPendingHostingRequests] =
+    useState(false);
+  const [pendingHostingRequestsError, setPendingHostingRequestsError] =
+    useState("");
+  const [selectedPendingHostingId, setSelectedPendingHostingId] =
+    useState(null);
+  const [reviewingHostingRequestId, setReviewingHostingRequestId] =
+    useState(null);
+  const [rejectHostingTarget, setRejectHostingTarget] = useState(null);
+  const [rejectHostingReason, setRejectHostingReason] = useState("");
   const [activeMenu, setActiveMenu] = useState(
     initialAdminMenu === "cadastroPets" ? "" : initialAdminMenu,
   );
@@ -431,6 +442,11 @@ export default function MelPetHostel({
       );
     }
   }, [initialAdminMenu, isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin || activeMenu !== "aprovarHospedagens") return;
+    loadPendingHostingRequests();
+  }, [activeMenu, isAdmin]);
 
   const shouldEnforceContractGate = Boolean(!isAdmin && enforceContractGate);
   const contratoValido = Boolean(contractStatus?.contratoValido);
@@ -1143,7 +1159,7 @@ export default function MelPetHostel({
   function getHostingRequestStatusTone(status) {
     const normalized = normalizeText(status);
     if (normalized.includes("aprov")) return "approved";
-    if (normalized.includes("recus")) return "rejected";
+    if (normalized.includes("recus") || normalized.includes("reprov")) return "rejected";
     if (normalized.includes("anal")) return "review";
     if (normalized.includes("confirm")) return "confirmed";
     if (normalized.includes("conclu")) return "completed";
@@ -1168,6 +1184,7 @@ export default function MelPetHostel({
     if (normalized.includes("aguard")) return "aguardando_pagamento";
     if (normalized.includes("confirm")) return "confirmado";
     if (normalized.includes("conclu")) return "concluido";
+    if (normalized.includes("recus") || normalized.includes("reprov")) return "recusado";
     if (normalized.includes("cancel")) return "cancelado";
     return "pendente";
   }
@@ -1232,6 +1249,82 @@ export default function MelPetHostel({
       setPlanosError(error?.message || "Não foi possível carregar os planos.");
     } finally {
       setLoadingPlanos(false);
+    }
+  }
+
+  async function loadPendingHostingRequests() {
+    setLoadingPendingHostingRequests(true);
+    setPendingHostingRequestsError("");
+    try {
+      const data = await api.get("/melpethostel/hospedagens/solicitacoes/pendentes");
+      setPendingHostingRequests(
+        Array.isArray(data?.solicitacoes) ? data.solicitacoes : [],
+      );
+    } catch (error) {
+      setPendingHostingRequests([]);
+      setPendingHostingRequestsError(
+        error?.message || "Não foi possível carregar hospedagens pendentes.",
+      );
+    } finally {
+      setLoadingPendingHostingRequests(false);
+    }
+  }
+
+  function openRejectHostingModal(request) {
+    setRejectHostingTarget(request);
+    setRejectHostingReason("");
+  }
+
+  function closeRejectHostingModal() {
+    if (reviewingHostingRequestId) return;
+    setRejectHostingTarget(null);
+    setRejectHostingReason("");
+  }
+
+  async function approveHostingRequest(request) {
+    if (!request?.id) return;
+    setReviewingHostingRequestId(request.id);
+    try {
+      await api.patch(
+        "/melpethostel/hospedagens/solicitacoes/" + request.id + "/aprovar",
+      );
+      showToast("Hospedagem aprovada.", "success");
+      setPendingHostingRequests((current) =>
+        current.filter((item) => Number(item.id) !== Number(request.id)),
+      );
+      if (selectedPendingHostingId === request.id) setSelectedPendingHostingId(null);
+    } catch (error) {
+      showToast(error?.message || "Não foi possível aprovar a hospedagem.", "error");
+    } finally {
+      setReviewingHostingRequestId(null);
+    }
+  }
+
+  async function rejectHostingRequest() {
+    const request = rejectHostingTarget;
+    const motivoRecusa = rejectHostingReason.trim();
+    if (!request?.id) return;
+    if (!motivoRecusa) {
+      showToast("Informe o motivo da reprovação.", "error");
+      return;
+    }
+    setReviewingHostingRequestId(request.id);
+    try {
+      await api.patch(
+        "/melpethostel/hospedagens/solicitacoes/" + request.id + "/reprovar",
+        { motivoRecusa },
+      );
+      showToast("Hospedagem reprovada.", "success");
+      setPendingHostingRequests((current) =>
+        current.filter((item) => Number(item.id) !== Number(request.id)),
+      );
+      if (selectedPendingHostingId === request.id) setSelectedPendingHostingId(null);
+      setRejectHostingTarget(null);
+      setRejectHostingReason("");
+    } catch (error) {
+      showToast(error?.message || "Não foi possível reprovar a hospedagem.", "error");
+    } finally {
+      setReviewingHostingRequestId(null);
     }
   }
 
@@ -3109,8 +3202,7 @@ export default function MelPetHostel({
     if (!petDocsPet) return null;
     const vaccineStatus = getPetVaccineStatus(petDocsPet);
     const isAdminPetFicha = Boolean(isAdmin && petDocsPet?.clienteId);
-    const isReadOnlyVaccineUpload =
-      !isAdminPetFicha && vaccineStatus.tone === "pending";
+    const isReadOnlyVaccineUpload = false;
     const documentStatuses = [
       ["frente", "Carteirinha de vacinação frente"],
       ["verso", "Carteirinha de vacinação verso"],
@@ -3190,7 +3282,7 @@ export default function MelPetHostel({
             const isConcluded = Boolean(uploadedPetVaccineSides[side]);
             const canReplaceCarteira = isAdminPetFicha && editingAdminPetVaccines;
             const actionDisabled =
-              Boolean(uploadingPetVaccineSide) ||
+              isUploadingThis ||
               (isConcluded && !canReplaceCarteira) ||
               isReadOnlyVaccineUpload;
 
@@ -3418,6 +3510,7 @@ export default function MelPetHostel({
     { key: "aguardando_pagamento", label: "Aguardando pagamento" },
     { key: "confirmado", label: "Confirmado" },
     { key: "concluido", label: "Concluído" },
+    { key: "recusado", label: "Recusado" },
     { key: "cancelado", label: "Cancelado" },
   ];
 
@@ -3929,6 +4022,110 @@ export default function MelPetHostel({
         </div>
       ) : (
         <p>Nenhum pedido de hospedagem encontrado.</p>
+      )}
+    </section>
+  );
+
+  const adminHostingApprovalContent = (
+    <section className="melpet-hosting-history melpet-admin-hosting-approval">
+      <header className="melpet-hosting-history-hero">
+        <div>
+          <span className="melpet-hosting-history-kicker">Hospedagens</span>
+          <h3>Aprovar Hospedagens Pendentes</h3>
+          <p>Consulte as solicitações enviadas pelos tutores e aprove ou reprove cada pedido.</p>
+        </div>
+        <div className="melpet-hosting-history-stats">
+          <div>
+            <strong>{pendingHostingRequests.length}</strong>
+            <span>Pendentes</span>
+          </div>
+        </div>
+      </header>
+
+      {pendingHostingRequestsError ? (
+        <p className="melpet-error">{pendingHostingRequestsError}</p>
+      ) : null}
+
+      {loadingPendingHostingRequests ? (
+        <p>Carregando hospedagens pendentes...</p>
+      ) : pendingHostingRequests.length ? (
+        <div className="melpet-hosting-history-list">
+          {pendingHostingRequests.map((request) => {
+            const isOpen = selectedPendingHostingId === request.id;
+            const requestTotal = request.valorFinal ?? request.valorTotal;
+            const busy = reviewingHostingRequestId === request.id;
+            return (
+              <article className={`melpet-hosting-history-card ${isOpen ? "is-open" : ""}`} key={request.id}>
+                <button
+                  type="button"
+                  className="melpet-hosting-history-card-toggle"
+                  aria-expanded={isOpen}
+                  onClick={() =>
+                    setSelectedPendingHostingId((current) =>
+                      current === request.id ? null : request.id,
+                    )
+                  }
+                >
+                  <div className="melpet-hosting-history-card-main">
+                    <div className="melpet-hosting-history-card-topline">
+                      <strong>{request.clienteNome || request.usuarioLogin || "Tutor"}</strong>
+                      <span className="melpet-hosting-history-card-badge">Pedido #{request.id}</span>
+                    </div>
+                    <div className="melpet-hosting-history-card-date">
+                      <span>Data do pedido</span>
+                      <strong>{formatDateTime(request.criadoEm)}</strong>
+                    </div>
+                  </div>
+                  <span className="melpet-hosting-history-status is-pending">
+                    <strong>Pendente</strong>
+                    <span>{request.itens?.length || 0} item(s)</span>
+                  </span>
+                  <span className="melpet-hosting-history-toggle-icon" aria-hidden="true">
+                    {isOpen ? "−" : "+"}
+                  </span>
+                </button>
+
+                {isOpen ? (
+                  <>
+                    <dl className="melpet-hosting-history-meta">
+                      <div><dt>Tutor</dt><dd>{request.clienteNome || request.usuarioLogin || "-"}</dd></div>
+                      <div><dt>Serviço</dt><dd>{request.tipo || "-"}</dd></div>
+                      <div><dt>Período</dt><dd>{formatHostingRequestPeriod(request)}</dd></div>
+                      <div><dt>Total solicitado</dt><dd>{formatCurrency(requestTotal)}</dd></div>
+                    </dl>
+                    <div className="melpet-hosting-history-items">
+                      <h4>Itens</h4>
+                      <ul>
+                        {(request.itens || []).map((item) => (
+                          <li key={item.id}>
+                            <strong>{item.petNome || `Pet ${item.petId}`}</strong>
+                            <small>{item.tipo} / {item.tempoQuantidade} {item.tempoUnidade} {"->"} {formatCurrency(item.valorDiaria)}</small>
+                            <small>{formatHostingItemPeriod(item)}</small>
+                            <strong>{formatCurrency(item.valorTotal)}</strong>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="melpet-hosting-history-actions">
+                      <Button type="button" size="sm" disabled={busy} onClick={() => approveHostingRequest(request)}>
+                        {busy ? "Processando..." : "Aprovar"}
+                      </Button>
+                      <Button type="button" variant="danger" size="sm" disabled={busy} onClick={() => openRejectHostingModal(request)}>
+                        Reprovar
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="melpet-hosting-history-card-summary">
+                    {request.tipo || "Hospedagem"} · {formatHostingRequestPeriod(request)} · {formatCurrency(requestTotal)}
+                  </p>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <p>Nenhuma hospedagem pendente no momento.</p>
       )}
     </section>
   );
@@ -5040,6 +5237,20 @@ export default function MelPetHostel({
                 },
                 content: clientSearchContent,
               },
+              {
+                id: "aprovar-hospedagens",
+                title: "Hospedagem",
+                summary: "Conferir e aprovar hospedagens pendentes.",
+                isOpen: activeMenu === "aprovarHospedagens",
+                onAction: () => {
+                  setActiveMenu((prev) =>
+                    prev === "aprovarHospedagens" ? "" : "aprovarHospedagens",
+                  );
+                  setSelectedPendingHostingId(null);
+                  loadPendingHostingRequests();
+                },
+                content: adminHostingApprovalContent,
+              },
             ],
       after: (
         <div className="pet-main-actions">
@@ -5190,6 +5401,52 @@ export default function MelPetHostel({
             disabled={Boolean(rejectingVaccineCardId)}
           >
             {rejectingVaccineCardId ? "Reprovando..." : "Reprovar"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+
+  const rejectHostingModalBusy = Boolean(
+    rejectHostingTarget && reviewingHostingRequestId === rejectHostingTarget.id,
+  );
+  const rejectHostingModal = (
+    <Modal
+      isOpen={Boolean(rejectHostingTarget)}
+      onClose={closeRejectHostingModal}
+      title="Reprovar Hospedagem"
+      closeOnBackdropClick={!rejectHostingModalBusy}
+      showCloseButton={!rejectHostingModalBusy}
+      containerStyle={{ width: "min(94%, 520px)" }}
+    >
+      <div className="melpet-reject-vaccine-modal melpet-reject-document-modal">
+        <p>Informe o motivo da reprovação. Esse texto será exibido ao cliente.</p>
+        <label className="pet-form-field">
+          Motivo da reprovação
+          <textarea
+            value={rejectHostingReason}
+            onChange={(event) => setRejectHostingReason(event.target.value)}
+            rows={4}
+            disabled={rejectHostingModalBusy}
+            placeholder="Ex.: agenda indisponível para o período solicitado..."
+          />
+        </label>
+        <div className="modal-actions">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={closeRejectHostingModal}
+            disabled={rejectHostingModalBusy}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            onClick={rejectHostingRequest}
+            disabled={rejectHostingModalBusy}
+          >
+            {rejectHostingModalBusy ? "Reprovando..." : "Reprovar"}
           </Button>
         </div>
       </div>
@@ -6070,6 +6327,7 @@ export default function MelPetHostel({
       {deletePetModal}
       {rejectDocumentModal}
       {rejectVaccineCardModal}
+      {rejectHostingModal}
 
       <Modal
         isOpen={Boolean(deleteWarningVaccineConfig)}

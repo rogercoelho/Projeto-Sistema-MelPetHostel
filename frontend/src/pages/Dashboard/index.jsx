@@ -89,6 +89,15 @@ function Dashboard() {
     setView("mel");
   }
 
+  function openMelPetHostingAdmin() {
+    setMelPetRegistrationOnly(false);
+    setMelComplianceGate(false);
+    setMelInitialAdminMenu("aprovarHospedagens");
+    setMelUserMenu("");
+    setOpenDashboardSection("");
+    setView("mel");
+  }
+
   async function openClientProfilePage() {
     setOpenDashboardSection("");
     setView("client-profile");
@@ -137,7 +146,10 @@ function Dashboard() {
           label: "Controle de Planos",
           onAction: openMelPetPlans,
         },
-        "Hospedagem",
+        {
+          label: "Hospedagem",
+          onAction: openMelPetHostingAdmin,
+        },
       ]
     : [
         ...(melPetRegistrationOnly

@@ -9,6 +9,7 @@ const {
   dbFor,
   getCurrentClienteId,
   getReqLogin,
+  isAdminUser,
   qcol,
   qtable,
   resolveTableName,
@@ -256,6 +257,7 @@ function normalizeHostingStatus(value) {
   }
   if (["confirmado", "confirmada"].includes(normalized)) return "confirmado";
   if (["concluido", "concluida"].includes(normalized)) return "concluido";
+  if (["recusado", "recusada", "reprovado", "reprovada"].includes(normalized)) return "recusado";
   if (["cancelado", "cancelada"].includes(normalized)) return "cancelado";
   return "pendente";
 }
@@ -278,6 +280,171 @@ function getAllowedHostingStatusTransition(status) {
   return "";
 }
 
+async function requireHostingAdmin(req, res) {
+  const login = getReqLogin(req);
+  if (!(await isAdminUser(req, login))) {
+    res.status(403).json({ status: "erro", mensagem: "Apenas administradores podem executar esta acao." });
+    return false;
+  }
+  return true;
+}
+
+function mapHostingRows(rows) {
+  const solicitacoesById = new Map();
+  for (const row of rows || []) {
+    const solicitacaoId = Number(row.solicitacao_id);
+    if (!solicitacoesById.has(solicitacaoId)) {
+      solicitacoesById.set(solicitacaoId, {
+        id: solicitacaoId,
+        clienteId: row.solicitacao_cliente_id,
+        clienteNome: row.cliente_nome,
+        usuarioLogin: row.usuario_login,
+        tipo: row.solicitacao_tipo,
+        modoCobranca: row.solicitacao_modo_cobranca,
+        inicioMes: row.solicitacao_inicio_mes,
+        dataEntrada: row.solicitacao_data_entrada,
+        dataSaida: row.solicitacao_data_saida,
+        dias: row.solicitacao_dias,
+        valorTotal: row.solicitacao_valor_total,
+        descontoValor: row.solicitacao_desconto_valor,
+        valorFinal: row.solicitacao_valor_final,
+        status: row.solicitacao_status,
+        motivoRecusa: row.solicitacao_motivo_recusa,
+        analisadoPor: row.solicitacao_analisado_por,
+        analisadoEm: row.solicitacao_analisado_em,
+        criadoEm: row.solicitacao_criado_em,
+        atualizadoEm: row.solicitacao_atualizado_em,
+        itens: [],
+      });
+    }
+    if (row.item_id !== null && row.item_id !== undefined) {
+      solicitacoesById.get(solicitacaoId).itens.push({
+        id: Number(row.item_id),
+        petId: row.item_pet_id,
+        petNome: row.item_pet_nome,
+        tipo: row.item_tipo,
+        planoId: row.item_plano_id,
+        modoCobranca: row.item_modo_cobranca,
+        tempoQuantidade: row.item_tempo_quantidade,
+        tempoUnidade: row.item_tempo_unidade,
+        inicioMes: row.item_inicio_mes,
+        dataEntrada: row.item_data_entrada,
+        dataSaida: row.item_data_saida,
+        dias: row.item_dias,
+        valorDiaria: row.item_valor_diaria,
+        valorTotal: row.item_valor_total,
+      });
+    }
+  }
+  return Array.from(solicitacoesById.values());
+}
+
+async function listHostingRequests(req, { clienteId = null, status = "" } = {}) {
+  const db = dbFor(req);
+  const solicitacoesTable = await resolveTableName(req, TABLE_NAMES.hospedagemSolicitacoes);
+  const itensTable = await resolveTableName(req, TABLE_NAMES.hospedagemSolicitacaoItens);
+  if (!solicitacoesTable || !itensTable) return null;
+  const where = [];
+  const params = [];
+  if (clienteId) { where.push("s.cliente_id = ?"); params.push(clienteId); }
+  if (status) { where.push("LOWER(TRIM(s.status)) = LOWER(TRIM(?))"); params.push(status); }
+  const sql = `
+      SELECT
+        s.id AS solicitacao_id,
+        s.cliente_id AS solicitacao_cliente_id,
+        c.nome AS cliente_nome,
+        u.usuario_login AS usuario_login,
+        s.tipo AS solicitacao_tipo,
+        s.modo_cobranca AS solicitacao_modo_cobranca,
+        s.inicio_mes AS solicitacao_inicio_mes,
+        s.data_entrada AS solicitacao_data_entrada,
+        s.data_saida AS solicitacao_data_saida,
+        s.dias AS solicitacao_dias,
+        s.valor_total AS solicitacao_valor_total,
+        s.desconto_valor AS solicitacao_desconto_valor,
+        s.valor_final AS solicitacao_valor_final,
+        s.status AS solicitacao_status,
+        s.motivo_recusa AS solicitacao_motivo_recusa,
+        s.analisado_por AS solicitacao_analisado_por,
+        s.analisado_em AS solicitacao_analisado_em,
+        s.criado_em AS solicitacao_criado_em,
+        s.atualizado_em AS solicitacao_atualizado_em,
+        i.id AS item_id,
+        i.pet_id AS item_pet_id,
+        i.pet_nome AS item_pet_nome,
+        i.tipo AS item_tipo,
+        i.plano_id AS item_plano_id,
+        i.modo_cobranca AS item_modo_cobranca,
+        i.tempo_quantidade AS item_tempo_quantidade,
+        i.tempo_unidade AS item_tempo_unidade,
+        i.inicio_mes AS item_inicio_mes,
+        i.data_entrada AS item_data_entrada,
+        i.data_saida AS item_data_saida,
+        i.dias AS item_dias,
+        i.valor_diaria AS item_valor_diaria,
+        i.valor_total AS item_valor_total
+      FROM ${qtable(solicitacoesTable)} s
+      LEFT JOIN ${qtable(itensTable)} i ON i.solicitacao_id = s.id
+      LEFT JOIN Clientes c ON c.id = s.cliente_id
+      LEFT JOIN Usuarios u ON u.cliente_id = s.cliente_id
+      ${where.length ? "WHERE " + where.join(" AND ") : ""}
+      ORDER BY s.criado_em DESC, i.id ASC
+    `;
+  const [rows] = await db.query(sql, params);
+  return mapHostingRows(rows);
+}
+
+router.get("/hospedagens/solicitacoes/pendentes", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const solicitacoes = await listHostingRequests(req, { status: "pendente" });
+    if (!solicitacoes) return res.status(500).json({ status: "erro", mensagem: "Tabelas de hospedagem nao encontradas. Execute create_hospedagens_schema.sql." });
+    return res.json({ status: "sucesso", total: solicitacoes.length, solicitacoes });
+  } catch (error) {
+    console.error("Error in GET /melpethostel/hospedagens/solicitacoes/pendentes:", error);
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.patch("/hospedagens/solicitacoes/:id/aprovar", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const solicitacaoId = Number(req.params?.id);
+    if (!Number.isInteger(solicitacaoId) || solicitacaoId <= 0) return res.status(400).json({ status: "erro", mensagem: "Solicitacao invalida." });
+    const table = await resolveTableName(req, TABLE_NAMES.hospedagemSolicitacoes);
+    if (!table) return res.status(500).json({ status: "erro", mensagem: "Tabela de hospedagem nao encontrada." });
+    const [rows] = await dbFor(req).query(`SELECT id, status FROM ${qtable(table)} WHERE id = ? LIMIT 1`, [solicitacaoId]);
+    const solicitacao = rows && rows[0] ? rows[0] : null;
+    if (!solicitacao) return res.status(404).json({ status: "erro", mensagem: "Solicitacao nao encontrada." });
+    if (normalizeHostingStatus(solicitacao.status) !== "pendente") return res.status(409).json({ status: "erro", mensagem: "A solicitacao nao esta pendente." });
+    await dbFor(req).query(`UPDATE ${qtable(table)} SET status = ?, analisado_por = ?, analisado_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`, ["aprovado", getReqLogin(req), solicitacaoId]);
+    return res.json({ status: "sucesso", mensagem: "Hospedagem aprovada com sucesso.", solicitacao: { id: solicitacaoId, status: "aprovado" } });
+  } catch (error) {
+    console.error("Error in PATCH /melpethostel/hospedagens/solicitacoes/:id/aprovar:", error);
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.patch("/hospedagens/solicitacoes/:id/reprovar", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const solicitacaoId = Number(req.params?.id);
+    const motivoRecusa = clean(req.body?.motivoRecusa || req.body?.motivoReprovacao);
+    if (!Number.isInteger(solicitacaoId) || solicitacaoId <= 0) return res.status(400).json({ status: "erro", mensagem: "Solicitacao invalida." });
+    if (!motivoRecusa) return res.status(400).json({ status: "erro", mensagem: "Informe o motivo da reprovacao." });
+    const table = await resolveTableName(req, TABLE_NAMES.hospedagemSolicitacoes);
+    if (!table) return res.status(500).json({ status: "erro", mensagem: "Tabela de hospedagem nao encontrada." });
+    const [rows] = await dbFor(req).query(`SELECT id, status FROM ${qtable(table)} WHERE id = ? LIMIT 1`, [solicitacaoId]);
+    const solicitacao = rows && rows[0] ? rows[0] : null;
+    if (!solicitacao) return res.status(404).json({ status: "erro", mensagem: "Solicitacao nao encontrada." });
+    if (normalizeHostingStatus(solicitacao.status) !== "pendente") return res.status(409).json({ status: "erro", mensagem: "A solicitacao nao esta pendente." });
+    await dbFor(req).query(`UPDATE ${qtable(table)} SET status = ?, motivo_recusa = ?, analisado_por = ?, analisado_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`, ["recusado", motivoRecusa, getReqLogin(req), solicitacaoId]);
+    return res.json({ status: "sucesso", mensagem: "Hospedagem reprovada com sucesso.", solicitacao: { id: solicitacaoId, status: "recusado", motivoRecusa } });
+  } catch (error) {
+    console.error("Error in PATCH /melpethostel/hospedagens/solicitacoes/:id/reprovar:", error);
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
 router.get("/hospedagens/solicitacoes", async (req, res) => {
   const db = dbFor(req);
 
