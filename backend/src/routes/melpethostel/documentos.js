@@ -84,6 +84,44 @@ function todayFileDate() {
 function normalizeCarteiraSide(value) {
   return clean(value).toLowerCase() === "verso" ? "verso" : "frente";
 }
+
+function pickExistingColumn(columnsByLowerName, candidates) {
+  for (const candidate of candidates) {
+    const column = columnsByLowerName.get(String(candidate).toLowerCase());
+    if (column) return column;
+  }
+  return null;
+}
+
+async function getPetCarteirasTableMeta(req) {
+  const tableName = await resolveTableName(req, TABLE_NAMES.petCarteirasVacinacao);
+  if (!tableName) return { exists: false, tableName: null };
+
+  const [rows] = await dbFor(req).query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
+    [tableName],
+  );
+  const columnsByLowerName = new Map();
+  for (const row of rows || []) {
+    const columnName = clean(row?.COLUMN_NAME);
+    if (columnName) columnsByLowerName.set(columnName.toLowerCase(), columnName);
+  }
+
+  return {
+    exists: columnsByLowerName.size > 0,
+    tableName,
+    idCol: pickExistingColumn(columnsByLowerName, ["id", "Id", "ID"]),
+    petIdCol: pickExistingColumn(columnsByLowerName, ["pet_id", "Pet_ID", "petId", "PetId"]),
+    clienteIdCol: pickExistingColumn(columnsByLowerName, ["cliente_id", "Cliente_ID", "clienteId", "ClienteId"]),
+    ladoCol: pickExistingColumn(columnsByLowerName, ["lado", "Lado"]),
+    nomeArquivoCol: pickExistingColumn(columnsByLowerName, ["nome_arquivo", "Nome_Arquivo", "nomeArquivo", "NomeArquivo"]),
+    filePathCol: pickExistingColumn(columnsByLowerName, ["file_path", "File_Path", "filePath", "FilePath"]),
+    statusCol: pickExistingColumn(columnsByLowerName, ["status", "Status"]),
+    conferidoAtCol: pickExistingColumn(columnsByLowerName, ["conferido_at", "Conferido_At", "conferido_em", "Conferido_Em"]),
+    conferidoPorCol: pickExistingColumn(columnsByLowerName, ["conferido_por", "Conferido_Por"]),
+    motivoReprovacaoCol: pickExistingColumn(columnsByLowerName, ["motivo_reprovacao", "Motivo_Reprovacao"]),
+  };
+}
 function normalizeReviewStatus(value) {
   const status = clean(value).toLowerCase();
   if (["aprovado", "reprovado", "pendente"].includes(status)) return status;
@@ -916,17 +954,38 @@ router.post(
       const petId = Number(req.body?.petId);
       if (!Number.isInteger(petId) || petId <= 0) return res.status(400).json({ status: "erro", mensagem: "Pet invalido." });
       const petsTable = await resolveTableName(req, TABLE_NAMES.pets);
-      const carteirasTable = await resolveTableName(req, TABLE_NAMES.petCarteirasVacinacao);
-      if (!petsTable || !carteirasTable) return res.status(500).json({ status: "erro", mensagem: "Tabelas de pets/carteiras nao estao prontas." });
+      const carteirasMeta = await getPetCarteirasTableMeta(req);
+      if (!petsTable || !carteirasMeta.exists) return res.status(500).json({ status: "erro", mensagem: "Tabelas de pets/carteiras nao estao prontas." });
+      if (!carteirasMeta.petIdCol || !carteirasMeta.clienteIdCol || !carteirasMeta.nomeArquivoCol || !carteirasMeta.filePathCol) {
+        return res.status(500).json({ status: "erro", mensagem: "Tabela Pet_Carteiras_Vacinacao nao esta pronta para upload." });
+      }
       const [petRows] = await dbFor(req).query(`SELECT id, nome FROM ${qtable(petsTable)} WHERE id = ? AND cliente_id = ? LIMIT 1`, [petId, clienteId]);
       const pet = petRows && petRows[0];
       if (!pet) return res.status(404).json({ status: "erro", mensagem: "Pet nao encontrado para este cliente." });
       const lado = normalizeCarteiraSide(req.body?.lado);
       const baseName = normalizeFileNamePart(`Carteira de Vacinacao ${lado} - ${pet.nome} ${todayFileDate()}`);
       const nomeArquivo = `${baseName || `Carteira de Vacinacao - Pet ${petId}`}.pdf`;
-      await fs.writeFile(path.join(diskDir, nomeArquivo), req.file.buffer);
+      const diskPath = path.join(diskDir, nomeArquivo);
       const filePath = `${relativeDir}/${nomeArquivo}`.replace(/\\/g, "/");
-      const [result] = await dbFor(req).query(`INSERT INTO ${qtable(carteirasTable)} (${["pet_id", "cliente_id", "lado", "nome_arquivo", "file_path", "status"].map(qcol).join(", ")}) VALUES (?, ?, ?, ?, ?, 'aprovado')`, [petId, clienteId, lado, nomeArquivo, filePath]);
+      await fs.writeFile(diskPath, req.file.buffer);
+      let result;
+      try {
+        const pairs = [
+          [carteirasMeta.petIdCol, petId],
+          [carteirasMeta.clienteIdCol, clienteId],
+          [carteirasMeta.ladoCol, lado],
+          [carteirasMeta.nomeArquivoCol, nomeArquivo],
+          [carteirasMeta.filePathCol, filePath],
+          [carteirasMeta.statusCol, "aprovado"],
+          [carteirasMeta.conferidoAtCol, new Date()],
+          [carteirasMeta.conferidoPorCol, adminLogin],
+          [carteirasMeta.motivoReprovacaoCol, null],
+        ].filter(([col]) => Boolean(col));
+        [result] = await dbFor(req).query(`INSERT INTO ${qtable(carteirasMeta.tableName)} (${pairs.map(([col]) => qcol(col)).join(", ")}) VALUES (${pairs.map(() => "?").join(", ")})`, pairs.map(([, value]) => value));
+      } catch (insertError) {
+        await fs.unlink(diskPath).catch(() => {});
+        throw insertError;
+      }
       return res.status(201).json({
         status: "sucesso",
         mensagem: "Carteira de vacinacao enviada com sucesso.",

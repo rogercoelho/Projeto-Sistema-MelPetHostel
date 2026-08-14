@@ -1898,8 +1898,12 @@ export default function MelPetHostel({
       setSelectedPet(fichaAtualizada);
       setPetDocsPet(fichaAtualizada);
       setUploadedPetVaccineSides({
-        frente: carteiras.some((carteira) => carteira.lado === "frente"),
-        verso: carteiras.some((carteira) => carteira.lado === "verso"),
+        frente: carteiras.some(
+          (carteira) => carteira.lado === "frente" && carteiraHasStoredFile(carteira),
+        ),
+        verso: carteiras.some(
+          (carteira) => carteira.lado === "verso" && carteiraHasStoredFile(carteira),
+        ),
       });
       setVaccineCardItems(itens);
       setPetVaccineResponses(
@@ -2949,11 +2953,23 @@ export default function MelPetHostel({
     })).filter((section) => section.items.length);
   }
 
+  function carteiraHasStoredFile(carteira) {
+    return Boolean(carteira?.id && (carteira.fileUrl || carteira.filePath || carteira.file_path));
+  }
+
   function getPetCarteiraBySide(side) {
     return (
       getCurrentPetCarteiras(petDocsPet).find(
-        (carteira) => carteira.lado === side,
+        (carteira) => carteira.lado === side && carteiraHasStoredFile(carteira),
       ) || null
+    );
+  }
+
+  function hasCompletePetCarteira(pet = petDocsPet) {
+    return ["frente", "verso"].every((side) =>
+      getCurrentPetCarteiras(pet).some(
+        (carteira) => carteira.lado === side && carteiraHasStoredFile(carteira),
+      ),
     );
   }
 
@@ -2975,6 +2991,7 @@ export default function MelPetHostel({
 
   function renderAdminPetVaccineContent() {
     const hasVaccineInfo = vaccineCardItems.length > 0;
+    const hasCarteiraFiles = hasCompletePetCarteira(petDocsPet);
     return (
       <div className="melpet-admin-pet-vaccine-content">
         <div
@@ -2991,7 +3008,7 @@ export default function MelPetHostel({
                 key={side}
                 type="button"
                 variant="outline"
-                disabled={!carteira?.fileUrl}
+                disabled={!carteiraHasStoredFile(carteira)}
                 onClick={() => openPetCarteiraDocument(side)}
               >
                 {label}
@@ -2999,9 +3016,14 @@ export default function MelPetHostel({
             );
           })}
         </div>
-        {hasVaccineInfo
-          ? renderVaccineCardInfoContainer()
-          : renderPetDocumentsContent()}
+        {hasVaccineInfo && hasCarteiraFiles ? (
+          renderVaccineCardInfoContainer()
+        ) : (
+          <>
+            {hasVaccineInfo ? renderVaccineCardInfoContainer() : null}
+            {renderPetDocumentsContent()}
+          </>
+        )}
       </div>
     );
   }
