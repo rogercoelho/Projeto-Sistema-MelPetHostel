@@ -129,7 +129,7 @@ function mapCarteiraRow(row) {
     nomeArquivo: row.nome_arquivo,
     filePath: row.file_path,
     fileUrl: row.file_path ? toPublicUploadPath(row.file_path) : null,
-    conferido: Boolean(row.conferido),
+    conferido: String(row.status || "").toLowerCase() === "aprovado" || Boolean(row.conferido),
     conferidoAt: row.conferido_at || null,
     conferidoPor: row.conferido_por || null,
     status: row.status || "pendente",
@@ -559,10 +559,7 @@ router.get("/pets/carteiras-vacinacao/pendentes", async (req, res) => {
         FROM ${qtable(tableName)} cv
         INNER JOIN ${qtable(petsTable)} p ON p.id = cv.pet_id
         INNER JOIN ${qtable(clientesTable)} c ON c.id = cv.cliente_id
-        WHERE (cv.conferido IS NULL OR cv.conferido = 0)
-          AND (cv.status IS NULL OR cv.status <> 'aprovado')
-          AND (cv.status IS NULL OR cv.status <> 'expurgado')
-          AND (cv.status IS NULL OR cv.status <> 'reprovado')
+        WHERE (cv.status IS NULL OR cv.status = 'pendente')
           AND p.ativo = 1
         ORDER BY cv.created_at ASC, cv.id ASC
       `,
@@ -908,8 +905,7 @@ router.post("/pets/carteiras-vacinacao/:id/aprovar", async (req, res) => {
     const [result] = await dbFor(req).query(
       `
         UPDATE ${qtable(tableName)}
-           SET conferido = 1,
-               conferido_at = NOW(),
+           SET conferido_at = NOW(),
                conferido_por = ?,
                status = 'aprovado',
                motivo_reprovacao = NULL
@@ -1013,12 +1009,11 @@ router.post(
               "lado",
               "nome_arquivo",
               "file_path",
-              "conferido",
               "status",
             ]
               .map(qcol)
               .join(", ")})
-          VALUES (?, ?, ?, ?, ?, 0, 'pendente')
+          VALUES (?, ?, ?, ?, ?, 'pendente')
         `,
         [petId, clienteId, lado, nomeArquivo, filePath],
       );
@@ -1162,8 +1157,7 @@ router.post("/pets/carteiras-vacinacao/:id/reprovar", async (req, res) => {
     const [result] = await dbFor(req).query(
       `
         UPDATE ${qtable(tableName)}
-           SET conferido = 0,
-               conferido_at = NOW(),
+           SET conferido_at = NOW(),
                conferido_por = ?,
                status = 'reprovado',
                motivo_reprovacao = ?

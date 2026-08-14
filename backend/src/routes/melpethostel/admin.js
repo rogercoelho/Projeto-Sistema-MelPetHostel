@@ -261,8 +261,7 @@ router.patch("/pets/:petId/status", async (req, res) => {
         if (carteirasTable) {
           await dbFor(req).query(
             `UPDATE ${qtable(carteirasTable)}
-                SET conferido = 0,
-                    conferido_at = NULL,
+                SET conferido_at = NULL,
                     conferido_por = NULL,
                     status = 'expurgado'
               WHERE pet_id = ?`,

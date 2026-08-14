@@ -1,3 +1,98 @@
+SET @contratos_table_name = (
+  SELECT TABLE_NAME
+    FROM INFORMATION_SCHEMA.TABLES
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND LOWER(TABLE_NAME) = LOWER('Contratos')
+   ORDER BY CASE WHEN TABLE_NAME = 'Contratos' THEN 0 ELSE 1 END
+   LIMIT 1
+);
+
+SET @contratos_table_exists = IF(@contratos_table_name IS NULL, 0, 1);
+
+SET @contratos_has_conferido_at = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = @contratos_table_name
+     AND LOWER(COLUMN_NAME) = LOWER('Conferido_At')
+);
+
+SET @sql = IF(
+  @contratos_table_exists = 0 OR @contratos_has_conferido_at > 0,
+  'SELECT ''Contratos.Conferido_At sem alteracao'' AS status',
+  CONCAT('ALTER TABLE `', REPLACE(@contratos_table_name, '`', ''), '` ADD COLUMN `Conferido_At` DATETIME NULL DEFAULT NULL')
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @contratos_has_conferido_por = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = @contratos_table_name
+     AND LOWER(COLUMN_NAME) = LOWER('Conferido_Por')
+);
+
+SET @sql = IF(
+  @contratos_table_exists = 0 OR @contratos_has_conferido_por > 0,
+  'SELECT ''Contratos.Conferido_Por sem alteracao'' AS status',
+  CONCAT('ALTER TABLE `', REPLACE(@contratos_table_name, '`', ''), '` ADD COLUMN `Conferido_Por` VARCHAR(191) NULL DEFAULT NULL')
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @contratos_has_status = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = @contratos_table_name
+     AND LOWER(COLUMN_NAME) = LOWER('Status')
+);
+
+SET @sql = IF(
+  @contratos_table_exists = 0 OR @contratos_has_status > 0,
+  'SELECT ''Contratos.Status sem alteracao'' AS status',
+  CONCAT('ALTER TABLE `', REPLACE(@contratos_table_name, '`', ''), '` ADD COLUMN `Status` VARCHAR(50) NOT NULL DEFAULT ''pendente''')
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @contratos_has_motivo_reprovacao = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = @contratos_table_name
+     AND LOWER(COLUMN_NAME) = LOWER('motivo_reprovacao')
+);
+
+SET @sql = IF(
+  @contratos_table_exists = 0 OR @contratos_has_motivo_reprovacao > 0,
+  'SELECT ''Contratos.motivo_reprovacao sem alteracao'' AS status',
+  CONCAT('ALTER TABLE `', REPLACE(@contratos_table_name, '`', ''), '` ADD COLUMN `motivo_reprovacao` TEXT NULL')
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET @contratos_has_status_index = (
+  SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.STATISTICS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = @contratos_table_name
+     AND INDEX_NAME = 'idx_mph_contratos_status'
+);
+
+SET @sql = IF(
+  @contratos_table_exists = 0 OR @contratos_has_status_index > 0,
+  'SELECT ''idx_mph_contratos_status sem alteracao'' AS status',
+  CONCAT('ALTER TABLE `', REPLACE(@contratos_table_name, '`', ''), '` ADD INDEX `idx_mph_contratos_status` (`Status`)')
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 CREATE TABLE IF NOT EXISTS Clientes (
   id INT AUTO_INCREMENT PRIMARY KEY,
   nome VARCHAR(191) NULL,
@@ -45,16 +140,16 @@ CREATE TABLE IF NOT EXISTS Contratos (
   Usuario_Login VARCHAR(191) NOT NULL,
   Nome_Arquivo VARCHAR(255) DEFAULT NULL,
   File_Path VARCHAR(1024) DEFAULT NULL,
-  Conferido TINYINT(1) NOT NULL DEFAULT 0,
   Conferido_At DATETIME NULL DEFAULT NULL,
   Conferido_Por VARCHAR(191) NULL DEFAULT NULL,
   Status VARCHAR(50) NOT NULL DEFAULT 'pendente',
+  motivo_reprovacao TEXT NULL,
   Created_At DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   Updated_At DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_mph_contratos_login (Usuario_Login),
-  INDEX idx_mph_contratos_status (Status),
-  INDEX idx_mph_contratos_conferido (Conferido)
+  INDEX idx_mph_contratos_status (Status)
 );
+
 
 CREATE TABLE IF NOT EXISTS Documentos_Tipo (
   Id INT AUTO_INCREMENT PRIMARY KEY,
@@ -72,7 +167,6 @@ CREATE TABLE IF NOT EXISTS Documentos (
   Usuario_ID INT NOT NULL,
   Contrato_ID INT NOT NULL,
   Documento_Tipo_ID INT NOT NULL,
-  Conferido TINYINT(1) NOT NULL DEFAULT 0,
   Conferido_At DATETIME NULL DEFAULT NULL,
   Conferido_Por VARCHAR(191) NULL DEFAULT NULL,
   Status VARCHAR(50) NOT NULL DEFAULT 'pendente',
@@ -90,7 +184,6 @@ CREATE TABLE IF NOT EXISTS Documentos (
     REFERENCES Documentos_Tipo (Id)
     ON DELETE RESTRICT,
   INDEX idx_mph_doc_usuario_contrato_tipo (Usuario_ID, Contrato_ID, Documento_Tipo_ID),
-  INDEX idx_mph_doc_conferido (Conferido),
   INDEX idx_mph_doc_status (Status)
 );
 

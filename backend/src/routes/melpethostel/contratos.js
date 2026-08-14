@@ -61,8 +61,22 @@ router.get("/contratos/status", async (req, res) => {
     const arquivoExiste = await fileExistsOnDisk(filePath, nomeArquivo);
 
     const conferido = isContratoConferido(row, meta);
+    const contratoStatus = meta.statusCol
+      ? String(row[meta.statusCol] || "").trim().toLowerCase()
+      : "";
+    const contratoReprovado = contratoStatus === "reprovado";
+    const contratoId = meta.idCol ? row[meta.idCol] : null;
+    const docsCheck = contratoId
+      ? await checkAllDocsConferidosByContratoId(req, contratoId)
+      : { ok: false, total: 0, pendentes: 0, reprovados: 0 };
 
-    const contratoValido = Boolean(arquivoExiste && conferido);
+    const documentosAprovados = Boolean(docsCheck.ok);
+    const contratoAprovado = contratoStatus
+      ? contratoStatus === "aprovado"
+      : conferido;
+    const contratoValido = Boolean(
+      arquivoExiste && contratoAprovado && documentosAprovados && !contratoReprovado,
+    );
 
     return res.json({
       status: "sucesso",
@@ -72,7 +86,15 @@ router.get("/contratos/status", async (req, res) => {
       },
       possuiContratoDb: true,
       arquivoExiste,
-      conferido,
+      conferido: contratoAprovado,
+      contratoStatus: contratoStatus || (contratoAprovado ? "aprovado" : "pendente"),
+      contratoReprovado,
+      motivoReprovacao: meta.motivoReprovacaoCol
+        ? String(row[meta.motivoReprovacaoCol] || "")
+        : "",
+      documentosAprovados,
+      documentosPendentes: docsCheck.pendentes || 0,
+      documentosReprovados: docsCheck.reprovados || 0,
       contratoValido,
     });
   } catch (error) {
@@ -87,28 +109,28 @@ router.post("/contratos/:contratoId/conferir", async (req, res) => {
     if (!login) {
       return res
         .status(400)
-        .json({ status: "erro", mensagem: "Usuário não identificado" });
+        .json({ status: "erro", mensagem: "Usuario nao identificado" });
     }
 
     const contratoId = Number(req.params.contratoId);
     if (!Number.isInteger(contratoId) || contratoId <= 0) {
       return res
         .status(400)
-        .json({ status: "erro", mensagem: "contratoId inválido" });
+        .json({ status: "erro", mensagem: "contratoId invalido" });
     }
 
     const meta = await getContratosTableMeta(req);
     if (!meta.exists || !meta.idCol) {
       return res.status(500).json({
         status: "erro",
-        mensagem: `Tabela ${TABLE_NAMES.contratos} não está pronta.`,
+        mensagem: `Tabela ${TABLE_NAMES.contratos} nao esta pronta.`,
       });
     }
 
-    if (!meta.conferidoCol || !meta.conferidoAtCol || !meta.conferidoPorCol) {
+    if (!meta.statusCol) {
       return res.status(500).json({
         status: "erro",
-        mensagem: `Colunas de conferência ausentes em ${TABLE_NAMES.contratos}.`,
+        mensagem: `Coluna Status ausente em ${TABLE_NAMES.contratos}.`,
       });
     }
 
@@ -125,29 +147,41 @@ router.post("/contratos/:contratoId/conferir", async (req, res) => {
     if (!existingRows || !existingRows.length) {
       return res
         .status(404)
-        .json({ status: "erro", mensagem: "Contrato não encontrado" });
+        .json({ status: "erro", mensagem: "Contrato nao encontrado" });
     }
 
     const docsCheck = await checkAllDocsConferidosByContratoId(req, contratoId);
     if (!docsCheck.ok) {
       const mensagem =
         docsCheck.reason === "metadata_missing"
-          ? `Tabela ${TABLE_NAMES.documentos} sem colunas de conferência para validar os documentos.`
+          ? `Tabela ${TABLE_NAMES.documentos} sem coluna Status para validar os documentos.`
           : docsCheck.reason === "no_documents"
-            ? "Não há documentos vinculados para conferir este contrato."
-            : `Ainda existem ${docsCheck.pendentes} documento(s) sem conferência.`;
+            ? "Nao ha documentos vinculados para conferir este contrato."
+            : docsCheck.reason === "rejected_documents"
+              ? "Existem documentos reprovados. O cliente precisa reenviar os documentos antes da aprovacao do contrato."
+              : `Ainda existem ${docsCheck.pendentes} documento(s) sem conferencia.`;
       return res.status(409).json({ status: "erro", mensagem });
     }
 
+    const updateParts = [`${qcol(meta.statusCol)} = ?`];
+    const updateParams = ["aprovado"];
+    if (meta.motivoReprovacaoCol) {
+      updateParts.push(`${qcol(meta.motivoReprovacaoCol)} = NULL`);
+    }
+    if (meta.conferidoAtCol) {
+      updateParts.push(`${qcol(meta.conferidoAtCol)} = NOW()`);
+    }
+    if (meta.conferidoPorCol) {
+      updateParts.push(`${qcol(meta.conferidoPorCol)} = ?`);
+      updateParams.push(login);
+    }
+    updateParams.push(contratoId);
+
     await dbFor(req).query(
-      `
-        UPDATE ${qtable(meta.tableName)}
-        SET ${qcol(meta.conferidoCol)} = 1,
-            ${qcol(meta.conferidoAtCol)} = NOW(),
-            ${qcol(meta.conferidoPorCol)} = ?
-        WHERE ${qcol(meta.idCol)} = ?
-      `,
-      [login, contratoId],
+      `UPDATE ${qtable(meta.tableName)}
+          SET ${updateParts.join(",\n              ")}
+        WHERE ${qcol(meta.idCol)} = ?`,
+      updateParams,
     );
 
     return res.json({
@@ -155,6 +189,7 @@ router.post("/contratos/:contratoId/conferir", async (req, res) => {
       mensagem: "Contrato conferido com sucesso.",
       contrato: {
         id: contratoId,
+        status: "aprovado",
         conferido: true,
         conferidoPor: login,
       },
@@ -162,6 +197,110 @@ router.post("/contratos/:contratoId/conferir", async (req, res) => {
   } catch (error) {
     console.error(
       "Error in POST /melpethostel/contratos/:contratoId/conferir:",
+      error,
+    );
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.post("/contratos/:contratoId/reprovar", async (req, res) => {
+  try {
+    const login = getReqLogin(req);
+    if (!login) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Usuario nao identificado" });
+    }
+
+    const contratoId = Number(req.params.contratoId);
+    if (!Number.isInteger(contratoId) || contratoId <= 0) {
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "contratoId invalido" });
+    }
+
+    const motivoReprovacao = String(req.body?.motivoReprovacao || "").trim();
+    if (!motivoReprovacao) {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Informe o motivo da reprovacao.",
+      });
+    }
+
+    const meta = await getContratosTableMeta(req);
+    if (!meta.exists || !meta.idCol) {
+      return res.status(500).json({
+        status: "erro",
+        mensagem: `Tabela ${TABLE_NAMES.contratos} nao esta pronta.`,
+      });
+    }
+
+    if (!meta.statusCol) {
+      return res.status(500).json({
+        status: "erro",
+        mensagem: `Coluna Status ausente em ${TABLE_NAMES.contratos}.`,
+      });
+    }
+
+    if (!meta.motivoReprovacaoCol) {
+      return res.status(500).json({
+        status: "erro",
+        mensagem: `Coluna motivo_reprovacao ausente em ${TABLE_NAMES.contratos}. Execute o schema principal create_melpethostel_schema.sql.`,
+      });
+    }
+
+    const [existingRows] = await dbFor(req).query(
+      `
+        SELECT ${qcol(meta.idCol)} AS id
+        FROM ${qtable(meta.tableName)}
+        WHERE ${qcol(meta.idCol)} = ?
+        LIMIT 1
+      `,
+      [contratoId],
+    );
+
+    if (!existingRows || !existingRows.length) {
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Contrato nao encontrado" });
+    }
+
+    const updateParts = [`${qcol(meta.statusCol)} = ?`];
+    const updateParams = ["reprovado"];
+    if (meta.motivoReprovacaoCol) {
+      updateParts.push(`${qcol(meta.motivoReprovacaoCol)} = ?`);
+      updateParams.push(motivoReprovacao);
+    }
+    if (meta.conferidoAtCol) {
+      updateParts.push(`${qcol(meta.conferidoAtCol)} = NOW()`);
+    }
+    if (meta.conferidoPorCol) {
+      updateParts.push(`${qcol(meta.conferidoPorCol)} = ?`);
+      updateParams.push(login);
+    }
+    updateParams.push(contratoId);
+
+    await dbFor(req).query(
+      `UPDATE ${qtable(meta.tableName)}
+          SET ${updateParts.join(",\n              ")}
+        WHERE ${qcol(meta.idCol)} = ?`,
+      updateParams,
+    );
+
+    return res.json({
+      status: "sucesso",
+      mensagem: "Contrato reprovado com sucesso.",
+      contrato: {
+        id: contratoId,
+        status: "reprovado",
+        motivoReprovacao,
+        conferido: false,
+        conferidoPor: login,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "Error in POST /melpethostel/contratos/:contratoId/reprovar:",
       error,
     );
     return res.status(500).json({ status: "erro", mensagem: error.message });
@@ -240,10 +379,7 @@ router.post(
         ];
         const params = [finalFileName, relativeDir];
 
-        if (meta.conferidoCol) {
-          setParts.push(`${qcol(meta.conferidoCol)} = ?`);
-          params.push(0);
-        }
+
         if (meta.conferidoAtCol) {
           setParts.push(`${qcol(meta.conferidoAtCol)} = NULL`);
         }
@@ -265,10 +401,7 @@ router.post(
         ];
         const insertVals = [login, finalFileName, relativeDir];
 
-        if (meta.conferidoCol) {
-          insertCols.push(meta.conferidoCol);
-          insertVals.push(0);
-        }
+
         if (meta.statusCol) {
           insertCols.push(meta.statusCol);
           insertVals.push("pendente");

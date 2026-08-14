@@ -250,6 +250,12 @@ async function getContratosTableMeta(req) {
       "Checked_By",
     ]),
     statusCol: pickColumn(columnsLowerMap, ["Status", "Contrato_Status"]),
+    motivoReprovacaoCol: pickColumn(columnsLowerMap, [
+      "motivo_reprovacao",
+      "Motivo_Reprovacao",
+      "MotivoReprovacao",
+      "motivoReprovacao",
+    ]),
     updatedAtCol: pickColumn(columnsLowerMap, [
       "Updated_At",
       "updated_at",
@@ -271,6 +277,7 @@ async function getLatestContratoRow(req, meta, login) {
         meta.conferidoAtCol,
         meta.conferidoPorCol,
         meta.statusCol,
+        meta.motivoReprovacaoCol,
         meta.updatedAtCol,
       ].filter(Boolean),
     )
@@ -606,7 +613,6 @@ async function movePetDocumentsToExpurgo(req, { petId, clienteId, login }) {
     await dbFor(req).query(
       `UPDATE ${qtable(carteirasTable)}
           SET file_path = ?,
-              conferido = 0,
               conferido_at = NULL,
               conferido_por = NULL,
               status = 'expurgado'
@@ -849,23 +855,13 @@ async function checkAllRequiredDocsConcluded(req, userId, contratoId) {
 }
 
 function isContratoConferido(row, meta) {
-  const hasConferidoColumns = Boolean(meta.conferidoCol || meta.conferidoAtCol);
-
-  if (hasConferidoColumns) {
-    const byFlag = meta.conferidoCol
-      ? isTruthyFlag(row[meta.conferidoCol])
-      : false;
-    const byDate = meta.conferidoAtCol
-      ? isValidDbDate(row[meta.conferidoAtCol])
-      : false;
-    return Boolean(byFlag || byDate);
-  }
-
-  let conferido = false;
   if (meta.statusCol) {
     const statusValue = String(row[meta.statusCol] || "")
       .trim()
       .toLowerCase();
+    if (["reprovado", "reprovada", "pendente"].includes(statusValue)) {
+      return false;
+    }
     if (
       [
         "conferido",
@@ -877,32 +873,49 @@ function isContratoConferido(row, meta) {
         "ok",
       ].includes(statusValue)
     ) {
-      conferido = true;
+      return true;
     }
   }
-  return conferido;
-}
 
+  const byFlag = meta.conferidoCol ? isTruthyFlag(row[meta.conferidoCol]) : false;
+  const byDate = meta.conferidoAtCol
+    ? isValidDbDate(row[meta.conferidoAtCol])
+    : false;
+  return Boolean(byFlag || byDate);
+}
 async function checkAllDocsConferidosByContratoId(req, contratoId) {
   const docsMeta = await getDocumentosTableMeta(req);
   if (
     !docsMeta.exists ||
     !docsMeta.contratoIdCol ||
     !docsMeta.idCol ||
-    !docsMeta.conferidoCol ||
-    !docsMeta.conferidoAtCol
+    !docsMeta.tipoIdCol ||
+    !docsMeta.statusCol
   ) {
     return { ok: false, total: 0, pendentes: 0, reason: "metadata_missing" };
+  }
+
+  const tipos = await getDocumentoTipos(req);
+  const requiredTipoIds = tipos
+    .filter((tipo) => mapRequiredDocKey(tipo.Documento_Tipo) !== "outros")
+    .map((tipo) => Number(tipo.Id))
+    .filter(Boolean);
+
+  if (!requiredTipoIds.length) {
+    return { ok: false, total: 0, pendentes: 0, reason: "no_required_types" };
   }
 
   const [docRows] = await dbFor(req).query(
     `
       SELECT
         ${qcol(docsMeta.idCol)} AS id,
-        ${qcol(docsMeta.conferidoCol)} AS conferidoFlag,
-        ${qcol(docsMeta.conferidoAtCol)} AS conferidoAt
+        ${qcol(docsMeta.tipoIdCol)} AS tipoId,
+        ${docsMeta.conferidoCol ? qcol(docsMeta.conferidoCol) : "0"} AS conferidoFlag,
+        ${docsMeta.conferidoAtCol ? qcol(docsMeta.conferidoAtCol) : "NULL"} AS conferidoAt,
+        ${qcol(docsMeta.statusCol)} AS status
       FROM ${qtable(docsMeta.tableName)}
       WHERE ${qcol(docsMeta.contratoIdCol)} = ?
+      ORDER BY ${qcol(docsMeta.idCol)} DESC
     `,
     [contratoId],
   );
@@ -912,14 +925,44 @@ async function checkAllDocsConferidosByContratoId(req, contratoId) {
     return { ok: false, total: 0, pendentes: 0, reason: "no_documents" };
   }
 
-  let pendentes = 0;
-  for (const row of docRows) {
-    const conferido =
-      isTruthyFlag(row?.conferidoFlag) || isValidDbDate(row?.conferidoAt);
-    if (!conferido) pendentes += 1;
+  const latestByTipoId = new Map();
+  for (const row of docRows || []) {
+    const tipoId = Number(row?.tipoId);
+    if (!tipoId || latestByTipoId.has(tipoId)) continue;
+    latestByTipoId.set(tipoId, row);
   }
 
-  return { ok: pendentes === 0, total, pendentes, reason: null };
+  let pendentes = 0;
+  let reprovados = 0;
+  for (const tipoId of requiredTipoIds) {
+    const row = latestByTipoId.get(tipoId);
+    if (!row) {
+      pendentes += 1;
+      continue;
+    }
+
+    const status = String(row.status || "").trim().toLowerCase();
+    if (status === "reprovado") {
+      reprovados += 1;
+      pendentes += 1;
+      continue;
+    }
+
+    const aprovado =
+      status === "aprovado" ||
+      (!docsMeta.statusCol &&
+        (isTruthyFlag(row.conferidoFlag) || isValidDbDate(row.conferidoAt)));
+
+    if (!aprovado) pendentes += 1;
+  }
+
+  return {
+    ok: pendentes === 0,
+    total,
+    pendentes,
+    reprovados,
+    reason: reprovados > 0 ? "rejected_documents" : null,
+  };
 }
 
 

@@ -54,6 +54,8 @@
 
 .melpet-section-content {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   margin-top: 8px;
 }
@@ -1758,11 +1760,15 @@
 }
 
 .melpet-outer-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   background: var(--cor-branco);
   border-radius: var(--radius-lg);
   padding: 12px;
   box-shadow: var(--shadow-sm);
   border: 1px solid rgba(0, 0, 0, 0.06);
+  box-sizing: border-box;
 }
 
 .melpet-outer-card-header h3 {
@@ -1772,19 +1778,27 @@
 }
 
 .melpet-categories-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin-top: var(--spacing-sm);
   background: transparent;
   border-radius: 16px;
   padding: 0;
   box-shadow: none;
   border: 2px solid #4b5563;
+  box-sizing: border-box;
 }
 
 .melpet-card-body {
-  overflow: auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
   background: #0b2333;
   border-radius: var(--radius-md);
   padding: 10px;
+  box-sizing: border-box;
 }
 
 .melpet-validate-subtitle,
@@ -1833,14 +1847,19 @@
 
 .melpet-docs-table-wrap {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
+  box-sizing: border-box;
 }
 
 .melpet-docs-table {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 980px;
   background: transparent;
   color: #e6eef6;
   border-radius: 12px;
@@ -1853,6 +1872,8 @@
   text-align: left;
   padding: 10px 8px;
   vertical-align: middle;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .melpet-docs-table th:nth-child(3),
@@ -1880,6 +1901,25 @@
   background: rgba(0, 0, 0, 0.18);
 }
 
+.melpet-docs-table th:nth-child(1),
+.melpet-docs-table td:nth-child(1) {
+  width: 30%;
+}
+
+.melpet-docs-table th:nth-child(2),
+.melpet-docs-table td:nth-child(2) {
+  width: 24%;
+}
+
+.melpet-docs-table th:nth-child(3),
+.melpet-docs-table td:nth-child(3),
+.melpet-docs-table th:nth-child(4),
+.melpet-docs-table td:nth-child(4),
+.melpet-docs-table th:nth-child(5),
+.melpet-docs-table td:nth-child(5) {
+  width: 15.33%;
+}
+
 .melpet-docs-table tbody tr {
   background: rgba(0, 0, 0, 0.08);
 }
@@ -1902,13 +1942,14 @@
 }
 
 .melpet-docs-card-body {
-  overflow: auto;
+  overflow: hidden;
   background: #0b2333;
   border-radius: var(--radius-md);
   padding: 10px;
 }
 
 .melpet-view-doc-btn {
+  max-width: 100%;
   border: 1px solid rgba(77, 50, 39, 0.3);
   border-radius: 8px;
   background: var(--cor-areia);
@@ -1916,6 +1957,7 @@
   padding: 6px 10px;
   font-weight: 600;
   cursor: pointer;
+  white-space: normal;
 }
 
 .melpet-view-doc-btn:disabled {
@@ -1924,12 +1966,14 @@
 }
 
 .melpet-review-btn {
+  max-width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   padding: 6px 10px;
   font-weight: 700;
   cursor: pointer;
   color: #ffffff;
+  white-space: normal;
 }
 
 .melpet-review-btn--approve {
@@ -2227,6 +2271,30 @@
   padding-top: 10px;
 }
 
+.melpet-document-rejection-reason {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.melpet-document-rejection-reason span {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.melpet-document-rejection-reason p {
+  margin: 0;
+  color: #1f2937;
+  font-weight: 800;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .melpet-preview-modal-body {
   background: #0b2333;
   padding: 0;
@@ -2384,17 +2452,9 @@
   color: var(--cor-marrom);
 }
 
-.melpet-upload-doc-copy span {
+.melpet-upload-doc-copy span:not(.melpet-doc-status) {
   color: var(--cor-marrom-claro);
   font-size: 0.86rem;
-}
-
-.melpet-upload-doc-copy .melpet-doc-status--pending {
-  color: #b91c1c;
-}
-
-.melpet-upload-doc-copy .melpet-doc-status--done {
-  color: #1d4ed8;
 }
 
 .melpet-upload-doc-main {
@@ -2494,18 +2554,41 @@
 }
 
 .melpet-doc-status {
-  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 
 .melpet-doc-status--pending {
-  color: #b91c1c;
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
 }
 
 .melpet-doc-status--done {
-  color: #1d4ed8;
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.melpet-doc-status--approved {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
 }
 
 .melpet-doc-status--rejected {
+  border-color: #fecaca;
+  background: #fef2f2;
   color: #b91c1c;
 }
 
