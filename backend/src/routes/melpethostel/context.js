@@ -104,7 +104,7 @@ function resolveUploadsDirToDisk(relativeDir) {
   const root = path.resolve(uploadsRootDefault);
   const abs = path.resolve(path.join(uploadsRootDefault, ...parts));
   if (!abs.startsWith(root)) {
-    throw new Error("Caminho de upload invÃ¡lido");
+    throw new Error("Caminho de upload invalido");
   }
   return abs;
 }
@@ -117,7 +117,7 @@ function resolveUploadsFileToDisk(rawPath) {
   const root = path.resolve(uploadsRootDefault);
   const abs = path.resolve(path.join(uploadsRootDefault, ...parts));
   if (!abs.startsWith(root)) {
-    throw new Error("Caminho de upload invÃ¡lido");
+    throw new Error("Caminho de upload invalido");
   }
   return abs;
 }
@@ -504,7 +504,7 @@ async function resolveUserDocumentsRelativeDir(req, login) {
   }
 
   return {
-    relativeDir: `/uploads/${safeGrupo}/${safeUsuario}/Documentos`,
+    relativeDir: `/uploads/${safeGrupo}/${safeUsuario}`,
     safeUsuario,
   };
 }
@@ -513,15 +513,15 @@ function resolveUserExpurgoRelativeDir(relativeDir) {
   const normalized = normalizeUploadsDir(relativeDir);
   if (!normalized) return null;
 
-  return normalized.replace(/\/Documentos\/?$/i, "/expurgo");
+  return normalized.replace(/\/$/, "") + "/expurgo";
 }
 
 async function ensureUserDocumentStorage(req, login) {
   const userDirData = await resolveUserDocumentsRelativeDir(req, login);
   if (!userDirData) return null;
 
-  const documentosDir = resolveUploadsDirToDisk(userDirData.relativeDir);
-  await fs.mkdir(documentosDir, { recursive: true });
+  const userDir = resolveUploadsDirToDisk(userDirData.relativeDir);
+  await fs.mkdir(userDir, { recursive: true });
 
   const expurgoRelativeDir = resolveUserExpurgoRelativeDir(
     userDirData.relativeDir,
