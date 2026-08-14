@@ -386,30 +386,17 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
       meta,
       user.Usuario_Login,
     );
-    if (!latestContrato || !latestContrato[meta.idCol]) {
-      return res.json({
-        status: "sucesso",
-        usuario: {
-          id: user.Usuario_ID,
-          nome: cadastro.nome || user.Usuario_Login,
-          cadastro,
-        },
-        contratoId: null,
-        arquivos: [],
-      });
-    }
-
-    const contratoId = latestContrato[meta.idCol];
+    const contratoId = latestContrato && meta.idCol ? latestContrato[meta.idCol] : null;
     const arquivos = [];
 
-    const nomeArquivoContrato = meta.nomeArquivoCol
+    const nomeArquivoContrato = latestContrato && meta.nomeArquivoCol
       ? latestContrato[meta.nomeArquivoCol]
       : null;
-    const filePathContrato = meta.filePathCol
+    const filePathContrato = latestContrato && meta.filePathCol
       ? latestContrato[meta.filePathCol]
       : null;
 
-    if (nomeArquivoContrato && filePathContrato) {
+    if (contratoId && nomeArquivoContrato && filePathContrato) {
       const existsDisk = await fileExistsOnDisk(
         filePathContrato,
         nomeArquivoContrato,
@@ -449,6 +436,9 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
       `d.${qcol(docsMeta.filePathCol || "File_Path")} AS filePath`,
       "t.Documento_Tipo AS tipoDocumento",
     ];
+    if (docsMeta.contratoIdCol) {
+      docsSelectCols.push(`d.${qcol(docsMeta.contratoIdCol)} AS docContratoId`);
+    }
     if (docsMeta.conferidoCol) {
       docsSelectCols.push(
         `d.${qcol(docsMeta.conferidoCol)} AS docConferidoFlag`,
@@ -479,10 +469,9 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
         FROM ${qtable(docsMeta.tableName)} d
         LEFT JOIN ${qtable(tipoTableName)} t ON t.Id = d.${qcol(docsMeta.tipoIdCol || "Documento_Tipo_ID")}
         WHERE d.${qcol(docsMeta.usuarioIdCol || "Usuario_ID")} = ?
-          AND d.${qcol(docsMeta.contratoIdCol || "Contrato_ID")} = ?
         ORDER BY d.${qcol(docsMeta.idCol || "Id")} ASC
       `,
-      [user.Usuario_ID, contratoId],
+      [user.Usuario_ID],
     );
 
     for (const doc of docRows || []) {
@@ -496,6 +485,7 @@ router.get("/documentos/usuario/:usuarioId/arquivos", async (req, res) => {
       arquivos.push({
         tipoRegistro: "documento",
         documentoId: doc?.docId || null,
+        contratoId: doc?.docContratoId || null,
         nomeDocumento: fileName || "Documento",
         tipoDocumento: doc?.tipoDocumento || "Documento",
         filePath: storedPath,

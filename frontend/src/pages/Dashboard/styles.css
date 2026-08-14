@@ -1277,3 +1277,90 @@
   min-width: 0;
   white-space: normal;
 }
+
+.melpet-tutor-pet-grid,
+.melpet-tutor-document-list {
+  display: grid;
+  gap: 10px;
+}
+
+.melpet-tutor-pet-card,
+.melpet-tutor-document-card {
+  align-items: center;
+  border: 1px solid rgba(84, 116, 139, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 8px 20px rgba(77, 50, 39, 0.06);
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.melpet-tutor-pet-card div,
+.melpet-tutor-document-card div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.melpet-tutor-pet-card strong,
+.melpet-tutor-document-card strong {
+  color: #2f241f;
+  font-weight: 900;
+}
+
+.melpet-tutor-pet-card span,
+.melpet-tutor-document-card span {
+  color: var(--cor-marrom-claro);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.melpet-tutor-pet-card em {
+  border-radius: 999px;
+  font-style: normal;
+  font-weight: 900;
+  justify-self: start;
+  padding: 6px 11px;
+}
+
+.melpet-tutor-pet-card em.is-active {
+  background: #dcfce7;
+  color: var(--cor-sucesso);
+}
+
+.melpet-tutor-pet-card em.is-inactive {
+  background: #fee2e2;
+  color: var(--cor-erro);
+}
+
+.melpet-tutor-upload-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(241,248,249,0.84));
+}
+
+.melpet-tutor-upload-grid input[type="file"] {
+  min-height: 46px;
+  padding: 10px;
+}
+
+.melpet-tutor-upload-actions .btn {
+  border-radius: 999px;
+  min-width: 180px;
+}
+
+@media (min-width: 760px) {
+  .melpet-tutor-pet-card,
+  .melpet-tutor-document-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+.melpet-tutor-maintenance-note {
+  border-radius: 12px;
+  background: rgba(216, 199, 170, 0.22);
+  color: var(--cor-marrom-claro);
+  font-weight: 800;
+  line-height: 1.35;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+}

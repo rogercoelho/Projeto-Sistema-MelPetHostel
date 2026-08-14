@@ -10,6 +10,7 @@ import { useToast } from "../../components/Toast/ToastContext";
 import { useAuth } from "../../contexts/AuthContext";
 import api from "../../services/api";
 import MelPetHostel from "../MelPetHostel";
+import MelPetTutorMaintenancePage from "./MelPetTutorMaintenancePage";
 import melPetLogo from "../MelPetHostel/assets/MelPetHostel_Logo.jpeg";
 import AdminGroupsPage from "./AdminGroupsPage";
 import AdminUserMaintenancePage from "./AdminUserMaintenancePage";
@@ -70,6 +71,15 @@ function Dashboard() {
     setView("mel");
   }
 
+  function openMelPetTutorMaintenance() {
+    setMelPetRegistrationOnly(false);
+    setMelComplianceGate(false);
+    setMelInitialAdminMenu("");
+    setMelUserMenu("");
+    setOpenDashboardSection("");
+    setView("mel-tutor-maintenance");
+  }
+
   function openMelPetRegistration() {
     setMelPetRegistrationOnly(true);
     setMelComplianceGate(false);
@@ -127,6 +137,10 @@ function Dashboard() {
         {
           label: "Cadastro de Clientes",
           onAction: openMelPetClientAdmin,
+        },
+        {
+          label: "Manutenção de Tutor",
+          onAction: openMelPetTutorMaintenance,
         },
         {
           label: "Cadastro de Pets",
@@ -583,6 +597,8 @@ function Dashboard() {
         <AdminGroupsPage onBack={() => setView("home")} />
       ) : view === "admin-user-maintenance" ? (
         <AdminUserMaintenancePage onBack={() => setView("home")} />
+      ) : view === "mel-tutor-maintenance" ? (
+        <MelPetTutorMaintenancePage onBack={() => setView("home")} />
       ) : view === "telegram-token" ? (
         <TelegramTokenPage onBack={() => setView("home")} />
       ) : view === "telegram-status" ? (
