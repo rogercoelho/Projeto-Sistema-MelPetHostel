@@ -3570,6 +3570,92 @@
   font-size: 1.45rem;
 }
 
+
+.melpet-hosting-payment-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.melpet-hosting-payment-option.btn {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 92px;
+  padding: 14px;
+  border-radius: 18px;
+  border-width: 1px;
+  text-align: center;
+  white-space: normal;
+  box-shadow: 0 14px 30px rgba(62, 46, 33, 0.1);
+}
+
+.melpet-hosting-payment-option strong,
+.melpet-hosting-payment-option span {
+  display: block;
+  width: 100%;
+}
+
+.melpet-hosting-payment-option strong {
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.melpet-hosting-payment-option span {
+  margin-top: 6px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.25;
+  opacity: 0.92;
+}
+
+.melpet-hosting-payment-option.is-total {
+  background: linear-gradient(135deg, #5284a0, #7fb8cc);
+  border-color: rgba(82, 132, 160, 0.42);
+  color: #fff;
+}
+
+.melpet-hosting-payment-option.is-reserve {
+  background: linear-gradient(135deg, #fff7ed, #f6d7b0);
+  border-color: rgba(180, 83, 9, 0.24);
+  color: #70482f;
+}
+
+.melpet-hosting-payment-option.is-card {
+  background: linear-gradient(135deg, #eef6f9, #d8ebee);
+  border-color: rgba(82, 132, 160, 0.26);
+  color: #28556b;
+}
+
+.melpet-hosting-payment-option.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 36px rgba(62, 46, 33, 0.14);
+}
+
+.melpet-hosting-payment-option.is-total:hover:not(:disabled) {
+  background: linear-gradient(135deg, #467891, #6aaec4);
+  color: #fff;
+}
+
+.melpet-hosting-payment-option.is-reserve:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ffedd5, #f4c58b);
+  color: #70482f;
+}
+
+.melpet-hosting-payment-option.is-card:hover:not(:disabled) {
+  background: linear-gradient(135deg, #dff0f5, #c8e3e8);
+  color: #28556b;
+}
+
+@media (max-width: 760px) {
+  .melpet-hosting-payment-options {
+    grid-template-columns: 1fr;
+  }
+
+  .melpet-hosting-payment-option.btn {
+    min-height: 76px;
+  }
+}
 .melpet-hosting-payment-grid {
   display: grid;
   grid-template-columns: minmax(140px, 220px) 1fr;

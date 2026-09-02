@@ -4406,9 +4406,10 @@ export default function MelPetHostel({
                                   <h4>{formatCurrency(requestTotal)}</h4>
                                 </div>
                                 <p>Escolha como deseja realizar o pagamento.</p>
-                                <div className="melpet-hosting-history-actions">
+                                <div className="melpet-hosting-payment-options">
                                   <Button
                                     type="button"
+                                    className="melpet-hosting-payment-option is-total"
                                     disabled={
                                       generatingHostingPaymentId === request.id
                                     }
@@ -4419,11 +4420,13 @@ export default function MelPetHostel({
                                       )
                                     }
                                   >
-                                    Pagamento total
+                                    <strong>Pagamento total</strong>
+                                    <span>Gerar um PIX único</span>
                                   </Button>
                                   <Button
                                     type="button"
                                     variant="outline"
+                                    className="melpet-hosting-payment-option is-reserve"
                                     disabled={
                                       generatingHostingPaymentId === request.id
                                     }
@@ -4434,7 +4437,25 @@ export default function MelPetHostel({
                                       )
                                     }
                                   >
-                                    Reserva + Check-in
+                                    <strong>Reserva + Check-in</strong>
+                                    <span>Dividir em duas etapas com PIX</span>
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="melpet-hosting-payment-option is-card"
+                                    disabled={
+                                      generatingHostingPaymentId === request.id
+                                    }
+                                    onClick={() =>
+                                      showToast(
+                                        "Pagamento com cartão de crédito em implantação.",
+                                        "info",
+                                      )
+                                    }
+                                  >
+                                    <strong>Cartão de Crédito</strong>
+                                    <span>Enviaremos um Link de Pagamento</span>
                                   </Button>
                                 </div>
                               </div>
