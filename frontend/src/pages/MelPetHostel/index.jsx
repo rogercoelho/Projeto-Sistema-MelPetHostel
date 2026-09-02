@@ -4650,7 +4650,7 @@ export default function MelPetHostel({
                                       </div>
                                     ) : null}
                                     {!isConfirmed && !hasPendingReceipt ? (
-                                      <div className="melpet-hosting-history-actions">
+                                      <div className="melpet-hosting-receipt-upload">
                                         <input
                                           ref={(el) => {
                                             hostingPaymentFileRefs.current[
@@ -4667,35 +4667,46 @@ export default function MelPetHostel({
                                             )
                                           }
                                         />
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          onClick={() =>
-                                            hostingPaymentFileRefs.current[
-                                              paymentKey
-                                            ]?.click()
-                                          }
-                                        >
-                                          {hostingPaymentFiles[paymentKey]
-                                            ?.name || "Selecionar comprovante"}
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          disabled={
-                                            uploadingHostingPaymentId ===
+                                        <div className="melpet-hosting-receipt-upload-copy">
+                                          <strong>Comprovante de pagamento</strong>
+                                          <span>Envie PDF, JPG ou PNG para análise.</span>
+                                        </div>
+                                        <div className="melpet-hosting-receipt-upload-actions">
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="melpet-hosting-receipt-select"
+                                            onClick={() =>
+                                              hostingPaymentFileRefs.current[
+                                                paymentKey
+                                              ]?.click()
+                                            }
+                                          >
+                                            <strong>Selecionar comprovante</strong>
+                                            <span>
+                                              {hostingPaymentFiles[paymentKey]
+                                                ?.name || "Nenhum arquivo selecionado"}
+                                            </span>
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            className="melpet-hosting-receipt-send"
+                                            disabled={
+                                              uploadingHostingPaymentId ===
+                                              request.id
+                                            }
+                                            onClick={() =>
+                                              uploadHostingPaymentReceipt(
+                                                uploadTarget,
+                                              )
+                                            }
+                                          >
+                                            {uploadingHostingPaymentId ===
                                             request.id
-                                          }
-                                          onClick={() =>
-                                            uploadHostingPaymentReceipt(
-                                              uploadTarget,
-                                            )
-                                          }
-                                        >
-                                          {uploadingHostingPaymentId ===
-                                          request.id
-                                            ? "Enviando..."
-                                            : "Enviar comprovante"}
-                                        </Button>
+                                              ? "Enviando..."
+                                              : "Enviar comprovante"}
+                                          </Button>
+                                        </div>
                                       </div>
                                     ) : null}
                                   </div>
