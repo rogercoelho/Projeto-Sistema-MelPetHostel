@@ -261,9 +261,31 @@ function formatBillingMode(value) {
 }
 
 function formatTelegramDate(value) {
-  const [year, month, day] = clean(value).split("-");
-  if (!year || !month || !day) return clean(value);
-  return `${day}/${month}/${year.slice(-2)}`;
+  if (!value) return "";
+  if (value instanceof Date) {
+    return value.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      timeZone: "America/Sao_Paulo",
+    });
+  }
+
+  const text = clean(value);
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1].slice(-2)}`;
+
+  const date = new Date(text);
+  if (!Number.isNaN(date.getTime())) {
+    return date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      timeZone: "America/Sao_Paulo",
+    });
+  }
+
+  return text;
 }
 
 function formatTelegramMoney(value) {
@@ -298,7 +320,7 @@ function buildHostingTelegramMessage({
     return [
       `Pet: <b>${clean(item.petNome) || `Pet ${item.petId}`}</b>`,
       `Serviço: <b>${clean(tipo)}</b>`,
-      `Tipo: <b>${item.tipo} / ${item.quantidadeSolicitada} ${item.tempoUnidade} -> ${formatTelegramMoney(item.valorDiaria)}</b>`,
+      `Tipo: <b>${clean(item.tipo) || "-"} / ${clean(item.quantidadeSolicitada || item.tempoQuantidade) || "1"} ${clean(item.tempoUnidade) || "dia"} -> ${formatTelegramMoney(item.valorDiaria)}</b>`,
       ...periodLines,
     ];
   });
@@ -329,6 +351,10 @@ async function loadHostingRequestById(req, solicitacaoId) {
     `
       SELECT
         s.id AS solicitacao_id,
+        s.cliente_id AS solicitacao_cliente_id,
+        c.nome AS cliente_nome,
+        c.email AS cliente_email,
+        u.usuario_login AS usuario_login,
         s.tipo AS solicitacao_tipo,
         s.modo_cobranca AS solicitacao_modo_cobranca,
         s.inicio_mes AS solicitacao_inicio_mes,
@@ -374,6 +400,8 @@ async function loadHostingRequestById(req, solicitacaoId) {
       LEFT JOIN ${qtable(itensTable)} i ON i.solicitacao_id = s.id
       LEFT JOIN Pets pet ON pet.id = i.pet_id
       LEFT JOIN ${qtable(TABLE_NAMES.hospedagemPagamentos)} p ON p.solicitacao_id = s.id
+      LEFT JOIN Clientes c ON c.id = s.cliente_id
+      LEFT JOIN Usuarios u ON u.cliente_id = s.cliente_id
       WHERE s.id = ?
       ORDER BY i.id ASC
     `,
@@ -386,6 +414,10 @@ async function loadHostingRequestById(req, solicitacaoId) {
     if (!solicitacoesById.has(id)) {
       solicitacoesById.set(id, {
         id,
+        clienteId: row.solicitacao_cliente_id,
+        clienteNome: row.cliente_nome,
+        clienteEmail: row.cliente_email || "",
+        usuarioLogin: row.usuario_login,
         tipo: row.solicitacao_tipo,
         modoCobranca: row.solicitacao_modo_cobranca,
         inicioMes: row.solicitacao_inicio_mes,
@@ -421,15 +453,19 @@ async function loadHostingRequestById(req, solicitacaoId) {
     }
 
     if (row.item_id !== null && row.item_id !== undefined) {
-      solicitacoesById.get(id).itens.push({
-        id: Number(row.item_id),
+      const solicitacao = solicitacoesById.get(id);
+      const itemId = Number(row.item_id);
+      if (solicitacao.itens.some((item) => item.id === itemId)) continue;
+      solicitacao.itens.push({
+        id: itemId,
         petId: row.item_pet_id,
         petNome: row.item_pet_nome,
         tipo: row.item_tipo,
         planoId: row.item_plano_id,
         modoCobranca: row.item_modo_cobranca,
         tempoQuantidade: row.item_tempo_quantidade,
-        tempoUnidade: row.item_tempo_unidade,
+        quantidadeSolicitada: row.item_tempo_quantidade || 1,
+        tempoUnidade: row.item_tempo_unidade || "dia",
         inicioMes: row.item_inicio_mes,
         dataEntrada: row.item_data_entrada,
         dataSaida: row.item_data_saida,
@@ -443,6 +479,41 @@ async function loadHostingRequestById(req, solicitacaoId) {
   return solicitacoesById.get(Number(solicitacaoId)) || null;
 }
 
+function formatPaymentTypeLabel(value) {
+  const type = clean(value).toLowerCase();
+  if (type === "reserva") return "Reserva";
+  if (type === "checkin") return "Check-in";
+  return "Pagamento Total";
+}
+
+function buildHostingReceiptTelegramMessage({ login, request, parcelaTipo, valor }) {
+  const items = request?.itens?.length ? request.itens : [{}];
+  const itemBlocks = items.map((item) => [
+    `Pet: <b>${clean(item.petNome) || (item.petId ? `Pet ${item.petId}` : "-")}</b>`,
+    `Serviço: <b>${clean(request?.tipo) || "-"}</b>`,
+    `Tipo: <b>${clean(item.tipo) || "-"}</b>`,
+    `Entrada: <b>${formatTelegramDate(item.dataEntrada || request?.dataEntrada)}</b>`,
+    `Saída: <b>${formatTelegramDate(item.dataSaida || request?.dataSaida)}</b>`,
+    `Dias: <b>${clean(item.dias || request?.dias) || "-"}</b>`,
+  ]);
+
+  return [
+    "Novo Comprovante enviado",
+    `Tutor: <b>${clean(login)}</b>`,
+    ...itemBlocks.flat(),
+    `Tipo de Pagamento: <b>${formatPaymentTypeLabel(parcelaTipo)}</b>`,
+    `Valor do Comprovante: <b>${formatTelegramMoney(valor)}</b>`,
+  ].join("\n");
+}
+
+async function notifyHostingReceiptAdmins(req, { login, request, parcelaTipo, valor }) {
+  return sendTelegramToConfiguredAdmins({
+    db: dbFor(req),
+    module: MODULE,
+    message: buildHostingReceiptTelegramMessage({ login, request, parcelaTipo, valor }),
+    disabledReason: "notificacao_desativada",
+  });
+}
 async function notifyAdmins(req, pedido) {
   const db = dbFor(req);
   const message = buildHostingTelegramMessage({
@@ -503,11 +574,11 @@ function formatEmailDate(value) {
 async function sendHostingApprovalEmail(request) {
   const result = await sendEmail({
     to: request?.clienteEmail,
-    subject: "Pedido de hospedagem aprovado - Mel Pet Hostel",
+    subject: "Confirmação do seu Pedido de Hospedagem - Mel Pet Hostel",
     text: `Ola ${request?.clienteNome || "Tutor"},
-O seu pedido de ${request?.tipo || "hospedagem"} para ${formatEmailDate(request?.dataEntrada)} até ${formatEmailDate(request?.dataSaida)} foi aprovado.
-Para confirmar a aprovacao, acesse o sistema da Mel Pet Hostel, efetue o processo de pagamento e nos envie o comprovante.
-Lembrando que a confirmação da estadia só será liberada após a comprovação dos pagamentos.
+O seu pedido de ${request?.tipo || "hospedagem"} para ${formatEmailDate(request?.dataEntrada)} até ${formatEmailDate(request?.dataSaida)} foi analisado e aprovado.
+Para confirmar a sua reserva, acesse o sistema da Mel Pet Hostel, efetue o processo de pagamento e nos envie o comprovante.
+Lembrando que a estadia só será liberada após a comprovação dos pagamentos.
 Muito obrigado por escolher a Mel pet Hostel.`,
   });
 
@@ -611,7 +682,8 @@ function mapHostingRows(rows) {
           planoId: row.item_plano_id,
           modoCobranca: row.item_modo_cobranca,
           tempoQuantidade: row.item_tempo_quantidade,
-          tempoUnidade: row.item_tempo_unidade,
+          quantidadeSolicitada: row.item_tempo_quantidade || 1,
+          tempoUnidade: row.item_tempo_unidade || "dia",
           inicioMes: row.item_inicio_mes,
           dataEntrada: row.item_data_entrada,
           dataSaida: row.item_data_saida,
@@ -832,10 +904,10 @@ router.patch("/hospedagens/solicitacoes/:id/aprovar", async (req, res) => {
       `UPDATE ${qtable(table)} SET status = ?, analisado_por = ?, analisado_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`,
       ["aprovado", getReqLogin(req), solicitacaoId],
     );
-    const solicitacoesAtualizadas = await listHostingRequests(req, {});
-    const solicitacaoAprovada = (solicitacoesAtualizadas || []).find(
-      (item) => Number(item.id) === solicitacaoId,
-    ) || { id: solicitacaoId, status: "aprovado" };
+    const solicitacaoAprovada = (await loadHostingRequestById(req, solicitacaoId)) || {
+      id: solicitacaoId,
+      status: "aprovado",
+    };
     const emailStatus = await sendHostingApprovalEmail(
       solicitacaoAprovada,
     ).catch((emailError) => {
@@ -1380,6 +1452,21 @@ router.post(
           parcelaTipo,
         ],
       );
+      const [pagamentoRows] = await dbFor(req).query(
+        "SELECT valor FROM " +
+          qtable(TABLE_NAMES.hospedagemPagamentos) +
+          " WHERE solicitacao_id = ? AND cliente_id = ? AND parcela_tipo = ? LIMIT 1",
+        [solicitacaoId, clienteId, parcelaTipo],
+      );
+      const pedidoCompleto = await loadHostingRequestById(req, solicitacaoId);
+      await notifyHostingReceiptAdmins(req, {
+        login,
+        request: pedidoCompleto || solicitacao,
+        parcelaTipo,
+        valor: pagamentoRows?.[0]?.valor,
+      }).catch((telegramError) => {
+        console.error("Erro notificando comprovante de hospedagem no Telegram:", telegramError);
+      });
       return res.json({
         status: "sucesso",
         mensagem: "Comprovante enviado com sucesso.",

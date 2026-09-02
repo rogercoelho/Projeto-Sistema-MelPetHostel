@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Button,
   MenuItem,
@@ -92,7 +92,7 @@ function Dashboard() {
   function openMelPetHostingAdmin() {
     setMelPetRegistrationOnly(false);
     setMelComplianceGate(false);
-    setMelInitialAdminMenu("aprovarHospedagens");
+    setMelInitialAdminMenu("");
     setMelUserMenu("");
     setOpenDashboardSection("");
     setView("mel");

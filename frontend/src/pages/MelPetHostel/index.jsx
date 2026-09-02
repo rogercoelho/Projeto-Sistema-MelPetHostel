@@ -371,7 +371,10 @@ export default function MelPetHostel({
     useState(null);
   const [pendingHostingPaymentRequests, setPendingHostingPaymentRequests] =
     useState([]);
-  const [selectedHostingPaymentRequestId, setSelectedHostingPaymentRequestId] = useState("");
+  const [selectedHostingPaymentRequestId, setSelectedHostingPaymentRequestId] =
+    useState("");
+  const [loadingHostingPaymentReceipts, setLoadingHostingPaymentReceipts] =
+    useState(false);
   const [approvingHostingPaymentId, setApprovingHostingPaymentId] =
     useState(null);
   const [rejectHostingPaymentTarget, setRejectHostingPaymentTarget] =
@@ -481,13 +484,16 @@ export default function MelPetHostel({
   }, [initialAdminMenu, isAdmin]);
 
   useEffect(() => {
-    if (!isAdmin || activeMenu !== "aprovarHospedagens") return;
-    loadPendingHostingRequests();
+    if (!isAdmin || activeMenu === "aprovarHospedagens") return;
+    setPendingHostingRequests([]);
+    setPendingHostingRequestsError("");
+    setSelectedPendingHostingId(null);
   }, [activeMenu, isAdmin]);
 
   useEffect(() => {
     if (!isAdmin || activeMenu !== "analisarComprovantes") return;
     loadPendingHostingPaymentReceipts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMenu, isAdmin]);
 
   useEffect(() => {
@@ -1195,7 +1201,7 @@ export default function MelPetHostel({
 
   function getHostingRequestStatusDetail(status) {
     const normalized = normalizeText(status);
-    if (normalized.includes("aprov")) return "Pedido aprovado";
+    if (normalized.includes("aprov")) return "Pagamento Pendente";
     if (normalized.includes("recus")) return "Pedido recusado";
     if (normalized.includes("anal")) return "Aguardando análise";
     if (normalized.includes("aguard")) return "Aguardando pagamento";
@@ -1415,11 +1421,17 @@ export default function MelPetHostel({
   }
 
   function getHostingPayments(request) {
-    return Array.isArray(request?.pagamentos) && request.pagamentos.length
+    const payments = Array.isArray(request?.pagamentos) && request.pagamentos.length
       ? request.pagamentos
       : request?.pagamento
         ? [request.pagamento]
         : [];
+    const order = { reserva: 1, checkin: 2, total: 3 };
+    return [...payments].sort((a, b) => {
+      const aType = String(a?.parcelaTipo || "total").toLowerCase();
+      const bType = String(b?.parcelaTipo || "total").toLowerCase();
+      return (order[aType] || 99) - (order[bType] || 99);
+    });
   }
 
   function getHostingPaymentLabel(payment) {
@@ -1484,15 +1496,28 @@ export default function MelPetHostel({
   }
 
   async function loadPendingHostingPaymentReceipts() {
+    if (loadingHostingPaymentReceipts) return pendingHostingPaymentRequests;
+    setLoadingHostingPaymentReceipts(true);
     try {
       const data = await api.get(
         "/melpethostel/hospedagens/comprovantes/pendentes",
       );
-      setPendingHostingPaymentRequests(
-        Array.isArray(data?.solicitacoes) ? data.solicitacoes : [],
+      const solicitacoes = Array.isArray(data?.solicitacoes)
+        ? data.solicitacoes
+        : [];
+      setPendingHostingPaymentRequests(solicitacoes);
+      setSelectedHostingPaymentRequestId((current) =>
+        current && !solicitacoes.some((request) => String(request.id) === current)
+          ? ""
+          : current,
       );
+      return solicitacoes;
     } catch {
       setPendingHostingPaymentRequests([]);
+      setSelectedHostingPaymentRequestId("");
+      return [];
+    } finally {
+      setLoadingHostingPaymentReceipts(false);
     }
   }
 
@@ -4291,12 +4316,13 @@ export default function MelPetHostel({
                     <strong>
                       {getHostingRequestStatusLabel(request.status)}
                     </strong>
-                    <span>{getHostingRequestStatusTone(request.status) === "confirmed" ? formatHostingCheckInOut(request) : getHostingRequestStatusDetail(request.status)}</span>
-                    {hasPendingHostingPayment(request) ? (
-                      <span className="melpet-hosting-payment-pending-label">
-                        Pagamento Pendente
-                      </span>
-                    ) : null}
+                    <span>
+                      {getHostingRequestStatusTone(request.status) === "confirmed"
+                        ? formatHostingCheckInOut(request)
+                        : hasPendingHostingPayment(request)
+                          ? "Pagamento Pendente"
+                          : getHostingRequestStatusDetail(request.status)}
+                    </span>
                   </span>
                   <span
                     className="melpet-hosting-history-toggle-icon"
@@ -4735,11 +4761,17 @@ export default function MelPetHostel({
             Selecionar tutor - pet
             <select
               value={selectedHostingPaymentRequestId}
+              onFocus={loadPendingHostingPaymentReceipts}
+              onPointerDown={loadPendingHostingPaymentReceipts}
               onChange={(event) =>
                 setSelectedHostingPaymentRequestId(event.target.value)
               }
             >
-              <option value="">Selecione um tutor - pet</option>
+              <option value="">
+                {loadingHostingPaymentReceipts
+                  ? "Atualizando comprovantes..."
+                  : "Selecione um tutor - pet"}
+              </option>
               {hostingPaymentSelectOptions.map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.label}
@@ -4868,6 +4900,7 @@ export default function MelPetHostel({
           </div>
         </div>
       </header>
+
 
       {pendingHostingRequestsError ? (
         <p className="melpet-error">{pendingHostingRequestsError}</p>
@@ -6125,11 +6158,15 @@ export default function MelPetHostel({
                 summary: "Conferir e aprovar hospedagens pendentes.",
                 isOpen: activeMenu === "aprovarHospedagens",
                 onAction: () => {
-                  setActiveMenu((prev) =>
-                    prev === "aprovarHospedagens" ? "" : "aprovarHospedagens",
-                  );
+                  const shouldOpen = activeMenu !== "aprovarHospedagens";
+                  setActiveMenu(shouldOpen ? "aprovarHospedagens" : "");
                   setSelectedPendingHostingId(null);
-                  loadPendingHostingRequests();
+                  if (shouldOpen) {
+                    loadPendingHostingRequests();
+                  } else {
+                    setPendingHostingRequests([]);
+                    setPendingHostingRequestsError("");
+                  }
                 },
                 content: adminHostingApprovalContent,
               },
