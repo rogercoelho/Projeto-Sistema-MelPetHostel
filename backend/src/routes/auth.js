@@ -114,6 +114,20 @@ async function deleteHospedagensByCliente(req, clienteId) {
     return { affectedRows: 0 };
   }
 
+  if (await tableExists(req, "Hospedagem_Pagamentos")) {
+    await dbFor(req).query(
+      `
+        DELETE FROM ${qident("Hospedagem_Pagamentos")}
+        WHERE cliente_id = ?
+           OR solicitacao_id IN (
+             SELECT id
+             FROM ${qident("Hospedagem_Solicitacoes")}
+             WHERE cliente_id = ?
+           )
+      `,
+      [clienteId, clienteId],
+    );
+  }
   if (await tableExists(req, "Hospedagem_Solicitacao_Itens")) {
     await dbFor(req).query(
       `

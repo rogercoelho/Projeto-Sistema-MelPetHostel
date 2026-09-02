@@ -1,4 +1,4 @@
-SET @clientes_table := (
+﻿SET @clientes_table := (
   SELECT TABLE_NAME
   FROM INFORMATION_SCHEMA.TABLES
   WHERE TABLE_SCHEMA = DATABASE()
@@ -162,3 +162,158 @@ SET @sql := CONCAT(
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
+
+
+SET @sql := CONCAT(
+  'CREATE TABLE IF NOT EXISTS `MelPet_Pix_Config` (',
+  '`id` INT NOT NULL AUTO_INCREMENT,',
+  '`chave_pix` VARCHAR(255) NOT NULL,',
+  '`nome_recebedor` VARCHAR(120) NOT NULL DEFAULT ''MEL PET HOSTEL'',',
+  '`cidade_recebedor` VARCHAR(80) NOT NULL DEFAULT ''SAO PAULO'',',
+  '`ativo` TINYINT(1) NOT NULL DEFAULT 1,',
+  '`atualizado_por` VARCHAR(191) NULL DEFAULT NULL,',
+  '`criado_em` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,',
+  '`atualizado_em` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,',
+  'PRIMARY KEY (`id`),',
+  'INDEX `idx_melpet_pix_ativo` (`ativo`)',
+  ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql := CONCAT(
+  'CREATE TABLE IF NOT EXISTS `Hospedagem_Pagamentos` (',
+  '`id` INT NOT NULL AUTO_INCREMENT,',
+  '`solicitacao_id` INT NOT NULL,',
+  '`cliente_id` ', @cliente_id_type, ' NOT NULL,',
+  '`parcela_tipo` VARCHAR(30) NOT NULL DEFAULT ''total'',',
+  '`valor` DECIMAL(10,2) NOT NULL DEFAULT 0.00,',
+  '`pix_copia_cola` TEXT NULL,',
+  '`qr_code_url` TEXT NULL,',
+  '`comprovante_path` VARCHAR(500) NULL DEFAULT NULL,',
+  '`comprovante_nome` VARCHAR(255) NULL DEFAULT NULL,',
+  '`status` VARCHAR(30) NOT NULL DEFAULT ''aguardando_comprovante'',',
+  '`motivo_recusa` TEXT NULL,',
+  '`enviado_em` DATETIME NULL DEFAULT NULL,',
+  '`conferido_por` VARCHAR(191) NULL DEFAULT NULL,',
+  '`conferido_em` DATETIME NULL DEFAULT NULL,',
+  '`criado_em` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,',
+  '`atualizado_em` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,',
+  'PRIMARY KEY (`id`),',
+  'UNIQUE KEY `uk_hosp_pag_solic_parcela` (`solicitacao_id`, `parcela_tipo`),',
+  'INDEX `idx_hosp_pag_cliente` (`cliente_id`),',
+  'INDEX `idx_hosp_pag_status` (`status`),',
+  'CONSTRAINT `fk_hosp_pag_solic` FOREIGN KEY (`solicitacao_id`) REFERENCES `Hospedagem_Solicitacoes` (`id`) ON DELETE CASCADE,',
+  'CONSTRAINT `fk_hosp_pag_cliente` FOREIGN KEY (`cliente_id`) REFERENCES ',
+  @clientes_table_q,
+  ' (`id`) ON DELETE CASCADE',
+  ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+
+
+SET @hosp_pag_parcela_col := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'Hospedagem_Pagamentos'
+    AND COLUMN_NAME = 'parcela_tipo'
+);
+SET @sql := IF(
+  @hosp_pag_parcela_col = 0,
+  'ALTER TABLE `Hospedagem_Pagamentos` ADD COLUMN `parcela_tipo` VARCHAR(30) NOT NULL DEFAULT ''total'' AFTER `cliente_id`',
+  'SELECT ''Coluna parcela_tipo ja existe'' AS status'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+
+
+SET @hosp_pag_motivo_col := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'Hospedagem_Pagamentos'
+    AND COLUMN_NAME = 'motivo_recusa'
+);
+SET @sql := IF(
+  @hosp_pag_motivo_col = 0,
+  'ALTER TABLE `Hospedagem_Pagamentos` ADD COLUMN `motivo_recusa` TEXT NULL AFTER `status`',
+  'SELECT ''Coluna motivo_recusa ja existe'' AS status'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET @hosp_pag_fk_solic := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'Hospedagem_Pagamentos'
+    AND CONSTRAINT_NAME = 'fk_hosp_pag_solic'
+    AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+);
+SET @sql := IF(
+  @hosp_pag_fk_solic > 0,
+  'ALTER TABLE `Hospedagem_Pagamentos` DROP FOREIGN KEY `fk_hosp_pag_solic`',
+  'SELECT ''FK antiga de solicitacao nao encontrada'' AS status'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @old_hosp_pag_index := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'Hospedagem_Pagamentos'
+    AND INDEX_NAME = 'uk_hosp_pag_solicitacao'
+);
+SET @sql := IF(
+  @old_hosp_pag_index > 0,
+  'ALTER TABLE `Hospedagem_Pagamentos` DROP INDEX `uk_hosp_pag_solicitacao`',
+  'SELECT ''Indice antigo de pagamento nao encontrado'' AS status'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @new_hosp_pag_index := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'Hospedagem_Pagamentos'
+    AND INDEX_NAME = 'uk_hosp_pag_solic_parcela'
+);
+SET @sql := IF(
+  @new_hosp_pag_index = 0,
+  'ALTER TABLE `Hospedagem_Pagamentos` ADD UNIQUE KEY `uk_hosp_pag_solic_parcela` (`solicitacao_id`, `parcela_tipo`)',
+  'SELECT ''Indice de parcela ja existe'' AS status'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @hosp_pag_fk_solic := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'Hospedagem_Pagamentos'
+    AND CONSTRAINT_NAME = 'fk_hosp_pag_solic'
+    AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+);
+SET @sql := IF(
+  @hosp_pag_fk_solic = 0,
+  'ALTER TABLE `Hospedagem_Pagamentos` ADD CONSTRAINT `fk_hosp_pag_solic` FOREIGN KEY (`solicitacao_id`) REFERENCES `Hospedagem_Solicitacoes` (`id`) ON DELETE CASCADE',
+  'SELECT ''FK de solicitacao ja existe'' AS status'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+
+

@@ -25,6 +25,8 @@ const TABLE_NAMES = Object.freeze({
   planos: "Planos",
   hospedagemSolicitacoes: "Hospedagem_Solicitacoes",
   hospedagemSolicitacaoItens: "Hospedagem_Solicitacao_Itens",
+  hospedagemPagamentos: "Hospedagem_Pagamentos",
+  pixConfig: "MelPet_Pix_Config",
 });
 
 const DEFAULT_DOCUMENT_TYPES = Object.freeze([

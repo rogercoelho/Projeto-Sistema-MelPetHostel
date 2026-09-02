@@ -1,18 +1,28 @@
+const crypto = require("crypto");
 const express = require("express");
 const router = express.Router();
 const {
   MODULE,
   sendTelegramToConfiguredAdmins,
 } = require("../../utils/moduleAccessNotification");
+const { sendEmail } = require("../../services/emailService");
 const {
   TABLE_NAMES,
   dbFor,
+  ensureUserDocumentStorage,
+  fs,
   getCurrentClienteId,
   getReqLogin,
+  getUsuarioByLogin,
   isAdminUser,
+  path,
   qcol,
   qtable,
   resolveTableName,
+  resolveUploadsDirToDisk,
+  resolveUploadsFileToDisk,
+  toPublicUploadPath,
+  uploadContrato,
 } = require("./context");
 
 function clean(value) {
@@ -51,6 +61,186 @@ function asPositiveInteger(value, fallback = null) {
   return fallback;
 }
 
+function normalizePixText(value, maxLength) {
+  return clean(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9 .\-]/g, "")
+    .slice(0, maxLength);
+}
+
+function emvField(id, value) {
+  const text = String(value || "");
+  return id + String(text.length).padStart(2, "0") + text;
+}
+
+function crc16(payload) {
+  let crc = 0xffff;
+  for (let index = 0; index < payload.length; index += 1) {
+    crc ^= payload.charCodeAt(index) << 8;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = crc & 0x8000 ? (crc << 1) ^ 0x1021 : crc << 1;
+      crc &= 0xffff;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, "0");
+}
+
+function buildPixPayload({ key, name, city, amount, description }) {
+  const pixKey = clean(key);
+  if (!pixKey) return "";
+  const merchantName = normalizePixText(name || "MEL PET HOSTEL", 25);
+  const merchantCity = normalizePixText(city || "SAO PAULO", 15);
+  const txid =
+    normalizePixText(description || crypto.randomUUID(), 25) || "MELPETHOSTEL";
+  const merchantAccount =
+    emvField("00", "br.gov.bcb.pix") + emvField("01", pixKey);
+  const payload =
+    emvField("00", "01") +
+    emvField("26", merchantAccount) +
+    emvField("52", "0000") +
+    emvField("53", "986") +
+    emvField("54", Number(amount || 0).toFixed(2)) +
+    emvField("58", "BR") +
+    emvField("59", merchantName) +
+    emvField("60", merchantCity) +
+    emvField("62", emvField("05", txid));
+  const crcPayload = payload + "6304";
+  return crcPayload + crc16(crcPayload);
+}
+
+function buildPixQrCodeUrl(payload) {
+  if (!payload) return "";
+  return (
+    "https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=12&data=" +
+    encodeURIComponent(payload)
+  );
+}
+
+async function ensurePixConfigTable(req) {
+  await dbFor(req).query(
+    "CREATE TABLE IF NOT EXISTS " +
+      qtable(TABLE_NAMES.pixConfig) +
+      " (" +
+      "id INT NOT NULL AUTO_INCREMENT," +
+      "chave_pix VARCHAR(255) NOT NULL," +
+      'nome_recebedor VARCHAR(120) NOT NULL DEFAULT "MEL PET HOSTEL",' +
+      'cidade_recebedor VARCHAR(80) NOT NULL DEFAULT "SAO PAULO",' +
+      "ativo TINYINT(1) NOT NULL DEFAULT 1," +
+      "atualizado_por VARCHAR(191) NULL DEFAULT NULL," +
+      "criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP," +
+      "atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+      "PRIMARY KEY (id)," +
+      "INDEX idx_melpet_pix_ativo (ativo)" +
+      ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+  );
+}
+
+async function getActivePixConfig(req) {
+  await ensurePixConfigTable(req);
+  const [rows] = await dbFor(req).query(
+    "SELECT id, chave_pix AS chavePix, nome_recebedor AS nomeRecebedor, cidade_recebedor AS cidadeRecebedor, ativo FROM " +
+      qtable(TABLE_NAMES.pixConfig) +
+      " WHERE id = 1 AND ativo = 1 AND chave_pix IS NOT NULL AND TRIM(chave_pix) <> '' LIMIT 1",
+  );
+  return rows && rows[0] ? rows[0] : null;
+}
+
+async function ensureHostingPaymentsTable(req) {
+  const db = dbFor(req);
+  await db.query(
+    "CREATE TABLE IF NOT EXISTS " +
+      qtable(TABLE_NAMES.hospedagemPagamentos) +
+      " (" +
+      "id INT NOT NULL AUTO_INCREMENT," +
+      "solicitacao_id INT NOT NULL," +
+      "cliente_id INT NOT NULL," +
+      "parcela_tipo VARCHAR(30) NOT NULL DEFAULT 'total'," +
+      "valor DECIMAL(10,2) NOT NULL DEFAULT 0.00," +
+      "pix_copia_cola TEXT NULL," +
+      "qr_code_url TEXT NULL," +
+      "comprovante_path VARCHAR(500) NULL DEFAULT NULL," +
+      "comprovante_nome VARCHAR(255) NULL DEFAULT NULL," +
+      "status VARCHAR(30) NOT NULL DEFAULT 'aguardando_comprovante'," +
+      "motivo_recusa TEXT NULL," +
+      "enviado_em DATETIME NULL DEFAULT NULL," +
+      "conferido_por VARCHAR(191) NULL DEFAULT NULL," +
+      "conferido_em DATETIME NULL DEFAULT NULL," +
+      "criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP," +
+      "atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+      "PRIMARY KEY (id)," +
+      "UNIQUE KEY uk_hosp_pag_solic_parcela (solicitacao_id, parcela_tipo)," +
+      "INDEX idx_hosp_pag_cliente (cliente_id)," +
+      "INDEX idx_hosp_pag_status (status)" +
+      ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+  );
+  const [columns] = await db.query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'parcela_tipo'",
+    [TABLE_NAMES.hospedagemPagamentos],
+  );
+  if (!columns?.length) {
+    await db.query(
+      "ALTER TABLE " +
+        qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " ADD COLUMN parcela_tipo VARCHAR(30) NOT NULL DEFAULT 'total' AFTER cliente_id",
+    );
+  }
+  const [oldForeignKeys] = await db.query(
+    "SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_NAME = 'fk_hosp_pag_solic' AND CONSTRAINT_TYPE = 'FOREIGN KEY' LIMIT 1",
+    [TABLE_NAMES.hospedagemPagamentos],
+  );
+  if (oldForeignKeys?.length) {
+    await db.query(
+      "ALTER TABLE " +
+        qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " DROP FOREIGN KEY fk_hosp_pag_solic",
+    );
+  }
+  const [oldIndexes] = await db.query(
+    "SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = 'uk_hosp_pag_solicitacao' LIMIT 1",
+    [TABLE_NAMES.hospedagemPagamentos],
+  );
+  if (oldIndexes?.length) {
+    await db.query(
+      "ALTER TABLE " +
+        qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " DROP INDEX uk_hosp_pag_solicitacao",
+    );
+  }
+  const [motivoColumns] = await db.query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'motivo_recusa'",
+    [TABLE_NAMES.hospedagemPagamentos],
+  );
+  if (!motivoColumns?.length) {
+    await db.query(
+      "ALTER TABLE " +
+        qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " ADD COLUMN motivo_recusa TEXT NULL AFTER status",
+    );
+  }
+  const [newIndexes] = await db.query(
+    "SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = 'uk_hosp_pag_solic_parcela' LIMIT 1",
+    [TABLE_NAMES.hospedagemPagamentos],
+  );
+  if (!newIndexes?.length) {
+    await db.query(
+      "ALTER TABLE " +
+        qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " ADD UNIQUE KEY uk_hosp_pag_solic_parcela (solicitacao_id, parcela_tipo)",
+    );
+  }
+  const [newForeignKeys] = await db.query(
+    "SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_NAME = 'fk_hosp_pag_solic' AND CONSTRAINT_TYPE = 'FOREIGN KEY' LIMIT 1",
+    [TABLE_NAMES.hospedagemPagamentos],
+  );
+  if (!newForeignKeys?.length) {
+    await db.query(
+      "ALTER TABLE " +
+        qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " ADD CONSTRAINT fk_hosp_pag_solic FOREIGN KEY (solicitacao_id) REFERENCES Hospedagem_Solicitacoes (id) ON DELETE CASCADE",
+    );
+  }
+}
 function normalizeBillingMode(value) {
   const normalized = clean(value)
     .normalize("NFD")
@@ -133,6 +323,7 @@ async function loadHostingRequestById(req, solicitacaoId) {
   );
 
   if (!solicitacoesTable || !itensTable) return null;
+  await ensureHostingPaymentsTable(req);
 
   const [rows] = await db.query(
     `
@@ -153,9 +344,21 @@ async function loadHostingRequestById(req, solicitacaoId) {
         s.analisado_em AS solicitacao_analisado_em,
         s.criado_em AS solicitacao_criado_em,
         s.atualizado_em AS solicitacao_atualizado_em,
+        p.id AS pagamento_id,
+        p.parcela_tipo AS pagamento_parcela_tipo,
+        p.valor AS pagamento_valor,
+        p.pix_copia_cola AS pagamento_pix_copia_cola,
+        p.qr_code_url AS pagamento_qr_code_url,
+        p.comprovante_path AS pagamento_comprovante_path,
+        p.comprovante_nome AS pagamento_comprovante_nome,
+        p.status AS pagamento_status,
+        p.motivo_recusa AS pagamento_motivo_recusa,
+        p.enviado_em AS pagamento_enviado_em,
+        p.conferido_por AS pagamento_conferido_por,
+        p.conferido_em AS pagamento_conferido_em,
         i.id AS item_id,
         i.pet_id AS item_pet_id,
-        i.pet_nome AS item_pet_nome,
+        COALESCE(i.pet_nome, pet.nome) AS item_pet_nome,
         i.tipo AS item_tipo,
         i.plano_id AS item_plano_id,
         i.modo_cobranca AS item_modo_cobranca,
@@ -169,6 +372,8 @@ async function loadHostingRequestById(req, solicitacaoId) {
         i.valor_total AS item_valor_total
       FROM ${qtable(solicitacoesTable)} s
       LEFT JOIN ${qtable(itensTable)} i ON i.solicitacao_id = s.id
+      LEFT JOIN Pets pet ON pet.id = i.pet_id
+      LEFT JOIN ${qtable(TABLE_NAMES.hospedagemPagamentos)} p ON p.solicitacao_id = s.id
       WHERE s.id = ?
       ORDER BY i.id ASC
     `,
@@ -196,6 +401,21 @@ async function loadHostingRequestById(req, solicitacaoId) {
         analisadoEm: row.solicitacao_analisado_em,
         criadoEm: row.solicitacao_criado_em,
         atualizadoEm: row.solicitacao_atualizado_em,
+        pagamento: row.pagamento_id
+          ? {
+              id: Number(row.pagamento_id),
+              valor: row.pagamento_valor,
+              pixCopiaCola: row.pagamento_pix_copia_cola || "",
+              qrCodeUrl: row.pagamento_qr_code_url || "",
+              comprovantePath: row.pagamento_comprovante_path || "",
+              comprovanteUrl: row.pagamento_comprovante_path
+                ? toPublicUploadPath(row.pagamento_comprovante_path)
+                : "",
+              comprovanteNome: row.pagamento_comprovante_nome || "",
+              status: row.pagamento_status || "",
+              enviadoEm: row.pagamento_enviado_em || null,
+            }
+          : null,
         itens: [],
       });
     }
@@ -257,7 +477,8 @@ function normalizeHostingStatus(value) {
   }
   if (["confirmado", "confirmada"].includes(normalized)) return "confirmado";
   if (["concluido", "concluida"].includes(normalized)) return "concluido";
-  if (["recusado", "recusada", "reprovado", "reprovada"].includes(normalized)) return "recusado";
+  if (["recusado", "recusada", "reprovado", "reprovada"].includes(normalized))
+    return "recusado";
   if (["cancelado", "cancelada"].includes(normalized)) return "cancelado";
   return "pendente";
 }
@@ -272,9 +493,36 @@ function getHostingStatusLabel(status) {
   return "Pendente";
 }
 
+function formatEmailDate(value) {
+  if (!value) return "data nao informada";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return clean(value) || "data nao informada";
+  return date.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+}
+
+async function sendHostingApprovalEmail(request) {
+  const result = await sendEmail({
+    to: request?.clienteEmail,
+    subject: "Pedido de hospedagem aprovado - Mel Pet Hostel",
+    text: `Ola ${request?.clienteNome || "Tutor"},
+O seu pedido de ${request?.tipo || "hospedagem"} para ${formatEmailDate(request?.dataEntrada)} até ${formatEmailDate(request?.dataSaida)} foi aprovado.
+Para confirmar a aprovacao, acesse o sistema da Mel Pet Hostel, efetue o processo de pagamento e nos envie o comprovante.
+Lembrando que a confirmação da estadia só será liberada após a comprovação dos pagamentos.
+Muito obrigado por escolher a Mel pet Hostel.`,
+  });
+
+  if (!result.sent) {
+    console.warn("Hosting approval email not sent:", result.reason);
+  }
+  return result;
+}
 function getAllowedHostingStatusTransition(status) {
   const normalized = normalizeHostingStatus(status);
-  if (normalized === "pendente" || normalized === "aguardando_pagamento") {
+  if (
+    normalized === "pendente" ||
+    normalized === "aprovado" ||
+    normalized === "aguardando_pagamento"
+  ) {
     return "cancelado";
   }
   return "";
@@ -283,7 +531,12 @@ function getAllowedHostingStatusTransition(status) {
 async function requireHostingAdmin(req, res) {
   const login = getReqLogin(req);
   if (!(await isAdminUser(req, login))) {
-    res.status(403).json({ status: "erro", mensagem: "Apenas administradores podem executar esta acao." });
+    res
+      .status(403)
+      .json({
+        status: "erro",
+        mensagem: "Apenas administradores podem executar esta acao.",
+      });
     return false;
   }
   return true;
@@ -298,6 +551,7 @@ function mapHostingRows(rows) {
         id: solicitacaoId,
         clienteId: row.solicitacao_cliente_id,
         clienteNome: row.cliente_nome,
+        clienteEmail: row.cliente_email || "",
         usuarioLogin: row.usuario_login,
         tipo: row.solicitacao_tipo,
         modoCobranca: row.solicitacao_modo_cobranca,
@@ -314,235 +568,43 @@ function mapHostingRows(rows) {
         analisadoEm: row.solicitacao_analisado_em,
         criadoEm: row.solicitacao_criado_em,
         atualizadoEm: row.solicitacao_atualizado_em,
+        pagamento: null,
+        pagamentos: [],
         itens: [],
       });
     }
-    if (row.item_id !== null && row.item_id !== undefined) {
-      solicitacoesById.get(solicitacaoId).itens.push({
-        id: Number(row.item_id),
-        petId: row.item_pet_id,
-        petNome: row.item_pet_nome,
-        tipo: row.item_tipo,
-        planoId: row.item_plano_id,
-        modoCobranca: row.item_modo_cobranca,
-        tempoQuantidade: row.item_tempo_quantidade,
-        tempoUnidade: row.item_tempo_unidade,
-        inicioMes: row.item_inicio_mes,
-        dataEntrada: row.item_data_entrada,
-        dataSaida: row.item_data_saida,
-        dias: row.item_dias,
-        valorDiaria: row.item_valor_diaria,
-        valorTotal: row.item_valor_total,
-      });
-    }
-  }
-  return Array.from(solicitacoesById.values());
-}
 
-async function listHostingRequests(req, { clienteId = null, status = "" } = {}) {
-  const db = dbFor(req);
-  const solicitacoesTable = await resolveTableName(req, TABLE_NAMES.hospedagemSolicitacoes);
-  const itensTable = await resolveTableName(req, TABLE_NAMES.hospedagemSolicitacaoItens);
-  if (!solicitacoesTable || !itensTable) return null;
-  const where = [];
-  const params = [];
-  if (clienteId) { where.push("s.cliente_id = ?"); params.push(clienteId); }
-  if (status) { where.push("LOWER(TRIM(s.status)) = LOWER(TRIM(?))"); params.push(status); }
-  const sql = `
-      SELECT
-        s.id AS solicitacao_id,
-        s.cliente_id AS solicitacao_cliente_id,
-        c.nome AS cliente_nome,
-        u.usuario_login AS usuario_login,
-        s.tipo AS solicitacao_tipo,
-        s.modo_cobranca AS solicitacao_modo_cobranca,
-        s.inicio_mes AS solicitacao_inicio_mes,
-        s.data_entrada AS solicitacao_data_entrada,
-        s.data_saida AS solicitacao_data_saida,
-        s.dias AS solicitacao_dias,
-        s.valor_total AS solicitacao_valor_total,
-        s.desconto_valor AS solicitacao_desconto_valor,
-        s.valor_final AS solicitacao_valor_final,
-        s.status AS solicitacao_status,
-        s.motivo_recusa AS solicitacao_motivo_recusa,
-        s.analisado_por AS solicitacao_analisado_por,
-        s.analisado_em AS solicitacao_analisado_em,
-        s.criado_em AS solicitacao_criado_em,
-        s.atualizado_em AS solicitacao_atualizado_em,
-        i.id AS item_id,
-        i.pet_id AS item_pet_id,
-        i.pet_nome AS item_pet_nome,
-        i.tipo AS item_tipo,
-        i.plano_id AS item_plano_id,
-        i.modo_cobranca AS item_modo_cobranca,
-        i.tempo_quantidade AS item_tempo_quantidade,
-        i.tempo_unidade AS item_tempo_unidade,
-        i.inicio_mes AS item_inicio_mes,
-        i.data_entrada AS item_data_entrada,
-        i.data_saida AS item_data_saida,
-        i.dias AS item_dias,
-        i.valor_diaria AS item_valor_diaria,
-        i.valor_total AS item_valor_total
-      FROM ${qtable(solicitacoesTable)} s
-      LEFT JOIN ${qtable(itensTable)} i ON i.solicitacao_id = s.id
-      LEFT JOIN Clientes c ON c.id = s.cliente_id
-      LEFT JOIN Usuarios u ON u.cliente_id = s.cliente_id
-      ${where.length ? "WHERE " + where.join(" AND ") : ""}
-      ORDER BY s.criado_em DESC, i.id ASC
-    `;
-  const [rows] = await db.query(sql, params);
-  return mapHostingRows(rows);
-}
-
-router.get("/hospedagens/solicitacoes/pendentes", async (req, res) => {
-  try {
-    if (!(await requireHostingAdmin(req, res))) return;
-    const solicitacoes = await listHostingRequests(req, { status: "pendente" });
-    if (!solicitacoes) return res.status(500).json({ status: "erro", mensagem: "Tabelas de hospedagem nao encontradas. Execute create_hospedagens_schema.sql." });
-    return res.json({ status: "sucesso", total: solicitacoes.length, solicitacoes });
-  } catch (error) {
-    console.error("Error in GET /melpethostel/hospedagens/solicitacoes/pendentes:", error);
-    return res.status(500).json({ status: "erro", mensagem: error.message });
-  }
-});
-
-router.patch("/hospedagens/solicitacoes/:id/aprovar", async (req, res) => {
-  try {
-    if (!(await requireHostingAdmin(req, res))) return;
-    const solicitacaoId = Number(req.params?.id);
-    if (!Number.isInteger(solicitacaoId) || solicitacaoId <= 0) return res.status(400).json({ status: "erro", mensagem: "Solicitacao invalida." });
-    const table = await resolveTableName(req, TABLE_NAMES.hospedagemSolicitacoes);
-    if (!table) return res.status(500).json({ status: "erro", mensagem: "Tabela de hospedagem nao encontrada." });
-    const [rows] = await dbFor(req).query(`SELECT id, status FROM ${qtable(table)} WHERE id = ? LIMIT 1`, [solicitacaoId]);
-    const solicitacao = rows && rows[0] ? rows[0] : null;
-    if (!solicitacao) return res.status(404).json({ status: "erro", mensagem: "Solicitacao nao encontrada." });
-    if (normalizeHostingStatus(solicitacao.status) !== "pendente") return res.status(409).json({ status: "erro", mensagem: "A solicitacao nao esta pendente." });
-    await dbFor(req).query(`UPDATE ${qtable(table)} SET status = ?, analisado_por = ?, analisado_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`, ["aprovado", getReqLogin(req), solicitacaoId]);
-    return res.json({ status: "sucesso", mensagem: "Hospedagem aprovada com sucesso.", solicitacao: { id: solicitacaoId, status: "aprovado" } });
-  } catch (error) {
-    console.error("Error in PATCH /melpethostel/hospedagens/solicitacoes/:id/aprovar:", error);
-    return res.status(500).json({ status: "erro", mensagem: error.message });
-  }
-});
-
-router.patch("/hospedagens/solicitacoes/:id/reprovar", async (req, res) => {
-  try {
-    if (!(await requireHostingAdmin(req, res))) return;
-    const solicitacaoId = Number(req.params?.id);
-    const motivoRecusa = clean(req.body?.motivoRecusa || req.body?.motivoReprovacao);
-    if (!Number.isInteger(solicitacaoId) || solicitacaoId <= 0) return res.status(400).json({ status: "erro", mensagem: "Solicitacao invalida." });
-    if (!motivoRecusa) return res.status(400).json({ status: "erro", mensagem: "Informe o motivo da reprovacao." });
-    const table = await resolveTableName(req, TABLE_NAMES.hospedagemSolicitacoes);
-    if (!table) return res.status(500).json({ status: "erro", mensagem: "Tabela de hospedagem nao encontrada." });
-    const [rows] = await dbFor(req).query(`SELECT id, status FROM ${qtable(table)} WHERE id = ? LIMIT 1`, [solicitacaoId]);
-    const solicitacao = rows && rows[0] ? rows[0] : null;
-    if (!solicitacao) return res.status(404).json({ status: "erro", mensagem: "Solicitacao nao encontrada." });
-    if (normalizeHostingStatus(solicitacao.status) !== "pendente") return res.status(409).json({ status: "erro", mensagem: "A solicitacao nao esta pendente." });
-    await dbFor(req).query(`UPDATE ${qtable(table)} SET status = ?, motivo_recusa = ?, analisado_por = ?, analisado_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`, ["recusado", motivoRecusa, getReqLogin(req), solicitacaoId]);
-    return res.json({ status: "sucesso", mensagem: "Hospedagem reprovada com sucesso.", solicitacao: { id: solicitacaoId, status: "recusado", motivoRecusa } });
-  } catch (error) {
-    console.error("Error in PATCH /melpethostel/hospedagens/solicitacoes/:id/reprovar:", error);
-    return res.status(500).json({ status: "erro", mensagem: error.message });
-  }
-});
-router.get("/hospedagens/solicitacoes", async (req, res) => {
-  const db = dbFor(req);
-
-  try {
-    const clienteId = await getCurrentClienteId(req);
-    if (!clienteId) {
-      return res.status(400).json({
-        status: "erro",
-        mensagem: "Cliente não identificado para consultar hospedagens.",
-      });
-    }
-
-    const solicitacoesTable = await resolveTableName(
-      req,
-      TABLE_NAMES.hospedagemSolicitacoes,
-    );
-    const itensTable = await resolveTableName(
-      req,
-      TABLE_NAMES.hospedagemSolicitacaoItens,
-    );
-
-    if (!solicitacoesTable || !itensTable) {
-      return res.status(500).json({
-        status: "erro",
-        mensagem:
-          "Tabelas de hospedagem não encontradas. Execute create_hospedagens_schema.sql.",
-      });
-    }
-
-    const [rows] = await db.query(
-      `
-        SELECT
-          s.id AS solicitacao_id,
-          s.tipo AS solicitacao_tipo,
-          s.modo_cobranca AS solicitacao_modo_cobranca,
-          s.inicio_mes AS solicitacao_inicio_mes,
-          s.data_entrada AS solicitacao_data_entrada,
-          s.data_saida AS solicitacao_data_saida,
-          s.dias AS solicitacao_dias,
-          s.valor_total AS solicitacao_valor_total,
-          s.desconto_valor AS solicitacao_desconto_valor,
-          s.valor_final AS solicitacao_valor_final,
-          s.status AS solicitacao_status,
-          s.motivo_recusa AS solicitacao_motivo_recusa,
-          s.analisado_por AS solicitacao_analisado_por,
-          s.analisado_em AS solicitacao_analisado_em,
-          s.criado_em AS solicitacao_criado_em,
-          s.atualizado_em AS solicitacao_atualizado_em,
-          i.id AS item_id,
-          i.pet_id AS item_pet_id,
-          i.pet_nome AS item_pet_nome,
-          i.tipo AS item_tipo,
-          i.plano_id AS item_plano_id,
-          i.modo_cobranca AS item_modo_cobranca,
-          i.tempo_quantidade AS item_tempo_quantidade,
-          i.tempo_unidade AS item_tempo_unidade,
-          i.inicio_mes AS item_inicio_mes,
-          i.data_entrada AS item_data_entrada,
-          i.data_saida AS item_data_saida,
-          i.dias AS item_dias,
-          i.valor_diaria AS item_valor_diaria,
-          i.valor_total AS item_valor_total
-        FROM ${qtable(solicitacoesTable)} s
-        LEFT JOIN ${qtable(itensTable)} i ON i.solicitacao_id = s.id
-        WHERE s.cliente_id = ?
-        ORDER BY s.criado_em DESC, i.id ASC
-      `,
-      [clienteId],
-    );
-
-    const solicitacoesById = new Map();
-    for (const row of rows || []) {
-      const solicitacaoId = Number(row.solicitacao_id);
-      if (!solicitacoesById.has(solicitacaoId)) {
-        solicitacoesById.set(solicitacaoId, {
-          id: solicitacaoId,
-          tipo: row.solicitacao_tipo,
-          modoCobranca: row.solicitacao_modo_cobranca,
-          inicioMes: row.solicitacao_inicio_mes,
-          dataEntrada: row.solicitacao_data_entrada,
-          dataSaida: row.solicitacao_data_saida,
-          dias: row.solicitacao_dias,
-          valorTotal: row.solicitacao_valor_total,
-          descontoValor: row.solicitacao_desconto_valor,
-          valorFinal: row.solicitacao_valor_final,
-          status: row.solicitacao_status,
-          motivoRecusa: row.solicitacao_motivo_recusa,
-          analisadoPor: row.solicitacao_analisado_por,
-          analisadoEm: row.solicitacao_analisado_em,
-          criadoEm: row.solicitacao_criado_em,
-          atualizadoEm: row.solicitacao_atualizado_em,
-          itens: [],
-        });
+    const solicitacao = solicitacoesById.get(solicitacaoId);
+    if (row.pagamento_id !== null && row.pagamento_id !== undefined) {
+      const pagamentoId = Number(row.pagamento_id);
+      if (!solicitacao.pagamentos.some((item) => item.id === pagamentoId)) {
+        const pagamento = {
+          id: pagamentoId,
+          parcelaTipo: row.pagamento_parcela_tipo || "total",
+          valor: row.pagamento_valor,
+          pixCopiaCola: row.pagamento_pix_copia_cola || "",
+          qrCodeUrl: row.pagamento_qr_code_url || "",
+          comprovantePath: row.pagamento_comprovante_path || "",
+          comprovanteUrl: row.pagamento_comprovante_path
+            ? toPublicUploadPath(row.pagamento_comprovante_path)
+            : "",
+          comprovanteNome: row.pagamento_comprovante_nome || "",
+          status: row.pagamento_status || "",
+          motivoRecusa: row.pagamento_motivo_recusa || "",
+          enviadoEm: row.pagamento_enviado_em || null,
+          conferidoPor: row.pagamento_conferido_por || "",
+          conferidoEm: row.pagamento_conferido_em || null,
+        };
+        solicitacao.pagamentos.push(pagamento);
+        if (!solicitacao.pagamento) solicitacao.pagamento = pagamento;
       }
+    }
 
-      if (row.item_id !== null && row.item_id !== undefined) {
-        solicitacoesById.get(solicitacaoId).itens.push({
-          id: Number(row.item_id),
+    if (row.item_id !== null && row.item_id !== undefined) {
+      const itemId = Number(row.item_id);
+      if (!solicitacao.itens.some((item) => item.id === itemId)) {
+        solicitacao.itens.push({
+          id: itemId,
           petId: row.item_pet_id,
           petNome: row.item_pet_nome,
           tipo: row.item_tipo,
@@ -559,23 +621,784 @@ router.get("/hospedagens/solicitacoes", async (req, res) => {
         });
       }
     }
+  }
+  return Array.from(solicitacoesById.values());
+}
+async function listHostingRequests(
+  req,
+  { clienteId = null, status = "" } = {},
+) {
+  const db = dbFor(req);
+  const solicitacoesTable = await resolveTableName(
+    req,
+    TABLE_NAMES.hospedagemSolicitacoes,
+  );
+  const itensTable = await resolveTableName(
+    req,
+    TABLE_NAMES.hospedagemSolicitacaoItens,
+  );
+  if (!solicitacoesTable || !itensTable) return null;
+  await ensureHostingPaymentsTable(req);
+  const where = [];
+  const params = [];
+  if (clienteId) {
+    where.push("s.cliente_id = ?");
+    params.push(clienteId);
+  }
+  if (status) {
+    where.push("LOWER(TRIM(s.status)) = LOWER(TRIM(?))");
+    params.push(status);
+  }
+  const sql = `
+      SELECT
+        s.id AS solicitacao_id,
+        s.cliente_id AS solicitacao_cliente_id,
+        c.nome AS cliente_nome,
+        c.email AS cliente_email,
+        u.usuario_login AS usuario_login,
+        s.tipo AS solicitacao_tipo,
+        s.modo_cobranca AS solicitacao_modo_cobranca,
+        s.inicio_mes AS solicitacao_inicio_mes,
+        s.data_entrada AS solicitacao_data_entrada,
+        s.data_saida AS solicitacao_data_saida,
+        s.dias AS solicitacao_dias,
+        s.valor_total AS solicitacao_valor_total,
+        s.desconto_valor AS solicitacao_desconto_valor,
+        s.valor_final AS solicitacao_valor_final,
+        s.status AS solicitacao_status,
+        s.motivo_recusa AS solicitacao_motivo_recusa,
+        s.analisado_por AS solicitacao_analisado_por,
+        s.analisado_em AS solicitacao_analisado_em,
+        s.criado_em AS solicitacao_criado_em,
+        s.atualizado_em AS solicitacao_atualizado_em,
+        p.id AS pagamento_id,
+        p.parcela_tipo AS pagamento_parcela_tipo,
+        p.valor AS pagamento_valor,
+        p.pix_copia_cola AS pagamento_pix_copia_cola,
+        p.qr_code_url AS pagamento_qr_code_url,
+        p.comprovante_path AS pagamento_comprovante_path,
+        p.comprovante_nome AS pagamento_comprovante_nome,
+        p.status AS pagamento_status,
+        p.motivo_recusa AS pagamento_motivo_recusa,
+        p.enviado_em AS pagamento_enviado_em,
+        p.conferido_por AS pagamento_conferido_por,
+        p.conferido_em AS pagamento_conferido_em,
+        i.id AS item_id,
+        i.pet_id AS item_pet_id,
+        COALESCE(i.pet_nome, pet.nome) AS item_pet_nome,
+        i.tipo AS item_tipo,
+        i.plano_id AS item_plano_id,
+        i.modo_cobranca AS item_modo_cobranca,
+        i.tempo_quantidade AS item_tempo_quantidade,
+        i.tempo_unidade AS item_tempo_unidade,
+        i.inicio_mes AS item_inicio_mes,
+        i.data_entrada AS item_data_entrada,
+        i.data_saida AS item_data_saida,
+        i.dias AS item_dias,
+        i.valor_diaria AS item_valor_diaria,
+        i.valor_total AS item_valor_total
+      FROM ${qtable(solicitacoesTable)} s
+      LEFT JOIN ${qtable(itensTable)} i ON i.solicitacao_id = s.id
+      LEFT JOIN Pets pet ON pet.id = i.pet_id
+      LEFT JOIN ${qtable(TABLE_NAMES.hospedagemPagamentos)} p ON p.solicitacao_id = s.id
+      LEFT JOIN Clientes c ON c.id = s.cliente_id
+      LEFT JOIN Usuarios u ON u.cliente_id = s.cliente_id
+      ${where.length ? "WHERE " + where.join(" AND ") : ""}
+      ORDER BY s.criado_em DESC, i.id ASC
+    `;
+  const [rows] = await db.query(sql, params);
+  return mapHostingRows(rows);
+}
 
+router.get("/hospedagens/pix-config", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const config = await getActivePixConfig(req);
     return res.json({
       status: "sucesso",
-      solicitacoes: Array.from(solicitacoesById.values()),
+      config: config
+        ? {
+            id: config.id,
+            chavePix: config.chavePix,
+            nomeRecebedor: config.nomeRecebedor,
+            cidadeRecebedor: config.cidadeRecebedor,
+            ativo: Boolean(config.ativo),
+          }
+        : null,
     });
+  } catch (error) {
+    console.error("Error in GET /melpethostel/hospedagens/pix-config:", error);
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.post("/hospedagens/pix-config", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const chavePix = clean(req.body?.chavePix || req.body?.chave_pix);
+    const nomeRecebedor = clean(
+      req.body?.nomeRecebedor || req.body?.nome_recebedor || "MEL PET HOSTEL",
+    );
+    const cidadeRecebedor = clean(
+      req.body?.cidadeRecebedor || req.body?.cidade_recebedor || "SAO PAULO",
+    );
+    if (!chavePix)
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Informe a chave PIX." });
+    await ensurePixConfigTable(req);
+    await dbFor(req).query(
+      "INSERT INTO " +
+        qtable(TABLE_NAMES.pixConfig) +
+        " (id, chave_pix, nome_recebedor, cidade_recebedor, ativo, atualizado_por) VALUES (1, ?, ?, ?, 1, ?) ON DUPLICATE KEY UPDATE chave_pix = VALUES(chave_pix), nome_recebedor = VALUES(nome_recebedor), cidade_recebedor = VALUES(cidade_recebedor), ativo = 1, atualizado_por = VALUES(atualizado_por), atualizado_em = CURRENT_TIMESTAMP",
+      [chavePix, nomeRecebedor, cidadeRecebedor, getReqLogin(req)],
+    );
+    const result = { insertId: 1 };
+    return res.json({
+      status: "sucesso",
+      mensagem: "Configuração PIX salva com sucesso.",
+      config: {
+        id: result.insertId,
+        chavePix,
+        nomeRecebedor,
+        cidadeRecebedor,
+        ativo: true,
+      },
+    });
+  } catch (error) {
+    console.error("Error in POST /melpethostel/hospedagens/pix-config:", error);
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+router.get("/hospedagens/solicitacoes/pendentes", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const solicitacoes = await listHostingRequests(req, { status: "pendente" });
+    if (!solicitacoes)
+      return res
+        .status(500)
+        .json({
+          status: "erro",
+          mensagem:
+            "Tabelas de hospedagem nao encontradas. Execute create_hospedagens_schema.sql.",
+        });
+    return res.json({
+      status: "sucesso",
+      total: solicitacoes.length,
+      solicitacoes,
+    });
+  } catch (error) {
+    console.error(
+      "Error in GET /melpethostel/hospedagens/solicitacoes/pendentes:",
+      error,
+    );
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.patch("/hospedagens/solicitacoes/:id/aprovar", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const solicitacaoId = Number(req.params?.id);
+    if (!Number.isInteger(solicitacaoId) || solicitacaoId <= 0)
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Solicitacao invalida." });
+    const table = await resolveTableName(
+      req,
+      TABLE_NAMES.hospedagemSolicitacoes,
+    );
+    if (!table)
+      return res
+        .status(500)
+        .json({
+          status: "erro",
+          mensagem: "Tabela de hospedagem nao encontrada.",
+        });
+    const [rows] = await dbFor(req).query(
+      `SELECT id, status FROM ${qtable(table)} WHERE id = ? LIMIT 1`,
+      [solicitacaoId],
+    );
+    const solicitacao = rows && rows[0] ? rows[0] : null;
+    if (!solicitacao)
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Solicitacao nao encontrada." });
+    if (normalizeHostingStatus(solicitacao.status) !== "pendente")
+      return res
+        .status(409)
+        .json({ status: "erro", mensagem: "A solicitacao nao esta pendente." });
+    await dbFor(req).query(
+      `UPDATE ${qtable(table)} SET status = ?, analisado_por = ?, analisado_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`,
+      ["aprovado", getReqLogin(req), solicitacaoId],
+    );
+    const solicitacoesAtualizadas = await listHostingRequests(req, {});
+    const solicitacaoAprovada = (solicitacoesAtualizadas || []).find(
+      (item) => Number(item.id) === solicitacaoId,
+    ) || { id: solicitacaoId, status: "aprovado" };
+    const emailStatus = await sendHostingApprovalEmail(
+      solicitacaoAprovada,
+    ).catch((emailError) => {
+      console.warn(
+        "Error sending hosting approval email:",
+        emailError?.message || emailError,
+      );
+      return {
+        sent: false,
+        reason: "erro_envio_email",
+        message: emailError?.message || String(emailError),
+      };
+    });
+    return res.json({
+      status: "sucesso",
+      mensagem: "Hospedagem aprovada com sucesso.",
+      solicitacao: solicitacaoAprovada,
+      email: emailStatus,
+    });
+  } catch (error) {
+    console.error(
+      "Error in PATCH /melpethostel/hospedagens/solicitacoes/:id/aprovar:",
+      error,
+    );
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.patch("/hospedagens/solicitacoes/:id/reprovar", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const solicitacaoId = Number(req.params?.id);
+    const motivoRecusa = clean(
+      req.body?.motivoRecusa || req.body?.motivoReprovacao,
+    );
+    if (!Number.isInteger(solicitacaoId) || solicitacaoId <= 0)
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Solicitacao invalida." });
+    if (!motivoRecusa)
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Informe o motivo da reprovacao." });
+    const table = await resolveTableName(
+      req,
+      TABLE_NAMES.hospedagemSolicitacoes,
+    );
+    if (!table)
+      return res
+        .status(500)
+        .json({
+          status: "erro",
+          mensagem: "Tabela de hospedagem nao encontrada.",
+        });
+    const [rows] = await dbFor(req).query(
+      `SELECT id, status FROM ${qtable(table)} WHERE id = ? LIMIT 1`,
+      [solicitacaoId],
+    );
+    const solicitacao = rows && rows[0] ? rows[0] : null;
+    if (!solicitacao)
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Solicitacao nao encontrada." });
+    if (normalizeHostingStatus(solicitacao.status) !== "pendente")
+      return res
+        .status(409)
+        .json({ status: "erro", mensagem: "A solicitacao nao esta pendente." });
+    await dbFor(req).query(
+      `UPDATE ${qtable(table)} SET status = ?, motivo_recusa = ?, analisado_por = ?, analisado_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`,
+      ["recusado", motivoRecusa, getReqLogin(req), solicitacaoId],
+    );
+    return res.json({
+      status: "sucesso",
+      mensagem: "Hospedagem reprovada com sucesso.",
+      solicitacao: { id: solicitacaoId, status: "recusado", motivoRecusa },
+    });
+  } catch (error) {
+    console.error(
+      "Error in PATCH /melpethostel/hospedagens/solicitacoes/:id/reprovar:",
+      error,
+    );
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+router.get("/hospedagens/solicitacoes", async (req, res) => {
+  try {
+    const clienteId = await getCurrentClienteId(req);
+    if (!clienteId) {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Cliente não identificado para consultar hospedagens.",
+      });
+    }
+
+    const solicitacoes = await listHostingRequests(req, { clienteId });
+    if (!solicitacoes) {
+      return res.status(500).json({
+        status: "erro",
+        mensagem:
+          "Tabelas de hospedagem não encontradas. Execute create_hospedagens_schema.sql.",
+      });
+    }
+
+    return res.json({ status: "sucesso", solicitacoes });
   } catch (error) {
     console.error(
       "Error in GET /melpethostel/hospedagens/solicitacoes:",
       error,
     );
-    return res.status(500).json({
-      status: "erro",
-      mensagem: error.message,
-    });
+    return res.status(500).json({ status: "erro", mensagem: error.message });
   }
 });
 
+router.post(
+  "/hospedagens/solicitacoes/:id/pagamento-opcao",
+  async (req, res) => {
+    try {
+      const clienteId = await getCurrentClienteId(req);
+      const solicitacaoId = Number(req.params?.id);
+      const opcao = clean(req.body?.opcao || req.body?.tipo).toLowerCase();
+      if (!clienteId)
+        return res
+          .status(400)
+          .json({ status: "erro", mensagem: "Cliente não identificado." });
+      if (!Number.isInteger(solicitacaoId) || solicitacaoId <= 0)
+        return res
+          .status(400)
+          .json({ status: "erro", mensagem: "Solicitação inválida." });
+      if (!["total", "dividido", "reserva_checkin"].includes(opcao))
+        return res
+          .status(400)
+          .json({ status: "erro", mensagem: "Opção de pagamento inválida." });
+      const table = await resolveTableName(
+        req,
+        TABLE_NAMES.hospedagemSolicitacoes,
+      );
+      if (!table)
+        return res
+          .status(500)
+          .json({
+            status: "erro",
+            mensagem: "Tabela de hospedagem não encontrada.",
+          });
+      const [rows] = await dbFor(req).query(
+        "SELECT id, cliente_id, valor_total, valor_final, status FROM " +
+          qtable(table) +
+          " WHERE id = ? AND cliente_id = ? LIMIT 1",
+        [solicitacaoId, clienteId],
+      );
+      const solicitacao = rows && rows[0] ? rows[0] : null;
+      if (!solicitacao)
+        return res
+          .status(404)
+          .json({ status: "erro", mensagem: "Solicitação não encontrada." });
+      if (normalizeHostingStatus(solicitacao.status) !== "aprovado")
+        return res
+          .status(409)
+          .json({
+            status: "erro",
+            mensagem:
+              "O pagamento só pode ser gerado para hospedagem aprovada.",
+          });
+      const pixConfig = await getActivePixConfig(req);
+      if (!pixConfig?.chavePix)
+        return res
+          .status(400)
+          .json({
+            status: "erro",
+            mensagem: "PIX ainda não configurado pelo administrador.",
+          });
+      await ensureHostingPaymentsTable(req);
+      const valorFinal = Number(
+        solicitacao.valor_final ?? solicitacao.valor_total ?? 0,
+      );
+      const parcelas =
+        opcao === "total"
+          ? [{ tipo: "total", valor: valorFinal }]
+          : [
+              {
+                tipo: "reserva",
+                valor: Math.round((valorFinal / 2) * 100) / 100,
+              },
+              {
+                tipo: "checkin",
+                valor:
+                  Math.round(
+                    (valorFinal - Math.round((valorFinal / 2) * 100) / 100) *
+                      100,
+                  ) / 100,
+              },
+            ];
+      await dbFor(req).query(
+        "DELETE FROM " +
+          qtable(TABLE_NAMES.hospedagemPagamentos) +
+          " WHERE solicitacao_id = ? AND cliente_id = ? AND (comprovante_path IS NULL OR comprovante_path = '')",
+        [solicitacaoId, clienteId],
+      );
+      for (const parcela of parcelas) {
+        const pixCopiaCola = buildPixPayload({
+          key: pixConfig.chavePix,
+          name: pixConfig.nomeRecebedor,
+          city: pixConfig.cidadeRecebedor,
+          amount: parcela.valor,
+          description: "HOSPED" + solicitacaoId + parcela.tipo.toUpperCase(),
+        });
+        await dbFor(req).query(
+          "INSERT INTO " +
+            qtable(TABLE_NAMES.hospedagemPagamentos) +
+            " (solicitacao_id, cliente_id, parcela_tipo, valor, pix_copia_cola, qr_code_url, status) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE valor = VALUES(valor), pix_copia_cola = VALUES(pix_copia_cola), qr_code_url = VALUES(qr_code_url), atualizado_em = CURRENT_TIMESTAMP",
+          [
+            solicitacaoId,
+            clienteId,
+            parcela.tipo,
+            parcela.valor,
+            pixCopiaCola,
+            buildPixQrCodeUrl(pixCopiaCola),
+            "aguardando_comprovante",
+          ],
+        );
+      }
+      const solicitacoes = await listHostingRequests(req, { clienteId });
+      return res.json({
+        status: "sucesso",
+        mensagem: "Pagamento gerado com sucesso.",
+        solicitacao:
+          (solicitacoes || []).find(
+            (item) => Number(item.id) === solicitacaoId,
+          ) || null,
+      });
+    } catch (error) {
+      console.error(
+        "Error in POST /melpethostel/hospedagens/solicitacoes/:id/pagamento-opcao:",
+        error,
+      );
+      return res.status(500).json({ status: "erro", mensagem: error.message });
+    }
+  },
+);
+
+router.get("/hospedagens/comprovantes/pendentes", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const solicitacoes = await listHostingRequests(req, {});
+    const pendentes = (solicitacoes || []).filter((solicitacao) =>
+      (solicitacao.pagamentos || []).some(
+        (pagamento) => pagamento.status === "comprovante_enviado",
+      ),
+    );
+    return res.json({
+      status: "sucesso",
+      total: pendentes.length,
+      solicitacoes: pendentes,
+    });
+  } catch (error) {
+    console.error(
+      "Error in GET /melpethostel/hospedagens/comprovantes/pendentes:",
+      error,
+    );
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.get("/hospedagens/pagamentos/:id/preview", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const pagamentoId = Number(req.params?.id);
+    if (!Number.isInteger(pagamentoId) || pagamentoId <= 0)
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Pagamento inválido." });
+    await ensureHostingPaymentsTable(req);
+    const [rows] = await dbFor(req).query(
+      "SELECT comprovante_path, comprovante_nome FROM " +
+        qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " WHERE id = ? LIMIT 1",
+      [pagamentoId],
+    );
+    const pagamento = rows && rows[0] ? rows[0] : null;
+    const storedPath = clean(pagamento?.comprovante_path);
+    if (!storedPath)
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Comprovante não encontrado." });
+    const diskPath = resolveUploadsFileToDisk(storedPath);
+    const buffer = await fs.readFile(diskPath);
+    const ext = path.extname(storedPath).toLowerCase();
+    const contentType =
+      ext === ".png"
+        ? "image/png"
+        : ext === ".jpg" || ext === ".jpeg"
+          ? "image/jpeg"
+          : "application/pdf";
+    return res.json({
+      status: "sucesso",
+      contentType,
+      fileName: pagamento.comprovante_nome || path.basename(storedPath),
+      base64: buffer.toString("base64"),
+    });
+  } catch (error) {
+    console.error(
+      "Error in GET /melpethostel/hospedagens/pagamentos/:id/preview:",
+      error,
+    );
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.patch("/hospedagens/pagamentos/:id/aprovar", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const pagamentoId = Number(req.params?.id);
+    if (!Number.isInteger(pagamentoId) || pagamentoId <= 0)
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Pagamento inválido." });
+    await ensureHostingPaymentsTable(req);
+    const [rows] = await dbFor(req).query(
+      "SELECT id, solicitacao_id, status FROM " +
+        qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " WHERE id = ? LIMIT 1",
+      [pagamentoId],
+    );
+    const pagamento = rows && rows[0] ? rows[0] : null;
+    if (!pagamento)
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Pagamento não encontrado." });
+    if (pagamento.status !== "comprovante_enviado")
+      return res
+        .status(409)
+        .json({
+          status: "erro",
+          mensagem: "Este comprovante não está pendente de conferência.",
+        });
+    await dbFor(req).query(
+      "UPDATE " +
+        qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " SET status = 'confirmado', conferido_por = ?, conferido_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?",
+      [getReqLogin(req), pagamentoId],
+    );
+    const [pendingRows] = await dbFor(req).query(
+      "SELECT COUNT(*) AS total FROM " +
+        qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " WHERE solicitacao_id = ? AND status <> 'confirmado'",
+      [pagamento.solicitacao_id],
+    );
+    if (Number(pendingRows?.[0]?.total || 0) === 0) {
+      const table = await resolveTableName(
+        req,
+        TABLE_NAMES.hospedagemSolicitacoes,
+      );
+      if (table)
+        await dbFor(req).query(
+          "UPDATE " +
+            qtable(table) +
+            " SET status = 'confirmado', atualizado_em = CURRENT_TIMESTAMP WHERE id = ?",
+          [pagamento.solicitacao_id],
+        );
+    }
+    return res.json({
+      status: "sucesso",
+      mensagem: "Comprovante aprovado com sucesso.",
+    });
+  } catch (error) {
+    console.error(
+      "Error in PATCH /melpethostel/hospedagens/pagamentos/:id/aprovar:",
+      error,
+    );
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.patch("/hospedagens/pagamentos/:id/reprovar", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const pagamentoId = Number(req.params?.id);
+    const motivoRecusa = clean(
+      req.body?.motivoRecusa || req.body?.motivoReprovacao,
+    );
+    if (!Number.isInteger(pagamentoId) || pagamentoId <= 0)
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Pagamento inválido." });
+    if (!motivoRecusa)
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Informe o motivo da recusa." });
+    await ensureHostingPaymentsTable(req);
+    const [rows] = await dbFor(req).query(
+      "SELECT id, status, comprovante_path FROM " +
+        qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " WHERE id = ? LIMIT 1",
+      [pagamentoId],
+    );
+    const pagamento = rows && rows[0] ? rows[0] : null;
+    if (!pagamento)
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Pagamento não encontrado." });
+    if (pagamento.status !== "comprovante_enviado")
+      return res
+        .status(409)
+        .json({
+          status: "erro",
+          mensagem: "Este comprovante não está pendente de conferência.",
+        });
+    const comprovantePath = clean(pagamento.comprovante_path);
+    if (comprovantePath) {
+      try {
+        await fs.unlink(resolveUploadsFileToDisk(comprovantePath));
+      } catch (fileError) {
+        if (fileError?.code !== "ENOENT") throw fileError;
+      }
+    }
+    await dbFor(req).query(
+      "UPDATE " +
+        qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " SET status = 'reprovado', motivo_recusa = ?, comprovante_path = NULL, comprovante_nome = NULL, conferido_por = ?, conferido_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?",
+      [motivoRecusa, getReqLogin(req), pagamentoId],
+    );
+    return res.json({
+      status: "sucesso",
+      mensagem: "Comprovante recusado com sucesso.",
+    });
+  } catch (error) {
+    console.error(
+      "Error in PATCH /melpethostel/hospedagens/pagamentos/:id/reprovar:",
+      error,
+    );
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.post(
+  "/hospedagens/solicitacoes/:id/comprovante",
+  uploadContrato.single("arquivo"),
+  async (req, res) => {
+    try {
+      const clienteId = await getCurrentClienteId(req);
+      const login = getReqLogin(req);
+      const solicitacaoId = Number(req.params?.id);
+      const parcelaTipo = clean(
+        req.body?.parcelaTipo || req.body?.parcela_tipo || "total",
+      ).toLowerCase();
+      if (!clienteId || !login)
+        return res
+          .status(400)
+          .json({ status: "erro", mensagem: "Cliente não identificado." });
+      if (!Number.isInteger(solicitacaoId) || solicitacaoId <= 0)
+        return res
+          .status(400)
+          .json({ status: "erro", mensagem: "Solicitação inválida." });
+      if (!req.file || !req.file.buffer)
+        return res
+          .status(400)
+          .json({ status: "erro", mensagem: "Arquivo é obrigatório." });
+      const originalName = String(req.file.originalname || "").toLowerCase();
+      const mime = String(req.file.mimetype || "").toLowerCase();
+      const allowed =
+        originalName.endsWith(".pdf") ||
+        originalName.endsWith(".jpg") ||
+        originalName.endsWith(".jpeg") ||
+        originalName.endsWith(".png") ||
+        mime === "application/pdf" ||
+        mime.startsWith("image/");
+      if (!allowed)
+        return res
+          .status(400)
+          .json({ status: "erro", mensagem: "Envie PDF, JPG ou PNG." });
+      const table = await resolveTableName(
+        req,
+        TABLE_NAMES.hospedagemSolicitacoes,
+      );
+      if (!table)
+        return res
+          .status(500)
+          .json({
+            status: "erro",
+            mensagem: "Tabela de hospedagem não encontrada.",
+          });
+      const [rows] = await dbFor(req).query(
+        "SELECT id, cliente_id, status FROM " +
+          qtable(table) +
+          " WHERE id = ? AND cliente_id = ? LIMIT 1",
+        [solicitacaoId, clienteId],
+      );
+      const solicitacao = rows && rows[0] ? rows[0] : null;
+      if (!solicitacao)
+        return res
+          .status(404)
+          .json({ status: "erro", mensagem: "Solicitação não encontrada." });
+      if (normalizeHostingStatus(solicitacao.status) !== "aprovado")
+        return res
+          .status(409)
+          .json({
+            status: "erro",
+            mensagem: "Comprovante disponível apenas para hospedagem aprovada.",
+          });
+      await ensureHostingPaymentsTable(req);
+      const user = await getUsuarioByLogin(req, login);
+      if (!user?.Usuario_ID)
+        return res
+          .status(400)
+          .json({ status: "erro", mensagem: "Usuário inválido." });
+      const storage = await ensureUserDocumentStorage(req, login);
+      if (!storage?.relativeDir)
+        return res
+          .status(400)
+          .json({
+            status: "erro",
+            mensagem: "Usuário sem grupo configurado para salvar comprovante.",
+          });
+      const comprovantesRelativeDir =
+        storage.relativeDir.replace(/\/$/, "") + "/comprovantes";
+      const diskDir = resolveUploadsDirToDisk(comprovantesRelativeDir);
+      await fs.mkdir(diskDir, { recursive: true });
+      const ext = path.extname(req.file.originalname || "") || ".pdf";
+      const nomeArquivo =
+        "Comprovante-Hospedagem-" +
+        solicitacaoId +
+        "-" +
+        new Date()
+          .toISOString()
+          .replace(/[-:T.Z]/g, "")
+          .slice(0, 14) +
+        ext.toLowerCase();
+      const filePath = (comprovantesRelativeDir + "/" + nomeArquivo).replace(
+        /\\/g,
+        "/",
+      );
+      await fs.writeFile(path.join(diskDir, nomeArquivo), req.file.buffer);
+      await dbFor(req).query(
+        "UPDATE " +
+          qtable(TABLE_NAMES.hospedagemPagamentos) +
+          " SET comprovante_path = ?, comprovante_nome = ?, status = ?, motivo_recusa = NULL, enviado_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE solicitacao_id = ? AND cliente_id = ? AND parcela_tipo = ?",
+        [
+          filePath,
+          nomeArquivo,
+          "comprovante_enviado",
+          solicitacaoId,
+          clienteId,
+          parcelaTipo,
+        ],
+      );
+      return res.json({
+        status: "sucesso",
+        mensagem: "Comprovante enviado com sucesso.",
+        pagamento: {
+          comprovantePath: filePath,
+          comprovanteUrl: toPublicUploadPath(filePath),
+          comprovanteNome: nomeArquivo,
+          status: "comprovante_enviado",
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Error in POST /melpethostel/hospedagens/solicitacoes/:id/comprovante:",
+        error,
+      );
+      return res.status(500).json({ status: "erro", mensagem: error.message });
+    }
+  },
+);
 router.patch("/hospedagens/solicitacoes/:id/cancelar", async (req, res) => {
   const db = dbFor(req);
 

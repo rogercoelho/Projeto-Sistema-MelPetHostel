@@ -1611,6 +1611,19 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24);
 }
 
+
+.melpet-hosting-history-status.has-payment-pending {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.melpet-hosting-payment-pending-label {
+  color: #b45309;
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
 .melpet-hosting-history-status.is-confirmed {
   background: #dcfce7;
   color: #166534;
@@ -3537,4 +3550,123 @@
 
 .melpet-admin-pet-emergency-section > header span {
   color: #92400e;
+}
+
+
+.melpet-admin-standard-card,
+.melpet-hosting-payment-card {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid rgba(126, 91, 62, 0.22);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 242, 235, 0.94));
+  box-shadow: 0 18px 44px rgba(62, 46, 33, 0.1);
+}
+
+.melpet-hosting-payment-card h4 {
+  margin: 4px 0 0;
+  color: #70482f;
+  font-size: 1.45rem;
+}
+
+.melpet-hosting-payment-grid {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) 1fr;
+  gap: 18px;
+  align-items: stretch;
+}
+
+.melpet-hosting-payment-qr {
+  width: 100%;
+  max-width: 220px;
+  aspect-ratio: 1;
+  padding: 10px;
+  border: 1px solid rgba(82, 132, 160, 0.24);
+  border-radius: 16px;
+  background: #fff;
+  object-fit: contain;
+}
+
+.melpet-hosting-payment-card textarea {
+  min-height: 120px;
+  resize: vertical;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 720px) {
+  .melpet-hosting-payment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .melpet-hosting-payment-qr {
+    justify-self: center;
+  }
+}
+
+
+.melpet-hosting-payment-installment {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(82, 132, 160, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+
+.melpet-hosting-payment-installment.is-rejected {
+  border-color: #fca5a5;
+  background: #fff7f7;
+}
+
+.melpet-hosting-payment-installment.is-done {
+  border-color: rgba(22, 101, 52, 0.24);
+  background: rgba(240, 253, 244, 0.82);
+}
+
+.melpet-hosting-payment-installment.is-pending {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(255, 251, 235, 0.82);
+}
+.melpet-hosting-payment-installment + .melpet-hosting-payment-installment {
+  margin-top: 4px;
+}
+
+.melpet-hosting-history-note.is-success {
+  border-color: rgba(22, 101, 52, 0.22);
+  background: rgba(220, 252, 231, 0.72);
+  color: #166534;
+}
+
+
+.melpet-hosting-pix-copy-field {
+  display: grid;
+  gap: 8px;
+}
+
+.melpet-hosting-pix-copy-field .btn {
+  justify-self: end;
+  min-width: 120px;
+}
+
+@media (max-width: 720px) {
+  .melpet-hosting-pix-copy-field .btn {
+    justify-self: stretch;
+    width: 100%;
+  }
+}
+
+
+.melpet-hosting-payment-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+@media (max-width: 720px) {
+  .melpet-hosting-payment-search {
+    grid-template-columns: 1fr;
+  }
 }
