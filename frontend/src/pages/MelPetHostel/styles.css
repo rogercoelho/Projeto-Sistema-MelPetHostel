@@ -3706,6 +3706,43 @@
 
 
 
+
+.melpet-hosting-card-payment-info {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(82, 132, 160, 0.24);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(238, 246, 249, 0.86), rgba(255, 255, 255, 0.9));
+  color: #28556b;
+}
+
+.melpet-hosting-card-payment-info p {
+  margin: 0;
+  color: #28556b;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.melpet-hosting-card-payment-info a,
+.melpet-hosting-card-payment-info > span {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff;
+  color: #70482f;
+  font-size: 0.84rem;
+  font-weight: 900;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.melpet-card-link-field {
+  width: 100%;
+  min-width: min(100%, 260px);
+}
 .melpet-hosting-receipt-upload {
   display: grid;
   gap: 12px;
@@ -3831,6 +3868,7 @@
   background: rgba(255, 251, 235, 0.82);
 }
 .melpet-hosting-payment-installment + 
+
 .melpet-hosting-receipt-upload {
   display: grid;
   gap: 12px;

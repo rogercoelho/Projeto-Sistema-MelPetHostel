@@ -159,6 +159,8 @@ async function ensureHostingPaymentsTable(req) {
       "valor DECIMAL(10,2) NOT NULL DEFAULT 0.00," +
       "pix_copia_cola TEXT NULL," +
       "qr_code_url TEXT NULL," +
+      "link_pagamento TEXT NULL," +
+      "link_pagamento_enviado_em DATETIME NULL DEFAULT NULL," +
       "comprovante_path VARCHAR(500) NULL DEFAULT NULL," +
       "comprovante_nome VARCHAR(255) NULL DEFAULT NULL," +
       "status VARCHAR(30) NOT NULL DEFAULT 'aguardando_comprovante'," +
@@ -206,6 +208,19 @@ async function ensureHostingPaymentsTable(req) {
         qtable(TABLE_NAMES.hospedagemPagamentos) +
         " DROP INDEX uk_hosp_pag_solicitacao",
     );
+  }
+  const paymentExtraColumns = [
+    { name: "link_pagamento", sql: "ADD COLUMN link_pagamento TEXT NULL AFTER qr_code_url" },
+    { name: "link_pagamento_enviado_em", sql: "ADD COLUMN link_pagamento_enviado_em DATETIME NULL DEFAULT NULL AFTER link_pagamento" },
+  ];
+  for (const column of paymentExtraColumns) {
+    const [existing] = await db.query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+      [TABLE_NAMES.hospedagemPagamentos, column.name],
+    );
+    if (!existing?.length) {
+      await db.query("ALTER TABLE " + qtable(TABLE_NAMES.hospedagemPagamentos) + " " + column.sql);
+    }
   }
   const [motivoColumns] = await db.query(
     "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'motivo_recusa'",
@@ -375,6 +390,8 @@ async function loadHostingRequestById(req, solicitacaoId) {
         p.valor AS pagamento_valor,
         p.pix_copia_cola AS pagamento_pix_copia_cola,
         p.qr_code_url AS pagamento_qr_code_url,
+        p.link_pagamento AS pagamento_link_pagamento,
+        p.link_pagamento_enviado_em AS pagamento_link_pagamento_enviado_em,
         p.comprovante_path AS pagamento_comprovante_path,
         p.comprovante_nome AS pagamento_comprovante_nome,
         p.status AS pagamento_status,
@@ -385,6 +402,7 @@ async function loadHostingRequestById(req, solicitacaoId) {
         i.id AS item_id,
         i.pet_id AS item_pet_id,
         COALESCE(i.pet_nome, pet.nome) AS item_pet_nome,
+        ficha.sexo AS item_pet_sexo,
         i.tipo AS item_tipo,
         i.plano_id AS item_plano_id,
         i.modo_cobranca AS item_modo_cobranca,
@@ -399,6 +417,7 @@ async function loadHostingRequestById(req, solicitacaoId) {
       FROM ${qtable(solicitacoesTable)} s
       LEFT JOIN ${qtable(itensTable)} i ON i.solicitacao_id = s.id
       LEFT JOIN Pets pet ON pet.id = i.pet_id
+      LEFT JOIN Pet_Fichas ficha ON ficha.pet_id = i.pet_id
       LEFT JOIN ${qtable(TABLE_NAMES.hospedagemPagamentos)} p ON p.solicitacao_id = s.id
       LEFT JOIN Clientes c ON c.id = s.cliente_id
       LEFT JOIN Usuarios u ON u.cliente_id = s.cliente_id
@@ -439,6 +458,8 @@ async function loadHostingRequestById(req, solicitacaoId) {
               valor: row.pagamento_valor,
               pixCopiaCola: row.pagamento_pix_copia_cola || "",
               qrCodeUrl: row.pagamento_qr_code_url || "",
+              linkPagamento: row.pagamento_link_pagamento || "",
+              linkPagamentoEnviadoEm: row.pagamento_link_pagamento_enviado_em || null,
               comprovantePath: row.pagamento_comprovante_path || "",
               comprovanteUrl: row.pagamento_comprovante_path
                 ? toPublicUploadPath(row.pagamento_comprovante_path)
@@ -460,6 +481,7 @@ async function loadHostingRequestById(req, solicitacaoId) {
         id: itemId,
         petId: row.item_pet_id,
         petNome: row.item_pet_nome,
+          sexo: row.item_pet_sexo || "",
         tipo: row.item_tipo,
         planoId: row.item_plano_id,
         modoCobranca: row.item_modo_cobranca,
@@ -513,6 +535,50 @@ async function notifyHostingReceiptAdmins(req, { login, request, parcelaTipo, va
     message: buildHostingReceiptTelegramMessage({ login, request, parcelaTipo, valor }),
     disabledReason: "notificacao_desativada",
   });
+}
+
+function buildHostingPaymentLinkTelegramMessage({ login, request }) {
+  return buildHostingTelegramMessage({
+    header: "=== ENVIAR LINK DE PAGAMENTO ===",
+    login,
+    tipo: request?.tipo,
+    items: request?.itens || [],
+    totalFormatado: formatTelegramMoney(request?.valorFinal ?? request?.valorTotal),
+  }) + "\nGere o link de pagamento e inclua no sistema da Mel Pet Hostel.";
+}
+
+async function notifyHostingPaymentLinkAdmins(req, { login, request }) {
+  return sendTelegramToConfiguredAdmins({
+    db: dbFor(req),
+    module: MODULE,
+    message: buildHostingPaymentLinkTelegramMessage({ login, request }),
+    disabledReason: "notificacao_desativada",
+  });
+}
+
+function getPetGenderArticle(request) {
+  const pet = (request?.itens || [])[0] || {};
+  const text = clean(pet.sexo || pet.genero || pet.gender).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return text.startsWith("f") ? "da pequena" : "do pequeno";
+}
+
+async function sendHostingPaymentLinkEmail(request, linkPagamento) {
+  const petNome = clean((request?.itens || [])[0]?.petNome) || "pet";
+  const result = await sendEmail({
+    to: request?.clienteEmail,
+    subject: "Link de Pagamento - Mel Pet Hostel",
+    text: `Ola ${request?.clienteNome || "Tutor"},
+A estadia ${getPetGenderArticle(request)} ${petNome} foi selecionado o modo de pagamento via cartao de credito.
+Geramos o Link de Pagamnto abaixo:
+${linkPagamento}
+
+Lembrando que os juros e taxas administrativas são do cartão de credito do cliente.
+
+Caso queira, você também pode acessar o sistema da Mel Pet Hostel para confirmar o link de pagamento ou mudar a opção de pagamento.
+Obrigado por escolher os serviço da Mel Pet Hostel.`,
+  });
+  if (!result.sent) console.warn("Hosting payment link email not sent:", result.reason);
+  return result;
 }
 async function notifyAdmins(req, pedido) {
   const db = dbFor(req);
@@ -655,6 +721,8 @@ function mapHostingRows(rows) {
           valor: row.pagamento_valor,
           pixCopiaCola: row.pagamento_pix_copia_cola || "",
           qrCodeUrl: row.pagamento_qr_code_url || "",
+              linkPagamento: row.pagamento_link_pagamento || "",
+              linkPagamentoEnviadoEm: row.pagamento_link_pagamento_enviado_em || null,
           comprovantePath: row.pagamento_comprovante_path || "",
           comprovanteUrl: row.pagamento_comprovante_path
             ? toPublicUploadPath(row.pagamento_comprovante_path)
@@ -678,6 +746,7 @@ function mapHostingRows(rows) {
           id: itemId,
           petId: row.item_pet_id,
           petNome: row.item_pet_nome,
+          sexo: row.item_pet_sexo || "",
           tipo: row.item_tipo,
           planoId: row.item_plano_id,
           modoCobranca: row.item_modo_cobranca,
@@ -748,6 +817,8 @@ async function listHostingRequests(
         p.valor AS pagamento_valor,
         p.pix_copia_cola AS pagamento_pix_copia_cola,
         p.qr_code_url AS pagamento_qr_code_url,
+        p.link_pagamento AS pagamento_link_pagamento,
+        p.link_pagamento_enviado_em AS pagamento_link_pagamento_enviado_em,
         p.comprovante_path AS pagamento_comprovante_path,
         p.comprovante_nome AS pagamento_comprovante_nome,
         p.status AS pagamento_status,
@@ -758,6 +829,7 @@ async function listHostingRequests(
         i.id AS item_id,
         i.pet_id AS item_pet_id,
         COALESCE(i.pet_nome, pet.nome) AS item_pet_nome,
+        ficha.sexo AS item_pet_sexo,
         i.tipo AS item_tipo,
         i.plano_id AS item_plano_id,
         i.modo_cobranca AS item_modo_cobranca,
@@ -772,6 +844,7 @@ async function listHostingRequests(
       FROM ${qtable(solicitacoesTable)} s
       LEFT JOIN ${qtable(itensTable)} i ON i.solicitacao_id = s.id
       LEFT JOIN Pets pet ON pet.id = i.pet_id
+      LEFT JOIN Pet_Fichas ficha ON ficha.pet_id = i.pet_id
       LEFT JOIN ${qtable(TABLE_NAMES.hospedagemPagamentos)} p ON p.solicitacao_id = s.id
       LEFT JOIN Clientes c ON c.id = s.cliente_id
       LEFT JOIN Usuarios u ON u.cliente_id = s.cliente_id
@@ -1036,7 +1109,7 @@ router.post(
         return res
           .status(400)
           .json({ status: "erro", mensagem: "Solicitação inválida." });
-      if (!["total", "dividido", "reserva_checkin"].includes(opcao))
+      if (!["total", "dividido", "reserva_checkin", "cartao_credito"].includes(opcao))
         return res
           .status(400)
           .json({ status: "erro", mensagem: "Opção de pagamento inválida." });
@@ -1070,8 +1143,9 @@ router.post(
             mensagem:
               "O pagamento só pode ser gerado para hospedagem aprovada.",
           });
-      const pixConfig = await getActivePixConfig(req);
-      if (!pixConfig?.chavePix)
+      const isCardPayment = opcao === "cartao_credito";
+      const pixConfig = isCardPayment ? null : await getActivePixConfig(req);
+      if (!isCardPayment && !pixConfig?.chavePix)
         return res
           .status(400)
           .json({
@@ -1083,9 +1157,11 @@ router.post(
         solicitacao.valor_final ?? solicitacao.valor_total ?? 0,
       );
       const parcelas =
-        opcao === "total"
-          ? [{ tipo: "total", valor: valorFinal }]
-          : [
+        opcao === "cartao_credito"
+          ? [{ tipo: "cartao_credito", valor: valorFinal }]
+          : opcao === "total"
+            ? [{ tipo: "total", valor: valorFinal }]
+            : [
               {
                 tipo: "reserva",
                 valor: Math.round((valorFinal / 2) * 100) / 100,
@@ -1106,13 +1182,15 @@ router.post(
         [solicitacaoId, clienteId],
       );
       for (const parcela of parcelas) {
-        const pixCopiaCola = buildPixPayload({
-          key: pixConfig.chavePix,
-          name: pixConfig.nomeRecebedor,
-          city: pixConfig.cidadeRecebedor,
-          amount: parcela.valor,
-          description: "HOSPED" + solicitacaoId + parcela.tipo.toUpperCase(),
-        });
+        const pixCopiaCola = isCardPayment
+          ? ""
+          : buildPixPayload({
+              key: pixConfig.chavePix,
+              name: pixConfig.nomeRecebedor,
+              city: pixConfig.cidadeRecebedor,
+              amount: parcela.valor,
+              description: "HOSPED" + solicitacaoId + parcela.tipo.toUpperCase(),
+            });
         await dbFor(req).query(
           "INSERT INTO " +
             qtable(TABLE_NAMES.hospedagemPagamentos) +
@@ -1123,10 +1201,19 @@ router.post(
             parcela.tipo,
             parcela.valor,
             pixCopiaCola,
-            buildPixQrCodeUrl(pixCopiaCola),
-            "aguardando_comprovante",
+            isCardPayment ? "" : buildPixQrCodeUrl(pixCopiaCola),
+            isCardPayment ? "aguardando_link" : "aguardando_comprovante",
           ],
         );
+      }
+      const requestForNotice = await loadHostingRequestById(req, solicitacaoId);
+      if (isCardPayment && requestForNotice) {
+        await notifyHostingPaymentLinkAdmins(req, {
+          login: requestForNotice.usuarioLogin || getReqLogin(req),
+          request: requestForNotice,
+        }).catch((telegramError) => {
+          console.error("Erro notificando link de pagamento no Telegram:", telegramError);
+        });
       }
       const solicitacoes = await listHostingRequests(req, { clienteId });
       return res.json({
@@ -1146,6 +1233,58 @@ router.post(
     }
   },
 );
+
+router.get("/hospedagens/pagamentos/cartao/pendentes", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const solicitacoes = await listHostingRequests(req, { status: "aprovado" });
+    const pendentes = (solicitacoes || []).filter((solicitacao) =>
+      (solicitacao.pagamentos || []).some((payment) =>
+        payment.parcelaTipo === "cartao_credito" &&
+        !clean(payment.linkPagamento) &&
+        !["confirmado", "comprovante_enviado"].includes(clean(payment.status).toLowerCase()),
+      ),
+    );
+    return res.json({ status: "sucesso", total: pendentes.length, solicitacoes: pendentes });
+  } catch (error) {
+    console.error("Error in GET /melpethostel/hospedagens/pagamentos/cartao/pendentes:", error);
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.patch("/hospedagens/pagamentos/:id/link-pagamento", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const pagamentoId = Number(req.params?.id);
+    const linkPagamento = clean(req.body?.linkPagamento || req.body?.link_pagamento);
+    if (!Number.isInteger(pagamentoId) || pagamentoId <= 0)
+      return res.status(400).json({ status: "erro", mensagem: "Pagamento inválido." });
+    if (!/^https?:\/\//i.test(linkPagamento))
+      return res.status(400).json({ status: "erro", mensagem: "Informe um link de pagamento válido." });
+    await ensureHostingPaymentsTable(req);
+    const [rows] = await dbFor(req).query(
+      "SELECT id, solicitacao_id, parcela_tipo FROM " + qtable(TABLE_NAMES.hospedagemPagamentos) + " WHERE id = ? LIMIT 1",
+      [pagamentoId],
+    );
+    const pagamento = rows?.[0];
+    if (!pagamento || pagamento.parcela_tipo !== "cartao_credito")
+      return res.status(404).json({ status: "erro", mensagem: "Pagamento por cartão não encontrado." });
+    await dbFor(req).query(
+      "UPDATE " + qtable(TABLE_NAMES.hospedagemPagamentos) + " SET link_pagamento = ?, link_pagamento_enviado_em = CURRENT_TIMESTAMP, status = 'aguardando_pagamento', atualizado_em = CURRENT_TIMESTAMP WHERE id = ?",
+      [linkPagamento, pagamentoId],
+    );
+    const request = await loadHostingRequestById(req, pagamento.solicitacao_id);
+    const email = await sendHostingPaymentLinkEmail(request, linkPagamento).catch((emailError) => ({
+      sent: false,
+      reason: "erro_envio_email",
+      message: emailError?.message || String(emailError),
+    }));
+    return res.json({ status: "sucesso", mensagem: "Link de pagamento enviado com sucesso.", solicitacao: request, email });
+  } catch (error) {
+    console.error("Error in PATCH /melpethostel/hospedagens/pagamentos/:id/link-pagamento:", error);
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
 
 router.get("/hospedagens/comprovantes/pendentes", async (req, res) => {
   try {
