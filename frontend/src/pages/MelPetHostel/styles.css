@@ -3647,6 +3647,20 @@
   color: #28556b;
 }
 
+
+.melpet-hosting-payment-change {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(82, 132, 160, 0.2);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.melpet-hosting-payment-options.is-compact .melpet-hosting-payment-option.btn {
+  min-height: 78px;
+  padding: 12px;
+}
 @media (max-width: 760px) {
   .melpet-hosting-payment-options {
     grid-template-columns: 1fr;

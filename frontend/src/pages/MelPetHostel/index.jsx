@@ -1448,6 +1448,17 @@ export default function MelPetHostel({
     );
   }
 
+  function canChangeHostingPaymentOption(request) {
+    if (getHostingRequestStatusTone(request?.status) !== "approved") return false;
+    const payments = getHostingPayments(request);
+    if (!payments.length) return false;
+    return payments.every((payment) => {
+      const status = String(payment?.status || "").toLowerCase();
+      const hasReceipt = Boolean(payment?.comprovantePath || payment?.comprovanteNome);
+      return !hasReceipt && !["confirmado", "comprovante_enviado"].includes(status);
+    });
+  }
+
   function formatHostingCheckInOut(request) {
     if (request?.dataEntrada || request?.dataSaida) {
       return `Check-in: ${formatBrazilDate(request.dataEntrada)} · Check-out: ${formatBrazilDate(request.dataSaida)}`;
@@ -4466,6 +4477,65 @@ export default function MelPetHostel({
                               {paymentMessage ? (
                                 <div className="melpet-hosting-history-highlight">
                                   {paymentMessage}
+                                </div>
+                              ) : null}
+                              {canChangeHostingPaymentOption(request) ? (
+                                <div className="melpet-hosting-payment-change">
+                                  <span className="melpet-hosting-history-kicker">
+                                    Mudar tipo de pagamento
+                                  </span>
+                                  <div className="melpet-hosting-payment-options is-compact">
+                                    <Button
+                                      type="button"
+                                      className="melpet-hosting-payment-option is-total"
+                                      disabled={
+                                        generatingHostingPaymentId === request.id
+                                      }
+                                      onClick={() =>
+                                        generateHostingPaymentOption(
+                                          request,
+                                          "total",
+                                        )
+                                      }
+                                    >
+                                      <strong>Pagamento total</strong>
+                                      <span>Gerar um PIX único</span>
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="melpet-hosting-payment-option is-reserve"
+                                      disabled={
+                                        generatingHostingPaymentId === request.id
+                                      }
+                                      onClick={() =>
+                                        generateHostingPaymentOption(
+                                          request,
+                                          "dividido",
+                                        )
+                                      }
+                                    >
+                                      <strong>Reserva + Check-in</strong>
+                                      <span>Dividir em duas etapas com PIX</span>
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="melpet-hosting-payment-option is-card"
+                                      disabled={
+                                        generatingHostingPaymentId === request.id
+                                      }
+                                      onClick={() =>
+                                        showToast(
+                                          "Pagamento com cartão de crédito em implantação.",
+                                          "info",
+                                        )
+                                      }
+                                    >
+                                      <strong>Cartão de Crédito</strong>
+                                      <span>Enviaremos um Link de Pagamento</span>
+                                    </Button>
+                                  </div>
                                 </div>
                               ) : null}
                               {payments.map((payment) => {
