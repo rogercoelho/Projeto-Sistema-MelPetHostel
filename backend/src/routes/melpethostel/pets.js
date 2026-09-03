@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const {
   notifyDocumentUploadForReview,
@@ -71,6 +71,16 @@ function todayFileDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function normalizeDateOnly(value) {
+  if (!value) return "";
+  const text = clean(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+
 async function getPetByIdForCliente(req, petId, clienteId = null) {
   const petsTable = await resolveTableName(req, TABLE_NAMES.pets);
   if (!petsTable) return null;
@@ -78,7 +88,7 @@ async function getPetByIdForCliente(req, petId, clienteId = null) {
   const where = clienteId ? "WHERE id = ? AND cliente_id = ?" : "WHERE id = ?";
   const values = clienteId ? [petId, clienteId] : [petId];
   const [rows] = await dbFor(req).query(
-    `SELECT id, cliente_id, nome, raca, idade, peso_aproximado
+    `SELECT id, cliente_id, nome, raca, data_nascimento, peso_aproximado
        FROM ${qtable(petsTable)}
        ${where}
       LIMIT 1`,
@@ -391,7 +401,7 @@ router.get("/pets", async (req, res) => {
           p.id,
           p.nome,
           p.raca,
-          p.idade,
+          p.data_nascimento,
           p.peso_aproximado,
           p.criado_em,
           f.veterinario_nome,
@@ -437,6 +447,7 @@ router.get("/pets", async (req, res) => {
           f.brinca_bolinha,
           f.brinca_madeira,
           f.observacoes_tutor,
+          f.data_nascimento AS ficha_data_nascimento,
           f.veracidade_informacoes
         FROM ${qtable(petsTable)} p
         LEFT JOIN ${qtable(fichasTable)} f ON f.pet_id = p.id
@@ -477,15 +488,15 @@ router.get("/pets", async (req, res) => {
         id: pet.id,
         nome: pet.nome,
         raca: pet.raca,
-        idade: pet.idade,
+        dataNascimento: normalizeDateOnly(pet.data_nascimento),
         pesoAproximado: pet.peso_aproximado,
         cadastradoEm: pet.criado_em,
         carteiras: carteirasByPetId.get(Number(pet.id)) || [],
         ficha: {
           nomePet: pet.nome,
           raca: pet.raca,
-          idade: pet.idade,
-          pesoAproximado: pet.peso_aproximado,
+          dataNascimento: normalizeDateOnly(pet.data_nascimento),
+        pesoAproximado: pet.peso_aproximado,
           veterinarioNome: pet.veterinario_nome,
           clinicaNome: pet.clinica_nome,
           clinicaTelefone: pet.clinica_telefone,
@@ -723,7 +734,7 @@ router.get("/pets/onboarding-status", async (req, res) => {
             p.cliente_id,
             p.nome,
             p.raca,
-            p.idade,
+            p.data_nascimento,
             p.peso_aproximado,
             f.sexo
           FROM ${qtable(petsTable)} p
@@ -733,7 +744,7 @@ router.get("/pets/onboarding-status", async (req, res) => {
           ORDER BY p.criado_em ASC, p.id ASC
         `
         : `
-          SELECT id, cliente_id, nome, raca, idade, peso_aproximado, '' AS sexo
+          SELECT id, cliente_id, nome, raca, data_nascimento, peso_aproximado, '' AS sexo
           FROM ${qtable(petsTable)}
           WHERE cliente_id = ? AND ativo = 1
           ORDER BY criado_em ASC, id ASC
@@ -756,8 +767,8 @@ router.get("/pets/onboarding-status", async (req, res) => {
             clienteId: pet.cliente_id,
             nome: pet.nome,
             raca: pet.raca,
-            idade: pet.idade,
-            pesoAproximado: pet.peso_aproximado,
+            dataNascimento: normalizeDateOnly(pet.data_nascimento),
+        pesoAproximado: pet.peso_aproximado,
             sexo: pet.sexo || "",
             ficha: {
               sexo: pet.sexo || "",
@@ -1319,14 +1330,14 @@ router.post("/pets", async (req, res) => {
     const [petResult] = await dbConn.query(
       `
         INSERT INTO ${qtable(petsTable)}
-          (cliente_id, nome, raca, idade, peso_aproximado)
+          (cliente_id, nome, raca, data_nascimento, peso_aproximado)
         VALUES (?, ?, ?, ?, ?)
       `,
       [
         clienteId,
         toText(data.nomePet),
         toText(data.raca),
-        toText(data.idade),
+        normalizeDateOnly(data.dataNascimento),
         toText(data.pesoAproximado),
       ],
     );
@@ -1338,6 +1349,7 @@ router.post("/pets", async (req, res) => {
       `
         INSERT INTO ${qtable(fichasTable)} (
           pet_id,
+          data_nascimento,
           veterinario_nome,
           clinica_nome,
           clinica_telefone,
@@ -1382,10 +1394,11 @@ router.post("/pets", async (req, res) => {
           brinca_madeira,
           observacoes_tutor,
           veracidade_informacoes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         petId,
+        normalizeDateOnly(data.dataNascimento),
         toText(data.veterinarioNome),
         toText(data.clinicaNome),
         toText(data.clinicaTelefone),
@@ -1439,11 +1452,11 @@ router.post("/pets", async (req, res) => {
         id: petId,
         nome: toText(data.nomePet),
         raca: toText(data.raca),
-        idade: toText(data.idade),
+        dataNascimento: normalizeDateOnly(data.dataNascimento),
         pesoAproximado: toText(data.pesoAproximado),
         sexo: toText(data.sexo),
         cadastradoEm: new Date().toISOString(),
-        ficha: data,
+        ficha: { ...data, dataNascimento: normalizeDateOnly(data.dataNascimento) },
       },
     });
   } catch (error) {
@@ -1482,5 +1495,6 @@ router.post("/pets", async (req, res) => {
 });
 
 module.exports = router;
+
 
 

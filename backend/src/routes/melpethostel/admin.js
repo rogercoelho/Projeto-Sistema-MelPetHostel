@@ -28,6 +28,16 @@ function isAdminAccessValue(value) {
   return String(value || "").toLowerCase() === "adm";
 }
 
+function normalizeDateOnly(value) {
+  if (!value) return "";
+  const text = clean(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+
 function normalizeCliente(row) {
   return {
     id: row.id,
@@ -90,7 +100,7 @@ async function listPetsByClienteIds(req, clienteIds) {
   const [rows] = await dbFor(req).query(
     `
       SELECT
-        p.id, p.cliente_id, p.nome, p.raca, p.idade, p.peso_aproximado, p.ativo,
+        p.id, p.cliente_id, p.nome, p.raca, p.data_nascimento, p.peso_aproximado, p.ativo,
         f.veterinario_nome, f.clinica_nome, f.clinica_telefone, f.clinica_endereco,
         f.autoriza_atendimento_emergencial, f.autoriza_medicacao, f.sexo, f.castrado,
         f.doenca_diagnosticada, f.doenca_detalhes, f.cirurgias_historico, f.cirurgias_detalhes,
@@ -102,7 +112,7 @@ async function listPetsByClienteIds(req, clienteIds) {
         f.ritual_dormir_comer, f.aceita_banho_escovacao, f.aceita_roupinha,
         f.permite_manuseio, f.gosta_colo, f.sensibilidade_fisica, f.sensibilidade_detalhes,
         f.brinca_piscina, f.brinca_mangueira, f.brinca_bolinha, f.brinca_madeira,
-        f.observacoes_tutor, f.veracidade_informacoes
+        f.observacoes_tutor, f.data_nascimento AS ficha_data_nascimento, f.veracidade_informacoes
       FROM ${qtable(tableName)} p
       ${fichasTable ? `LEFT JOIN ${qtable(fichasTable)} f ON f.pet_id = p.id` : ""}
       WHERE p.${qcol("cliente_id")} IN (${placeholders})
@@ -118,13 +128,13 @@ async function listPetsByClienteIds(req, clienteIds) {
       id: row.id,
       nome: row.nome || "",
       raca: row.raca || "",
-      idade: row.idade || "",
+      dataNascimento: normalizeDateOnly(row.data_nascimento),
       pesoAproximado: row.peso_aproximado || "",
       ativo: row.ativo === undefined || row.ativo === null ? true : row.ativo == 1,
       ficha: {
         nomePet: row.nome || "",
         raca: row.raca || "",
-        idade: row.idade || "",
+        dataNascimento: normalizeDateOnly(row.ficha_data_nascimento || row.data_nascimento),
         pesoAproximado: row.peso_aproximado || "",
         veterinarioNome: row.veterinario_nome || "",
         clinicaNome: row.clinica_nome || "",

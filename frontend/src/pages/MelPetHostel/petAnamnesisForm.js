@@ -8,7 +8,7 @@ export function getEmptyPetAnamnesisForm() {
   return {
     nomePet: "",
     raca: "",
-    idade: "",
+    dataNascimento: "",
     pesoAproximado: "",
     veterinarioNome: "",
     clinicaNome: "",
@@ -70,7 +70,7 @@ export const PET_ANAMNESIS_SECTIONS = [
         required: true,
       },
       { name: "raca", label: "Raça", type: "text", required: true },
-      { name: "idade", label: "Idade", type: "text", required: true },
+      { name: "dataNascimento", label: "Data de nascimento", type: "date", required: true },
       {
         name: "pesoAproximado",
         label: "Peso aproximado",

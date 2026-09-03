@@ -156,7 +156,7 @@ SET @sql = CONCAT(
   '`cliente_id` ', @cliente_id_type, ' NOT NULL,',
   '`nome` VARCHAR(160) NOT NULL,',
   '`raca` VARCHAR(120) NOT NULL,',
-  '`idade` VARCHAR(60) NOT NULL,',
+  '`data_nascimento` DATE NULL,',
   '`peso_aproximado` VARCHAR(60) NOT NULL,',
   '`ativo` TINYINT(1) NOT NULL DEFAULT 1,',
   '`criado_em` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,',
@@ -171,9 +171,45 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+
+-- Campo novo: data de nascimento do pet. Idade passa a ser calculada pela aplicacao.
+SET @sql = (
+  SELECT IF(
+    EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'Pets'
+        AND COLUMN_NAME = 'data_nascimento'
+    ),
+    'SELECT ''Pets.data_nascimento ja existe'' AS status',
+    'ALTER TABLE `Pets` ADD COLUMN `data_nascimento` DATE NULL AFTER `raca`'
+  )
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = (
+  SELECT IF(
+    EXISTS (
+      SELECT 1
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'Pets'
+        AND COLUMN_NAME = 'idade'
+    ),
+    'ALTER TABLE `Pets` DROP COLUMN `idade`',
+    'SELECT ''Pets.idade ja foi removida'' AS status'
+  )
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 CREATE TABLE IF NOT EXISTS `Pet_Fichas` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `pet_id` INT NOT NULL,
+  `data_nascimento` DATE NULL,
   `veterinario_nome` VARCHAR(160) NOT NULL,
   `clinica_nome` VARCHAR(160) NOT NULL,
   `clinica_telefone` VARCHAR(40) NOT NULL,
@@ -225,6 +261,28 @@ CREATE TABLE IF NOT EXISTS `Pet_Fichas` (
     REFERENCES `Pets` (`id`)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SET @sql = (
+  SELECT IF(
+    EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'Pet_Fichas'
+        AND COLUMN_NAME = 'data_nascimento'
+    ),
+    'SELECT ''Pet_Fichas.data_nascimento ja existe'' AS status',
+    'ALTER TABLE `Pet_Fichas` ADD COLUMN `data_nascimento` DATE NULL AFTER `pet_id`'
+  )
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+UPDATE `Pet_Fichas` f
+INNER JOIN `Pets` p ON p.id = f.pet_id
+SET f.`data_nascimento` = p.`data_nascimento`
+WHERE f.`data_nascimento` IS NULL
+  AND p.`data_nascimento` IS NOT NULL;
 
 SET @sql = CONCAT(
   'CREATE TABLE IF NOT EXISTS `Pet_Carteiras_Vacinacao` (',

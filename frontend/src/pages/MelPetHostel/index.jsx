@@ -62,10 +62,40 @@ function getSupportDocKeyFromTypeName(value) {
   return "";
 }
 
+function calculatePetAgeParts(dataNascimento) {
+  if (!dataNascimento) return null;
+  const [year, month, day] = String(dataNascimento).slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return null;
+
+  const today = new Date();
+  const birthDate = new Date(year, month - 1, day);
+  if (Number.isNaN(birthDate.getTime()) || birthDate > today) return null;
+
+  let years = today.getFullYear() - year;
+  const currentMonth = today.getMonth() + 1;
+  const currentDay = today.getDate();
+  if (currentMonth < month || (currentMonth === month && currentDay < day)) years -= 1;
+
+  let months = (today.getFullYear() - year) * 12 + (currentMonth - month);
+  if (currentDay < day) months -= 1;
+
+  return { years: Math.max(0, years), months: Math.max(0, months) };
+}
+
+function calculatePetAgeYears(dataNascimento) {
+  return calculatePetAgeParts(dataNascimento)?.years ?? null;
+}
+
+function calculatePetAgeLabel(dataNascimento) {
+  const age = calculatePetAgeParts(dataNascimento);
+  if (!age) return "";
+  if (age.years >= 1) return `${age.years} ${age.years === 1 ? "ano" : "anos"}`;
+  return `${age.months} ${age.months === 1 ? "mes" : "meses"}`;
+}
 function formatPetAge(value) {
   const age = String(value || "").trim();
   if (!age) return "";
-  return /\bano(s)?\b/i.test(age) ? age : `${age} anos`;
+  return /\b(ano|anos|mes|meses)\b/i.test(age) ? age : `${age} anos`;
 }
 
 function formatPetWeight(value) {
@@ -77,7 +107,7 @@ function formatPetWeight(value) {
 function getPetSummary(pet) {
   return [
     pet?.raca,
-    formatPetAge(pet?.idade),
+    formatPetAge(calculatePetAgeLabel(pet?.dataNascimento)),
     formatPetWeight(pet?.pesoAproximado),
   ]
     .filter(Boolean)
@@ -176,7 +206,7 @@ function getPetFormInitialData(pet) {
     ...(pet?.ficha || {}),
     nomePet: pet?.ficha?.nomePet || pet?.nome || "",
     raca: pet?.ficha?.raca || pet?.raca || "",
-    idade: pet?.ficha?.idade || pet?.idade || "",
+    dataNascimento: pet?.ficha?.dataNascimento || pet?.dataNascimento || "",
     pesoAproximado: pet?.ficha?.pesoAproximado || pet?.pesoAproximado || "",
   };
 }
@@ -1971,7 +2001,7 @@ export default function MelPetHostel({
     return plansForType.filter((plano) => {
       const unidade = normalizeText(plano.unidade || "");
       const petValue = unidade.includes("ano")
-        ? parsePlanNumber(pet?.idade)
+        ? calculatePetAgeYears(pet?.dataNascimento)
         : parsePlanNumber(pet?.pesoAproximado);
       const min = parsePlanNumber(plano.categoriaDe);
       const max = parsePlanNumber(plano.categoriaAte);
@@ -2743,7 +2773,7 @@ export default function MelPetHostel({
           id: data.pendingPet.id,
           nome: data.pendingPet.nome,
           raca: data.pendingPet.raca,
-          idade: data.pendingPet.idade,
+          dataNascimento: data.pendingPet.dataNascimento || "",
           pesoAproximado: data.pendingPet.pesoAproximado,
           sexo: data.pendingPet.sexo || data.pendingPet.ficha?.sexo || "",
           ficha: {
@@ -2922,7 +2952,7 @@ export default function MelPetHostel({
       id: pet?.id || `${createdAt}-${payload.nomePet}`,
       nome: pet?.nome || payload.nomePet,
       raca: pet?.raca || payload.raca,
-      idade: pet?.idade || payload.idade,
+      dataNascimento: pet?.dataNascimento || payload.dataNascimento || "",
       pesoAproximado: pet?.pesoAproximado || payload.pesoAproximado,
       sexo: pet?.sexo || pet?.ficha?.sexo || payload.sexo || "",
       carteiras: [],
@@ -3565,14 +3595,15 @@ export default function MelPetHostel({
             }))),
       ],
       after: deveBloquearVoltarNoFluxoPet ? null : (
-        <div className="pet-main-actions">
+        <div className="pet-main-actions melpet-back-actions">
           <Button
-            type="button"
-            variant="outline"
-            onClick={handleBackFromPetAdminMenu}
-          >
-            Voltar
-          </Button>
+                type="button"
+                variant="outline"
+                onClick={handleBackFromPetAdminMenu}
+                className="melpet-back-button"
+              >
+                Voltar
+              </Button>
         </div>
       ),
     },
@@ -3595,7 +3626,6 @@ export default function MelPetHostel({
             ![
               "nomePet",
               "raca",
-              "idade",
               "pesoAproximado",
               "veterinarioNome",
               "clinicaNome",
@@ -5538,14 +5568,15 @@ export default function MelPetHostel({
         },
       ],
       after: (
-        <div className="pet-main-actions">
+        <div className="pet-main-actions melpet-back-actions">
           <Button
-            type="button"
-            variant="outline"
-            onClick={handleBackToMainMenu}
-          >
-            Voltar
-          </Button>
+                type="button"
+                variant="outline"
+                onClick={handleBackToMainMenu}
+                className="melpet-back-button"
+              >
+                Voltar
+              </Button>
         </div>
       ),
     },
@@ -5838,6 +5869,17 @@ export default function MelPetHostel({
           {adminUploadingDocument ? "Enviando..." : "Enviar documento"}
         </Button>
       </section>
+
+      <footer className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions melpet-back-actions melpet-admin-pet-footer">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleBackToClientSearch}
+          className="melpet-back-button"
+        >
+          Voltar
+        </Button>
+      </footer>
     </article>
   ) : null;
 
@@ -6395,7 +6437,7 @@ export default function MelPetHostel({
                             <span className="melpet-admin-pet-info-badge">
                               <small>{pet.raca || "Tipo nao informado"}</small>
                               <small>
-                                {formatPetAge(pet.idade) || "Idade nao informada"}
+                                {formatPetAge(calculatePetAgeLabel(pet.dataNascimento)) || "Idade nao informada"}
                               </small>
                               <small>
                                 {formatPetWeight(pet.pesoAproximado) ||
@@ -6493,7 +6535,7 @@ export default function MelPetHostel({
                             <span className="melpet-admin-pet-info-badge">
                               <small>{pet.raca || "Tipo nao informado"}</small>
                               <small>
-                                {formatPetAge(pet.idade) || "Idade nao informada"}
+                                {formatPetAge(calculatePetAgeLabel(pet.dataNascimento)) || "Idade nao informada"}
                               </small>
                               <small>
                                 {formatPetWeight(pet.pesoAproximado) ||
@@ -7085,14 +7127,15 @@ export default function MelPetHostel({
               ],
       children: isPixConfigAdminMenu ? adminPixConfigContent : null,
       after: (
-        <div className="pet-main-actions">
+        <div className="pet-main-actions melpet-back-actions">
           <Button
-            type="button"
-            variant="outline"
-            onClick={handleBackToMainMenu}
-          >
-            Voltar
-          </Button>
+                type="button"
+                variant="outline"
+                onClick={handleBackToMainMenu}
+                className="melpet-back-button"
+              >
+                Voltar
+              </Button>
         </div>
       ),
     },
@@ -7376,11 +7419,12 @@ export default function MelPetHostel({
 
             {petStatusManagementContent}
 
-            <div className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions">
+            <div className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions melpet-back-actions">
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleBackToPetAdminMenu}
+                className="melpet-back-button"
               >
                 Voltar
               </Button>
@@ -7408,11 +7452,12 @@ export default function MelPetHostel({
 
             {vaccineManagementContent}
 
-            <div className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions">
+            <div className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions melpet-back-actions">
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleBackToPetAdminMenu}
+                className="melpet-back-button"
               >
                 Voltar
               </Button>
@@ -7466,8 +7511,13 @@ export default function MelPetHostel({
 
             {adminVaccineApprovalContent}
 
-            <div className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions">
-              <Button type="button" variant="outline" onClick={handleBackToPetAdminMenu}>
+            <div className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions melpet-back-actions">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleBackToPetAdminMenu}
+                className="melpet-back-button"
+              >
                 Voltar
               </Button>
             </div>
@@ -7506,11 +7556,12 @@ export default function MelPetHostel({
 
             {adminPetSearchContent}
 
-            <div className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions">
+            <div className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions melpet-back-actions">
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleBackToPetAdminMenu}
+                className="melpet-back-button"
               >
                 Voltar
               </Button>
@@ -7528,15 +7579,6 @@ export default function MelPetHostel({
         <main className="melpet-admin-standalone-screen">
           <section className="melpet-admin-pet-screen melpet-admin-client-screen">
             {adminClientDetailsContent}
-            <footer className="melpet-admin-pet-footer">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleBackToClientSearch}
-              >
-                Voltar
-              </Button>
-            </footer>
           </section>
         </main>
         <Modal
@@ -7614,8 +7656,15 @@ export default function MelPetHostel({
                 </header>
                 <dl className="melpet-admin-pet-info-grid">
                   <div>
+                    <dt>Data de nascimento</dt>
+                    <dd>{formatBrazilDate(selectedAdminPet.dataNascimento)}</dd>
+                  </div>
+                  <div>
                     <dt>Idade</dt>
-                    <dd>{selectedAdminPet.idade || "-"}</dd>
+                    <dd>
+                      {calculatePetAgeLabel(selectedAdminPet.dataNascimento) ||
+                        "-"}
+                    </dd>
                   </div>
                   <div>
                     <dt>Peso</dt>
@@ -7666,7 +7715,14 @@ export default function MelPetHostel({
                 {getFilledAnamnesisGroups(selectedAdminPet).length ? (
                   <div className="melpet-admin-anamnesis-groups">
                     {getFilledAnamnesisGroups(selectedAdminPet).map((group) => (
-                      <article key={group.title}>
+                      <article
+                        key={group.title}
+                        className={
+                          normalizeText(group.title).includes("veracidade")
+                            ? "melpet-admin-anamnesis-group--full"
+                            : undefined
+                        }
+                      >
                         <h4>{group.title}</h4>
                         <dl>
                           {group.items.map((item) => (
@@ -7684,11 +7740,12 @@ export default function MelPetHostel({
                 )}
               </section>
 
-              <footer className="melpet-admin-pet-footer">
+              <footer className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions melpet-back-actions melpet-admin-pet-footer">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleBackToAdminPetSearch}
+                  className="melpet-back-button"
                 >
                   Voltar
                 </Button>
