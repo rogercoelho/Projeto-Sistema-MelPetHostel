@@ -210,8 +210,14 @@ async function ensureHostingPaymentsTable(req) {
     );
   }
   const paymentExtraColumns = [
-    { name: "link_pagamento", sql: "ADD COLUMN link_pagamento TEXT NULL AFTER qr_code_url" },
-    { name: "link_pagamento_enviado_em", sql: "ADD COLUMN link_pagamento_enviado_em DATETIME NULL DEFAULT NULL AFTER link_pagamento" },
+    {
+      name: "link_pagamento",
+      sql: "ADD COLUMN link_pagamento TEXT NULL AFTER qr_code_url",
+    },
+    {
+      name: "link_pagamento_enviado_em",
+      sql: "ADD COLUMN link_pagamento_enviado_em DATETIME NULL DEFAULT NULL AFTER link_pagamento",
+    },
   ];
   for (const column of paymentExtraColumns) {
     const [existing] = await db.query(
@@ -219,7 +225,12 @@ async function ensureHostingPaymentsTable(req) {
       [TABLE_NAMES.hospedagemPagamentos, column.name],
     );
     if (!existing?.length) {
-      await db.query("ALTER TABLE " + qtable(TABLE_NAMES.hospedagemPagamentos) + " " + column.sql);
+      await db.query(
+        "ALTER TABLE " +
+          qtable(TABLE_NAMES.hospedagemPagamentos) +
+          " " +
+          column.sql,
+      );
     }
   }
   const [motivoColumns] = await db.query(
@@ -459,7 +470,8 @@ async function loadHostingRequestById(req, solicitacaoId) {
               pixCopiaCola: row.pagamento_pix_copia_cola || "",
               qrCodeUrl: row.pagamento_qr_code_url || "",
               linkPagamento: row.pagamento_link_pagamento || "",
-              linkPagamentoEnviadoEm: row.pagamento_link_pagamento_enviado_em || null,
+              linkPagamentoEnviadoEm:
+                row.pagamento_link_pagamento_enviado_em || null,
               comprovantePath: row.pagamento_comprovante_path || "",
               comprovanteUrl: row.pagamento_comprovante_path
                 ? toPublicUploadPath(row.pagamento_comprovante_path)
@@ -481,7 +493,7 @@ async function loadHostingRequestById(req, solicitacaoId) {
         id: itemId,
         petId: row.item_pet_id,
         petNome: row.item_pet_nome,
-          sexo: row.item_pet_sexo || "",
+        sexo: row.item_pet_sexo || "",
         tipo: row.item_tipo,
         planoId: row.item_plano_id,
         modoCobranca: row.item_modo_cobranca,
@@ -508,7 +520,12 @@ function formatPaymentTypeLabel(value) {
   return "Pagamento Total";
 }
 
-function buildHostingReceiptTelegramMessage({ login, request, parcelaTipo, valor }) {
+function buildHostingReceiptTelegramMessage({
+  login,
+  request,
+  parcelaTipo,
+  valor,
+}) {
   const items = request?.itens?.length ? request.itens : [{}];
   const itemBlocks = items.map((item) => [
     `Pet: <b>${clean(item.petNome) || (item.petId ? `Pet ${item.petId}` : "-")}</b>`,
@@ -528,23 +545,35 @@ function buildHostingReceiptTelegramMessage({ login, request, parcelaTipo, valor
   ].join("\n");
 }
 
-async function notifyHostingReceiptAdmins(req, { login, request, parcelaTipo, valor }) {
+async function notifyHostingReceiptAdmins(
+  req,
+  { login, request, parcelaTipo, valor },
+) {
   return sendTelegramToConfiguredAdmins({
     db: dbFor(req),
     module: MODULE,
-    message: buildHostingReceiptTelegramMessage({ login, request, parcelaTipo, valor }),
+    message: buildHostingReceiptTelegramMessage({
+      login,
+      request,
+      parcelaTipo,
+      valor,
+    }),
     disabledReason: "notificacao_desativada",
   });
 }
 
 function buildHostingPaymentLinkTelegramMessage({ login, request }) {
-  return buildHostingTelegramMessage({
-    header: "=== ENVIAR LINK DE PAGAMENTO ===",
-    login,
-    tipo: request?.tipo,
-    items: request?.itens || [],
-    totalFormatado: formatTelegramMoney(request?.valorFinal ?? request?.valorTotal),
-  }) + "\nGere o link de pagamento e inclua no sistema da Mel Pet Hostel.";
+  return (
+    buildHostingTelegramMessage({
+      header: "=== ENVIAR LINK DE PAGAMENTO ===",
+      login,
+      tipo: request?.tipo,
+      items: request?.itens || [],
+      totalFormatado: formatTelegramMoney(
+        request?.valorFinal ?? request?.valorTotal,
+      ),
+    }) + "\nGere o link de pagamento e inclua no sistema da Mel Pet Hostel."
+  );
 }
 
 async function notifyHostingPaymentLinkAdmins(req, { login, request }) {
@@ -558,7 +587,10 @@ async function notifyHostingPaymentLinkAdmins(req, { login, request }) {
 
 function getPetGenderArticle(request) {
   const pet = (request?.itens || [])[0] || {};
-  const text = clean(pet.sexo || pet.genero || pet.gender).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const text = clean(pet.sexo || pet.genero || pet.gender)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
   return text.startsWith("f") ? "da pequena" : "do pequeno";
 }
 
@@ -568,16 +600,18 @@ async function sendHostingPaymentLinkEmail(request, linkPagamento) {
     to: request?.clienteEmail,
     subject: "Link de Pagamento - Mel Pet Hostel",
     text: `Ola ${request?.clienteNome || "Tutor"},
-A estadia ${getPetGenderArticle(request)} ${petNome} foi selecionado o modo de pagamento via cartao de credito.
+Para a estadia ${getPetGenderArticle(request)} ${petNome}, o modo de pagamento selecionado foi via cartao de credito.
 Geramos o Link de Pagamnto abaixo:
 ${linkPagamento}
 
-Lembrando que os juros e taxas administrativas são do cartão de credito do cliente.
+Para pagamentos realizados por cartão de crédito, juros, encargos e taxas administrativas de eventuais parcelamentos, serão de responsabilidade do cliente.
+
 
 Caso queira, você também pode acessar o sistema da Mel Pet Hostel para confirmar o link de pagamento ou mudar a opção de pagamento.
 Obrigado por escolher os serviço da Mel Pet Hostel.`,
   });
-  if (!result.sent) console.warn("Hosting payment link email not sent:", result.reason);
+  if (!result.sent)
+    console.warn("Hosting payment link email not sent:", result.reason);
   return result;
 }
 async function notifyAdmins(req, pedido) {
@@ -668,12 +702,10 @@ function getAllowedHostingStatusTransition(status) {
 async function requireHostingAdmin(req, res) {
   const login = getReqLogin(req);
   if (!(await isAdminUser(req, login))) {
-    res
-      .status(403)
-      .json({
-        status: "erro",
-        mensagem: "Apenas administradores podem executar esta acao.",
-      });
+    res.status(403).json({
+      status: "erro",
+      mensagem: "Apenas administradores podem executar esta acao.",
+    });
     return false;
   }
   return true;
@@ -721,8 +753,9 @@ function mapHostingRows(rows) {
           valor: row.pagamento_valor,
           pixCopiaCola: row.pagamento_pix_copia_cola || "",
           qrCodeUrl: row.pagamento_qr_code_url || "",
-              linkPagamento: row.pagamento_link_pagamento || "",
-              linkPagamentoEnviadoEm: row.pagamento_link_pagamento_enviado_em || null,
+          linkPagamento: row.pagamento_link_pagamento || "",
+          linkPagamentoEnviadoEm:
+            row.pagamento_link_pagamento_enviado_em || null,
           comprovantePath: row.pagamento_comprovante_path || "",
           comprovanteUrl: row.pagamento_comprovante_path
             ? toPublicUploadPath(row.pagamento_comprovante_path)
@@ -920,13 +953,11 @@ router.get("/hospedagens/solicitacoes/pendentes", async (req, res) => {
     if (!(await requireHostingAdmin(req, res))) return;
     const solicitacoes = await listHostingRequests(req, { status: "pendente" });
     if (!solicitacoes)
-      return res
-        .status(500)
-        .json({
-          status: "erro",
-          mensagem:
-            "Tabelas de hospedagem nao encontradas. Execute create_hospedagens_schema.sql.",
-        });
+      return res.status(500).json({
+        status: "erro",
+        mensagem:
+          "Tabelas de hospedagem nao encontradas. Execute create_hospedagens_schema.sql.",
+      });
     return res.json({
       status: "sucesso",
       total: solicitacoes.length,
@@ -954,12 +985,10 @@ router.patch("/hospedagens/solicitacoes/:id/aprovar", async (req, res) => {
       TABLE_NAMES.hospedagemSolicitacoes,
     );
     if (!table)
-      return res
-        .status(500)
-        .json({
-          status: "erro",
-          mensagem: "Tabela de hospedagem nao encontrada.",
-        });
+      return res.status(500).json({
+        status: "erro",
+        mensagem: "Tabela de hospedagem nao encontrada.",
+      });
     const [rows] = await dbFor(req).query(
       `SELECT id, status FROM ${qtable(table)} WHERE id = ? LIMIT 1`,
       [solicitacaoId],
@@ -977,7 +1006,10 @@ router.patch("/hospedagens/solicitacoes/:id/aprovar", async (req, res) => {
       `UPDATE ${qtable(table)} SET status = ?, analisado_por = ?, analisado_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`,
       ["aprovado", getReqLogin(req), solicitacaoId],
     );
-    const solicitacaoAprovada = (await loadHostingRequestById(req, solicitacaoId)) || {
+    const solicitacaoAprovada = (await loadHostingRequestById(
+      req,
+      solicitacaoId,
+    )) || {
       id: solicitacaoId,
       status: "aprovado",
     };
@@ -1029,12 +1061,10 @@ router.patch("/hospedagens/solicitacoes/:id/reprovar", async (req, res) => {
       TABLE_NAMES.hospedagemSolicitacoes,
     );
     if (!table)
-      return res
-        .status(500)
-        .json({
-          status: "erro",
-          mensagem: "Tabela de hospedagem nao encontrada.",
-        });
+      return res.status(500).json({
+        status: "erro",
+        mensagem: "Tabela de hospedagem nao encontrada.",
+      });
     const [rows] = await dbFor(req).query(
       `SELECT id, status FROM ${qtable(table)} WHERE id = ? LIMIT 1`,
       [solicitacaoId],
@@ -1109,7 +1139,11 @@ router.post(
         return res
           .status(400)
           .json({ status: "erro", mensagem: "Solicitação inválida." });
-      if (!["total", "dividido", "reserva_checkin", "cartao_credito"].includes(opcao))
+      if (
+        !["total", "dividido", "reserva_checkin", "cartao_credito"].includes(
+          opcao,
+        )
+      )
         return res
           .status(400)
           .json({ status: "erro", mensagem: "Opção de pagamento inválida." });
@@ -1118,12 +1152,10 @@ router.post(
         TABLE_NAMES.hospedagemSolicitacoes,
       );
       if (!table)
-        return res
-          .status(500)
-          .json({
-            status: "erro",
-            mensagem: "Tabela de hospedagem não encontrada.",
-          });
+        return res.status(500).json({
+          status: "erro",
+          mensagem: "Tabela de hospedagem não encontrada.",
+        });
       const [rows] = await dbFor(req).query(
         "SELECT id, cliente_id, valor_total, valor_final, status FROM " +
           qtable(table) +
@@ -1136,22 +1168,17 @@ router.post(
           .status(404)
           .json({ status: "erro", mensagem: "Solicitação não encontrada." });
       if (normalizeHostingStatus(solicitacao.status) !== "aprovado")
-        return res
-          .status(409)
-          .json({
-            status: "erro",
-            mensagem:
-              "O pagamento só pode ser gerado para hospedagem aprovada.",
-          });
+        return res.status(409).json({
+          status: "erro",
+          mensagem: "O pagamento só pode ser gerado para hospedagem aprovada.",
+        });
       const isCardPayment = opcao === "cartao_credito";
       const pixConfig = isCardPayment ? null : await getActivePixConfig(req);
       if (!isCardPayment && !pixConfig?.chavePix)
-        return res
-          .status(400)
-          .json({
-            status: "erro",
-            mensagem: "PIX ainda não configurado pelo administrador.",
-          });
+        return res.status(400).json({
+          status: "erro",
+          mensagem: "PIX ainda não configurado pelo administrador.",
+        });
       await ensureHostingPaymentsTable(req);
       const valorFinal = Number(
         solicitacao.valor_final ?? solicitacao.valor_total ?? 0,
@@ -1162,19 +1189,19 @@ router.post(
           : opcao === "total"
             ? [{ tipo: "total", valor: valorFinal }]
             : [
-              {
-                tipo: "reserva",
-                valor: Math.round((valorFinal / 2) * 100) / 100,
-              },
-              {
-                tipo: "checkin",
-                valor:
-                  Math.round(
-                    (valorFinal - Math.round((valorFinal / 2) * 100) / 100) *
-                      100,
-                  ) / 100,
-              },
-            ];
+                {
+                  tipo: "reserva",
+                  valor: Math.round((valorFinal / 2) * 100) / 100,
+                },
+                {
+                  tipo: "checkin",
+                  valor:
+                    Math.round(
+                      (valorFinal - Math.round((valorFinal / 2) * 100) / 100) *
+                        100,
+                    ) / 100,
+                },
+              ];
       await dbFor(req).query(
         "DELETE FROM " +
           qtable(TABLE_NAMES.hospedagemPagamentos) +
@@ -1189,7 +1216,8 @@ router.post(
               name: pixConfig.nomeRecebedor,
               city: pixConfig.cidadeRecebedor,
               amount: parcela.valor,
-              description: "HOSPED" + solicitacaoId + parcela.tipo.toUpperCase(),
+              description:
+                "HOSPED" + solicitacaoId + parcela.tipo.toUpperCase(),
             });
         await dbFor(req).query(
           "INSERT INTO " +
@@ -1212,7 +1240,10 @@ router.post(
           login: requestForNotice.usuarioLogin || getReqLogin(req),
           request: requestForNotice,
         }).catch((telegramError) => {
-          console.error("Erro notificando link de pagamento no Telegram:", telegramError);
+          console.error(
+            "Erro notificando link de pagamento no Telegram:",
+            telegramError,
+          );
         });
       }
       const solicitacoes = await listHostingRequests(req, { clienteId });
@@ -1239,15 +1270,25 @@ router.get("/hospedagens/pagamentos/cartao/pendentes", async (req, res) => {
     if (!(await requireHostingAdmin(req, res))) return;
     const solicitacoes = await listHostingRequests(req, { status: "aprovado" });
     const pendentes = (solicitacoes || []).filter((solicitacao) =>
-      (solicitacao.pagamentos || []).some((payment) =>
-        payment.parcelaTipo === "cartao_credito" &&
-        !clean(payment.linkPagamento) &&
-        !["confirmado", "comprovante_enviado"].includes(clean(payment.status).toLowerCase()),
+      (solicitacao.pagamentos || []).some(
+        (payment) =>
+          payment.parcelaTipo === "cartao_credito" &&
+          !clean(payment.linkPagamento) &&
+          !["confirmado", "comprovante_enviado"].includes(
+            clean(payment.status).toLowerCase(),
+          ),
       ),
     );
-    return res.json({ status: "sucesso", total: pendentes.length, solicitacoes: pendentes });
+    return res.json({
+      status: "sucesso",
+      total: pendentes.length,
+      solicitacoes: pendentes,
+    });
   } catch (error) {
-    console.error("Error in GET /melpethostel/hospedagens/pagamentos/cartao/pendentes:", error);
+    console.error(
+      "Error in GET /melpethostel/hospedagens/pagamentos/cartao/pendentes:",
+      error,
+    );
     return res.status(500).json({ status: "erro", mensagem: error.message });
   }
 });
@@ -1256,32 +1297,57 @@ router.patch("/hospedagens/pagamentos/:id/link-pagamento", async (req, res) => {
   try {
     if (!(await requireHostingAdmin(req, res))) return;
     const pagamentoId = Number(req.params?.id);
-    const linkPagamento = clean(req.body?.linkPagamento || req.body?.link_pagamento);
+    const linkPagamento = clean(
+      req.body?.linkPagamento || req.body?.link_pagamento,
+    );
     if (!Number.isInteger(pagamentoId) || pagamentoId <= 0)
-      return res.status(400).json({ status: "erro", mensagem: "Pagamento inválido." });
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Pagamento inválido." });
     if (!/^https?:\/\//i.test(linkPagamento))
-      return res.status(400).json({ status: "erro", mensagem: "Informe um link de pagamento válido." });
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Informe um link de pagamento válido.",
+      });
     await ensureHostingPaymentsTable(req);
     const [rows] = await dbFor(req).query(
-      "SELECT id, solicitacao_id, parcela_tipo FROM " + qtable(TABLE_NAMES.hospedagemPagamentos) + " WHERE id = ? LIMIT 1",
+      "SELECT id, solicitacao_id, parcela_tipo FROM " +
+        qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " WHERE id = ? LIMIT 1",
       [pagamentoId],
     );
     const pagamento = rows?.[0];
     if (!pagamento || pagamento.parcela_tipo !== "cartao_credito")
-      return res.status(404).json({ status: "erro", mensagem: "Pagamento por cartão não encontrado." });
+      return res.status(404).json({
+        status: "erro",
+        mensagem: "Pagamento por cartão não encontrado.",
+      });
     await dbFor(req).query(
-      "UPDATE " + qtable(TABLE_NAMES.hospedagemPagamentos) + " SET link_pagamento = ?, link_pagamento_enviado_em = CURRENT_TIMESTAMP, status = 'aguardando_pagamento', atualizado_em = CURRENT_TIMESTAMP WHERE id = ?",
+      "UPDATE " +
+        qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " SET link_pagamento = ?, link_pagamento_enviado_em = CURRENT_TIMESTAMP, status = 'aguardando_pagamento', atualizado_em = CURRENT_TIMESTAMP WHERE id = ?",
       [linkPagamento, pagamentoId],
     );
     const request = await loadHostingRequestById(req, pagamento.solicitacao_id);
-    const email = await sendHostingPaymentLinkEmail(request, linkPagamento).catch((emailError) => ({
+    const email = await sendHostingPaymentLinkEmail(
+      request,
+      linkPagamento,
+    ).catch((emailError) => ({
       sent: false,
       reason: "erro_envio_email",
       message: emailError?.message || String(emailError),
     }));
-    return res.json({ status: "sucesso", mensagem: "Link de pagamento enviado com sucesso.", solicitacao: request, email });
+    return res.json({
+      status: "sucesso",
+      mensagem: "Link de pagamento enviado com sucesso.",
+      solicitacao: request,
+      email,
+    });
   } catch (error) {
-    console.error("Error in PATCH /melpethostel/hospedagens/pagamentos/:id/link-pagamento:", error);
+    console.error(
+      "Error in PATCH /melpethostel/hospedagens/pagamentos/:id/link-pagamento:",
+      error,
+    );
     return res.status(500).json({ status: "erro", mensagem: error.message });
   }
 });
@@ -1375,12 +1441,10 @@ router.patch("/hospedagens/pagamentos/:id/aprovar", async (req, res) => {
         .status(404)
         .json({ status: "erro", mensagem: "Pagamento não encontrado." });
     if (pagamento.status !== "comprovante_enviado")
-      return res
-        .status(409)
-        .json({
-          status: "erro",
-          mensagem: "Este comprovante não está pendente de conferência.",
-        });
+      return res.status(409).json({
+        status: "erro",
+        mensagem: "Este comprovante não está pendente de conferência.",
+      });
     await dbFor(req).query(
       "UPDATE " +
         qtable(TABLE_NAMES.hospedagemPagamentos) +
@@ -1447,12 +1511,10 @@ router.patch("/hospedagens/pagamentos/:id/reprovar", async (req, res) => {
         .status(404)
         .json({ status: "erro", mensagem: "Pagamento não encontrado." });
     if (pagamento.status !== "comprovante_enviado")
-      return res
-        .status(409)
-        .json({
-          status: "erro",
-          mensagem: "Este comprovante não está pendente de conferência.",
-        });
+      return res.status(409).json({
+        status: "erro",
+        mensagem: "Este comprovante não está pendente de conferência.",
+      });
     const comprovantePath = clean(pagamento.comprovante_path);
     if (comprovantePath) {
       try {
@@ -1521,12 +1583,10 @@ router.post(
         TABLE_NAMES.hospedagemSolicitacoes,
       );
       if (!table)
-        return res
-          .status(500)
-          .json({
-            status: "erro",
-            mensagem: "Tabela de hospedagem não encontrada.",
-          });
+        return res.status(500).json({
+          status: "erro",
+          mensagem: "Tabela de hospedagem não encontrada.",
+        });
       const [rows] = await dbFor(req).query(
         "SELECT id, cliente_id, status FROM " +
           qtable(table) +
@@ -1539,12 +1599,10 @@ router.post(
           .status(404)
           .json({ status: "erro", mensagem: "Solicitação não encontrada." });
       if (normalizeHostingStatus(solicitacao.status) !== "aprovado")
-        return res
-          .status(409)
-          .json({
-            status: "erro",
-            mensagem: "Comprovante disponível apenas para hospedagem aprovada.",
-          });
+        return res.status(409).json({
+          status: "erro",
+          mensagem: "Comprovante disponível apenas para hospedagem aprovada.",
+        });
       await ensureHostingPaymentsTable(req);
       const user = await getUsuarioByLogin(req, login);
       if (!user?.Usuario_ID)
@@ -1553,12 +1611,10 @@ router.post(
           .json({ status: "erro", mensagem: "Usuário inválido." });
       const storage = await ensureUserDocumentStorage(req, login);
       if (!storage?.relativeDir)
-        return res
-          .status(400)
-          .json({
-            status: "erro",
-            mensagem: "Usuário sem grupo configurado para salvar comprovante.",
-          });
+        return res.status(400).json({
+          status: "erro",
+          mensagem: "Usuário sem grupo configurado para salvar comprovante.",
+        });
       const comprovantesRelativeDir =
         storage.relativeDir.replace(/\/$/, "") + "/comprovantes";
       const diskDir = resolveUploadsDirToDisk(comprovantesRelativeDir);
@@ -1604,7 +1660,10 @@ router.post(
         parcelaTipo,
         valor: pagamentoRows?.[0]?.valor,
       }).catch((telegramError) => {
-        console.error("Erro notificando comprovante de hospedagem no Telegram:", telegramError);
+        console.error(
+          "Erro notificando comprovante de hospedagem no Telegram:",
+          telegramError,
+        );
       });
       return res.json({
         status: "sucesso",
