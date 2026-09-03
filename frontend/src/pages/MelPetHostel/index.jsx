@@ -332,8 +332,7 @@ export default function MelPetHostel({
   });
   const [uploadingPetVaccineSide, setUploadingPetVaccineSide] = useState("");
   const [savingPetVaccines, setSavingPetVaccines] = useState(false);
-  const [hostingMenuOpen, setHostingMenuOpen] = useState(false);
-  const [hostingHistoryOpen, setHostingHistoryOpen] = useState(false);
+  const [activeHostingMenu, setActiveHostingMenu] = useState("");
   const [hostingHistoryStatusFilter, setHostingHistoryStatusFilter] =
     useState("all");
   const [hostingRequestOpenId, setHostingRequestOpenId] = useState(null);
@@ -848,6 +847,12 @@ export default function MelPetHostel({
       return cliente;
     });
   }
+
+  function handleBackToClientSearch() {
+    setSelectedClient(null);
+    setSelectedClientFiles([]);
+    setSelectedClientFilesError("");
+  }
   function buildDocumentPreviewUrl(file) {
     const tipo = file?.tipoRegistro === "contrato" ? "contrato" : "documento";
     const id =
@@ -1159,10 +1164,6 @@ export default function MelPetHostel({
     setSelectedVaccineUser((current) =>
       current?.key === user?.key ? null : user,
     );
-  }
-
-  function handleCloseVaccineUser() {
-    setSelectedVaccineUser(null);
   }
 
   function getVaccineDocumentName(card) {
@@ -2189,7 +2190,7 @@ export default function MelPetHostel({
       await loadHostingRequests();
       showToast("Solicitação de hospedagem enviada.", "success");
       clearHostingRequest();
-      setHostingMenuOpen(false);
+      setActiveHostingMenu("");
     } catch (error) {
       showToast(
         error?.message || "Não foi possível enviar a solicitação.",
@@ -2689,7 +2690,7 @@ export default function MelPetHostel({
   useEffect(() => {
     if (isAdmin || userMenu !== "hospedagem") return;
     loadHostingRequests();
-  }, [isAdmin, userMenu, hostingHistoryOpen]);
+  }, [isAdmin, userMenu]);
 
   useEffect(() => {
     if (!isAdmin || activeMenu !== "pesquisarClientes") return;
@@ -3078,6 +3079,23 @@ export default function MelPetHostel({
   function handleBackToMainMenu() {
     handleClosePetForm();
     onBack?.();
+  }
+
+  function handleBackToPetAdminMenu() {
+    handleClosePetForm();
+    setSelectedVaccineUser(null);
+    setSelectedAdminPet(null);
+    setPetDocsPet(null);
+    setActiveMenu("cadastroPets");
+  }
+
+  function handleBackFromPetAdminMenu() {
+    if (["pesquisarPets", "aprovarCarteiraVacinacao", "vacinasOutros", "ativarInativarPet"].includes(activeMenu)) {
+      handleBackToPetAdminMenu();
+      return;
+    }
+
+    handleBackToMainMenu();
   }
 
   async function loadPetVaccineConfigs() {
@@ -3551,7 +3569,7 @@ export default function MelPetHostel({
           <Button
             type="button"
             variant="outline"
-            onClick={handleBackToMainMenu}
+            onClick={handleBackFromPetAdminMenu}
           >
             Voltar
           </Button>
@@ -4714,7 +4732,9 @@ export default function MelPetHostel({
                                           a opção de cartão de crédito. Assim
                                           que o link for gerado, ficará
                                           disponivel abaixo e você também
-                                          receberá por email. Depois do pagamento, envie o comprovante neste pedido.
+                                          receberá por email. Depois do
+                                          pagamento, envie o comprovante neste
+                                          pedido.
                                         </p>
                                         {payment.linkPagamento ? (
                                           <a
@@ -5496,16 +5516,24 @@ export default function MelPetHostel({
         {
           id: "solicitar-hospedagem",
           title: "Solicitar Hospedagem",
-          isOpen: hostingMenuOpen,
-          onAction: () => setHostingMenuOpen((current) => !current),
+          isOpen: activeHostingMenu === "solicitarHospedagem",
+          onAction: () =>
+            setActiveHostingMenu((current) =>
+              current === "solicitarHospedagem" ? "" : "solicitarHospedagem",
+            ),
           content: hostingRequestContent,
         },
         {
           id: "meus-pedidos-hospedagem",
           title: "Meus Pedidos de Hospedagem",
           summary: "Acompanhe as solicitações enviadas.",
-          isOpen: hostingHistoryOpen,
-          onAction: () => setHostingHistoryOpen((current) => !current),
+          isOpen: activeHostingMenu === "meusPedidosHospedagem",
+          onAction: () =>
+            setActiveHostingMenu((current) =>
+              current === "meusPedidosHospedagem"
+                ? ""
+                : "meusPedidosHospedagem",
+            ),
           content: hostingRequestsContent,
         },
       ],
@@ -5524,26 +5552,34 @@ export default function MelPetHostel({
   ];
 
   const clientSearchContent = (
-    <section className="melpet-client-search">
-      <form className="melpet-client-search-form" onSubmit={loadClientSearch}>
+    <section className="melpet-client-search melpet-pet-status-admin melpet-admin-pet-search melpet-admin-client-search">
+      <header className="melpet-admin-pet-search-header">
+        <span>Cadastro de clientes</span>
+        <h3>Pesquisar clientes</h3>
+      </header>
+
+      <form
+        className="melpet-client-search-form melpet-admin-pet-search-form melpet-admin-client-search-form"
+        onSubmit={loadClientSearch}
+      >
         <label>
-          Pesquisar cliente
+          <span>Cliente ou codigo</span>
           <input
             type="search"
             value={clientSearchTerm}
             onChange={(event) => setClientSearchTerm(event.target.value)}
-            placeholder="Código ou nome do cliente"
+            placeholder="Digite para pesquisar"
           />
         </label>
 
         <label>
-          Ordenar por
+          <span>Ordenar por</span>
           <select
             value={clientSearchOrder}
             onChange={(event) => setClientSearchOrder(event.target.value)}
           >
-            <option value="codigo_asc">Código crescente</option>
-            <option value="codigo_desc">Código decrescente</option>
+            <option value="codigo_asc">Codigo crescente</option>
+            <option value="codigo_desc">Codigo decrescente</option>
             <option value="nome_asc">Nome A-Z</option>
             <option value="nome_desc">Nome Z-A</option>
           </select>
@@ -5558,242 +5594,260 @@ export default function MelPetHostel({
         <p className="melpet-error">{clientSearchError}</p>
       ) : null}
 
-      <div className="melpet-client-search-grid">
-        <div className="melpet-client-list">
-          {loadingClientSearch ? (
-            <p>Carregando clientes...</p>
-          ) : clientSearchResults.length ? (
-            clientSearchResults.map((cliente) => (
+      <div className="melpet-pet-status-results melpet-admin-client-results">
+        {loadingClientSearch ? (
+          <p>Carregando clientes...</p>
+        ) : clientSearchResults.length ? (
+          clientSearchResults.map((cliente) => (
+            <article
+              className="melpet-pet-status-client melpet-admin-pet-result-card melpet-admin-client-result-card"
+              key={cliente.id}
+            >
+              <header>
+                <div>
+                  <strong>{cliente.nome || "Cliente sem nome"}</strong>
+                  <span>Codigo {cliente.id}</span>
+                </div>
+                {cliente.admin ? (
+                  <em className="melpet-client-admin-badge">admin</em>
+                ) : null}
+              </header>
+
               <button
                 type="button"
-                key={cliente.id}
-                className={
-                  selectedClient?.id === cliente.id
-                    ? "melpet-client-list-item is-selected"
-                    : "melpet-client-list-item"
-                }
+                className="melpet-pet-name-button melpet-admin-pet-open-button melpet-admin-client-open-button"
                 onClick={() => handleSelectClient(cliente)}
               >
-                <strong>{cliente.id}</strong>
                 <span>
-                  {cliente.nome}
-                  {cliente.admin ? (
-                    <em className="melpet-client-admin-badge">admin</em>
-                  ) : null}
+                  <strong>{cliente.nome || "Cliente sem nome"}</strong>
+                  <small>
+                    {cliente.telefone || cliente.email || "Abrir ficha do cliente"}
+                  </small>
                 </span>
+                <em>Abrir</em>
               </button>
-            ))
-          ) : clientSearchSubmitted ? (
-            <p>Nenhum cliente encontrado.</p>
-          ) : (
-            <p>
-              Informe um código ou nome, ou clique em pesquisar para listar
-              todos.
-            </p>
-          )}
-        </div>
-
-        {selectedClient ? (
-          <article className="melpet-client-details">
-            <h3>
-              {selectedClient.nome}
-              {selectedClient.admin ? (
-                <em className="melpet-client-admin-badge">admin</em>
-              ) : null}
-            </h3>
-            <dl>
-              <div>
-                <dt>Código</dt>
-                <dd>{selectedClient.id}</dd>
-              </div>
-              <div>
-                <dt>CPF</dt>
-                <dd>
-                  {selectedClient.cpf ? maskCpf(selectedClient.cpf) : "-"}
-                </dd>
-              </div>
-              <div>
-                <dt>RG</dt>
-                <dd>{selectedClient.rg || "-"}</dd>
-              </div>
-              <div>
-                <dt>Data de nascimento</dt>
-                <dd>{formatBrazilDate(selectedClient.data_nascimento)}</dd>
-              </div>
-              <div>
-                <dt>Telefone</dt>
-                <dd>{selectedClient.telefone || "-"}</dd>
-              </div>
-              <div>
-                <dt>WhatsApp</dt>
-                <dd>{selectedClient.whatsapp || "-"}</dd>
-              </div>
-              <div>
-                <dt>Email</dt>
-                <dd>{selectedClient.email || "-"}</dd>
-              </div>
-              <div>
-                <dt>Observações</dt>
-                <dd>{selectedClient.observacoes || "-"}</dd>
-              </div>
-            </dl>
-
-            <div className="melpet-client-detail-block">
-              <h4>Endereços</h4>
-              {selectedClient.enderecos?.length ? (
-                <ul>
-                  {selectedClient.enderecos.map((endereco) => (
-                    <li key={endereco.id || formatAddress(endereco)}>
-                      {formatAddress(endereco)}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>Nenhum endereço cadastrado.</p>
-              )}
-            </div>
-
-            <div className="melpet-client-detail-block">
-              <h4>Pets</h4>
-              {selectedClient.pets?.length ? (
-                <ul>
-                  {selectedClient.pets.map((pet) => (
-                    <li className="melpet-client-pet-row" key={pet.id}>
-                      <span>{pet.nome || "Pet sem nome"}</span>
-                      <em
-                        className={`melpet-client-pet-status ${
-                          pet.ativo
-                            ? "melpet-client-pet-status--active"
-                            : "melpet-client-pet-status--inactive"
-                        }`}
-                      >
-                        {pet.ativo ? "Ativo" : "Inativo"}
-                      </em>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>Nenhum pet cadastrado.</p>
-              )}
-            </div>
-            <div className="melpet-client-detail-block melpet-client-documents-card">
-              <h4>Contrato e documentos</h4>
-              {loadingSelectedClientFiles ? (
-                <p>Carregando documentos...</p>
-              ) : selectedClientFilesError ? (
-                <p className="melpet-error">{selectedClientFilesError}</p>
-              ) : selectedClientFiles.length ? (
-                <ul className="melpet-client-documents-list">
-                  {selectedClientFiles.map((file, index) => {
-                    const key =
-                      String(file.tipoRegistro || "documento") +
-                      "-" +
-                      String(file.contratoId || file.documentoId || index);
-                    return (
-                      <li key={key}>
-                        <div>
-                          <strong>{file.tipoDocumento || "Documento"}</strong>
-                          <span>{file.nomeDocumento || "Arquivo PDF"}</span>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={!file.existsDisk}
-                          onClick={() => handleOpenDocumentPreview(file)}
-                        >
-                          Visualizar
-                        </Button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p>Nenhum contrato ou documento encontrado.</p>
-              )}
-            </div>
-            <div className="melpet-client-detail-block melpet-admin-upload-card">
-              <h4>Upload de documentos pelo administrador</h4>
-              <div className="melpet-admin-upload-grid">
-                <label>
-                  <span>Tipo</span>
-                  <select
-                    value={adminUploadType}
-                    onChange={(event) => setAdminUploadType(event.target.value)}
-                  >
-                    <option value="contrato">Contrato assinado</option>
-                    <option value="documento">
-                      Documento de identificação
-                    </option>
-                    <option value="comprovante">Comprovante de endereço</option>
-                    <option value="outros">Outros documentos</option>
-                  </select>
-                </label>
-
-                {adminUploadType === "carteira" ? (
-                  <>
-                    <label>
-                      <span>Pet</span>
-                      <select
-                        value={adminUploadPetId}
-                        onChange={(event) =>
-                          setAdminUploadPetId(event.target.value)
-                        }
-                      >
-                        <option value="">Selecione</option>
-                        {(selectedClient.pets || []).map((pet) => (
-                          <option key={pet.id} value={pet.id}>
-                            {pet.nome || `Pet ${pet.id}`}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>Lado</span>
-                      <select
-                        value={adminUploadSide}
-                        onChange={(event) =>
-                          setAdminUploadSide(event.target.value)
-                        }
-                      >
-                        <option value="frente">Frente</option>
-                        <option value="verso">Verso</option>
-                      </select>
-                    </label>
-                  </>
-                ) : null}
-
-                <label className="melpet-admin-upload-file">
-                  <span>Arquivo PDF</span>
-                  <input
-                    type="file"
-                    accept="application/pdf,.pdf"
-                    onChange={(event) =>
-                      setAdminUploadFile(event.target.files?.[0] || null)
-                    }
-                  />
-                </label>
-              </div>
-              <Button
-                type="button"
-                onClick={handleAdminClientDocumentUpload}
-                disabled={adminUploadingDocument || !adminUploadFile}
-              >
-                {adminUploadingDocument ? "Enviando..." : "Enviar documento"}
-              </Button>
-            </div>
-          </article>
-        ) : null}
+            </article>
+          ))
+        ) : clientSearchSubmitted ? (
+          <p>Nenhum cliente encontrado.</p>
+        ) : (
+          <p>Pesquise por codigo ou nome do cliente.</p>
+        )}
       </div>
     </section>
   );
 
+  const adminClientDetailsContent = selectedClient ? (
+    <article className="melpet-admin-pet-card melpet-admin-client-card">
+      <header className="melpet-admin-pet-card-header">
+        <div className="melpet-admin-pet-heading">
+          <span>Ficha do cliente</span>
+          <h3>
+            {selectedClient.nome || "Cliente sem nome"}
+            {selectedClient.admin ? (
+              <em className="melpet-client-admin-badge">admin</em>
+            ) : null}
+          </h3>
+        </div>
+      </header>
+
+      <section className="melpet-admin-pet-info-section">
+        <header>
+          <span>Dados cadastrais</span>
+        </header>
+        <dl className="melpet-admin-pet-info-grid">
+          <div>
+            <dt>Codigo</dt>
+            <dd>{selectedClient.id}</dd>
+          </div>
+          <div>
+            <dt>CPF</dt>
+            <dd>{selectedClient.cpf ? maskCpf(selectedClient.cpf) : "-"}</dd>
+          </div>
+          <div>
+            <dt>RG</dt>
+            <dd>{selectedClient.rg || "-"}</dd>
+          </div>
+          <div>
+            <dt>Data de nascimento</dt>
+            <dd>{formatBrazilDate(selectedClient.data_nascimento)}</dd>
+          </div>
+          <div>
+            <dt>Telefone</dt>
+            <dd>{selectedClient.telefone || "-"}</dd>
+          </div>
+          <div>
+            <dt>WhatsApp</dt>
+            <dd>{selectedClient.whatsapp || "-"}</dd>
+          </div>
+          <div>
+            <dt>Email</dt>
+            <dd>{selectedClient.email || "-"}</dd>
+          </div>
+          <div>
+            <dt>Observacoes</dt>
+            <dd>{selectedClient.observacoes || "-"}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="melpet-admin-pet-info-section melpet-admin-client-address-section">
+        <header>
+          <span>Enderecos</span>
+        </header>
+        {selectedClient.enderecos?.length ? (
+          <ul className="melpet-admin-client-simple-list">
+            {selectedClient.enderecos.map((endereco) => (
+              <li key={endereco.id || formatAddress(endereco)}>
+                {formatAddress(endereco)}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>Nenhum endereco cadastrado.</p>
+        )}
+      </section>
+
+      <section className="melpet-admin-pet-info-section melpet-admin-client-pets-section">
+        <header>
+          <span>Pets</span>
+        </header>
+        {selectedClient.pets?.length ? (
+          <ul className="melpet-admin-client-simple-list">
+            {selectedClient.pets.map((pet) => (
+              <li className="melpet-client-pet-row" key={pet.id}>
+                <span>{pet.nome || "Pet sem nome"}</span>
+                <em
+                  className={
+                    pet.ativo
+                      ? "melpet-client-pet-status melpet-client-pet-status--active"
+                      : "melpet-client-pet-status melpet-client-pet-status--inactive"
+                  }
+                >
+                  {pet.ativo ? "Ativo" : "Inativo"}
+                </em>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>Nenhum pet cadastrado.</p>
+        )}
+      </section>
+
+      <section className="melpet-admin-pet-docs-section melpet-client-documents-card">
+        <header>
+          <span>Contrato e documentos</span>
+        </header>
+        {loadingSelectedClientFiles ? (
+          <p>Carregando documentos...</p>
+        ) : selectedClientFilesError ? (
+          <p className="melpet-error">{selectedClientFilesError}</p>
+        ) : selectedClientFiles.length ? (
+          <ul className="melpet-client-documents-list">
+            {selectedClientFiles.map((file, index) => {
+              const key =
+                String(file.tipoRegistro || "documento") +
+                "-" +
+                String(file.contratoId || file.documentoId || index);
+              return (
+                <li key={key}>
+                  <div>
+                    <strong>{file.tipoDocumento || "Documento"}</strong>
+                    <span>{file.nomeDocumento || "Arquivo PDF"}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!file.existsDisk}
+                    onClick={() => handleOpenDocumentPreview(file)}
+                  >
+                    Visualizar
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p>Nenhum contrato ou documento encontrado.</p>
+        )}
+      </section>
+
+      <section className="melpet-admin-pet-docs-section melpet-admin-upload-card">
+        <header>
+          <span>Upload de documentos pelo administrador</span>
+        </header>
+        <div className="melpet-admin-upload-grid">
+          <label>
+            <span>Tipo</span>
+            <select
+              value={adminUploadType}
+              onChange={(event) => setAdminUploadType(event.target.value)}
+            >
+              <option value="contrato">Contrato assinado</option>
+              <option value="documento">Documento de identificacao</option>
+              <option value="comprovante">Comprovante de endereco</option>
+              <option value="outros">Outros documentos</option>
+            </select>
+          </label>
+
+          {adminUploadType === "carteira" ? (
+            <>
+              <label>
+                <span>Pet</span>
+                <select
+                  value={adminUploadPetId}
+                  onChange={(event) => setAdminUploadPetId(event.target.value)}
+                >
+                  <option value="">Selecione</option>
+                  {(selectedClient.pets || []).map((pet) => (
+                    <option key={pet.id} value={pet.id}>
+                      {pet.nome || "Pet " + pet.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Lado</span>
+                <select
+                  value={adminUploadSide}
+                  onChange={(event) => setAdminUploadSide(event.target.value)}
+                >
+                  <option value="frente">Frente</option>
+                  <option value="verso">Verso</option>
+                </select>
+              </label>
+            </>
+          ) : null}
+
+          <label className="melpet-admin-upload-file">
+            <span>Arquivo PDF</span>
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={(event) =>
+                setAdminUploadFile(event.target.files?.[0] || null)
+              }
+            />
+          </label>
+        </div>
+        <Button
+          type="button"
+          onClick={handleAdminClientDocumentUpload}
+          disabled={adminUploadingDocument || !adminUploadFile}
+        >
+          {adminUploadingDocument ? "Enviando..." : "Enviar documento"}
+        </Button>
+      </section>
+    </article>
+  ) : null;
+
   const vaccineManagementContent = (
-    <section className="melpet-vaccine-admin-stack">
+    <section className="melpet-vaccine-admin-stack melpet-admin-vaccine-config-content">
       <form
-        className="admin-page-panel admin-page-form"
+        className="admin-user-create-section melpet-admin-vaccine-config-card"
         onSubmit={saveVaccineConfig}
       >
-        <div className="admin-page-panel-title">
+        <div className="melpet-admin-document-card-heading">
           <span>{editingVaccineConfigId ? "Editando" : "Novo item"}</span>
           <h3>
             {editingVaccineConfigId
@@ -5894,21 +5948,21 @@ export default function MelPetHostel({
               variant="secondary"
               onClick={resetVaccineConfigForm}
             >
-              Cancelar edicao
+              Cancelar edição
             </Button>
           ) : null}
           <Button type="submit" disabled={savingVaccineConfig}>
             {savingVaccineConfig
               ? "Salvando..."
               : editingVaccineConfigId
-                ? "Salvar alteracoes"
+                ? "Salvar alterações"
                 : "Criar item"}
           </Button>
         </div>
       </form>
 
-      <section className="admin-page-panel">
-        <div className="admin-page-panel-title">
+      <section className="admin-user-create-section melpet-admin-vaccine-config-list-card">
+        <div className="melpet-admin-document-card-heading">
           <span>Vacinas / Outros</span>
           <h3>Itens cadastrados</h3>
         </div>
@@ -6270,169 +6324,409 @@ export default function MelPetHostel({
   );
 
   const adminPetSearchContent = (
-    <section className="melpet-client-search melpet-pet-status-admin melpet-admin-pet-search">
-      <header className="melpet-admin-pet-search-header">
-        <span>Cadastro de pets</span>
-        <h3>Pesquisar pets</h3>
-      </header>
+    <section className="melpet-admin-pet-maintenance-layout">
       <form
-        className="melpet-client-search-form melpet-admin-pet-search-form"
+        className="admin-user-create-section admin-user-search-section melpet-admin-pet-search-card"
         onSubmit={loadPetStatusSearch}
       >
-        <label>
-          <span>Cliente, codigo ou pet</span>
+        <div className="admin-user-section-title">
+          <span>Pesquisa</span>
+          <h3>Pesquisar pet</h3>
+        </div>
+        <label className="admin-user-search-field">
+          Buscar pet
           <input
             type="search"
             value={petStatusSearchTerm}
             onChange={(event) => setPetStatusSearchTerm(event.target.value)}
-            placeholder="Digite para pesquisar"
+            placeholder="Nome do pet, tutor ou codigo"
           />
         </label>
-        <Button type="submit" disabled={loadingPetStatus}>
-          {loadingPetStatus ? "Pesquisando..." : "Pesquisar"}
-        </Button>
+        <div className="admin-page-actions admin-user-search-actions">
+          <Button type="submit" disabled={loadingPetStatus}>
+            {loadingPetStatus ? "Pesquisando..." : "Pesquisar"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={resetAdminPetSearch}
+            disabled={loadingPetStatus}
+          >
+            Limpar
+          </Button>
+        </div>
       </form>
 
       {petStatusError ? <p className="melpet-error">{petStatusError}</p> : null}
 
-      <div className="melpet-pet-status-results">
-        {loadingPetStatus ? (
-          <p>Carregando clientes e pets...</p>
-        ) : petStatusResults.length ? (
-          petStatusResults.map((cliente) => (
-            <article
-              className="melpet-pet-status-client melpet-admin-pet-result-card"
-              key={cliente.id}
-            >
-              <header>
-                <div>
-                  <strong>{cliente.nome || "Cliente sem nome"}</strong>
-                </div>
-                <em>{cliente.pets?.length || 0} pets</em>
-              </header>
+      {petStatusSubmitted ? (
+        <section className="admin-user-create-section admin-user-search-results-section melpet-admin-pet-results-card">
+          <div className="admin-user-section-title">
+            <span>Resultado</span>
+            <h3>Pets encontrados</h3>
+          </div>
+          <div className="admin-user-search-results melpet-admin-pet-maintenance-results">
+            {loadingPetStatus ? (
+              <p>Carregando clientes e pets...</p>
+            ) : petStatusResults.length ? (
+              petStatusResults.map((cliente) => (
+                <article
+                  className="melpet-admin-pet-maintenance-client"
+                  key={cliente.id}
+                >
+                  <div className="melpet-admin-pet-maintenance-client-title">
+                    <strong>{cliente.nome || "Tutor sem nome"}</strong>
+                    <span className="melpet-admin-pet-count-text">{cliente.pets?.length || 0} pet(s)</span>
+                  </div>
 
-              {cliente.pets?.length ? (
-                <ul className="melpet-admin-pet-result-list">
-                  {cliente.pets.map((pet) => (
-                    <li
-                      className="melpet-pet-status-row melpet-admin-pet-result-row"
-                      key={pet.id}
-                    >
-                      <button
-                        type="button"
-                        className="melpet-pet-name-button melpet-admin-pet-open-button"
-                        onClick={() => handleOpenAdminPetFicha(cliente, pet)}
-                      >
-                        <span>
-                          <strong>{pet.nome || "Pet sem nome"}</strong>
-                          <small>{getPetSummary(pet) || "Ficha do pet"}</small>
-                        </span>
-                        <em
-                          className={`melpet-client-pet-status ${
-                            pet.ativo
-                              ? "melpet-client-pet-status--active"
-                              : "melpet-client-pet-status--inactive"
-                          }`}
+                  {cliente.pets?.length ? (
+                    <div className="melpet-admin-pet-maintenance-pets">
+                      {cliente.pets.map((pet) => (
+                        <button
+                          type="button"
+                          className="admin-user-search-result-pick melpet-admin-pet-maintenance-pick"
+                          key={pet.id}
+                          onClick={() => handleOpenAdminPetFicha(cliente, pet)}
                         >
-                          {pet.ativo ? "Ativo" : "Inativo"}
-                        </em>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>Nenhum pet cadastrado para este cliente.</p>
-              )}
-            </article>
-          ))
-        ) : petStatusSubmitted ? (
-          <p>Nenhum cliente encontrado.</p>
-        ) : (
-          <p>Pesquise por cliente, codigo ou nome do pet.</p>
-        )}
-      </div>
+                          <span className="melpet-admin-pet-result-content">
+                            <strong className="melpet-admin-pet-result-name">
+                              {pet.nome || "Pet sem nome"}
+                            </strong>
+                            <span className="melpet-admin-pet-info-badge">
+                              <small>{pet.raca || "Tipo nao informado"}</small>
+                              <small>
+                                {formatPetAge(pet.idade) || "Idade nao informada"}
+                              </small>
+                              <small>
+                                {formatPetWeight(pet.pesoAproximado) ||
+                                  "Peso nao informado"}
+                              </small>
+                              <em
+                                className={
+                                  pet.ativo
+                                    ? "melpet-client-pet-status melpet-client-pet-status--active"
+                                    : "melpet-client-pet-status melpet-client-pet-status--inactive"
+                                }
+                              >
+                                {pet.ativo ? "Ativo" : "Inativo"}
+                              </em>
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p>Nenhum pet cadastrado para este tutor.</p>
+                  )}
+                </article>
+              ))
+            ) : (
+              <p>Nenhum pet encontrado.</p>
+            )}
+          </div>
+        </section>
+      ) : null}
     </section>
   );
 
   const petStatusManagementContent = (
-    <section className="melpet-client-search melpet-pet-status-admin">
+    <section className="melpet-admin-pet-maintenance-layout melpet-admin-pet-status-content">
       <form
-        className="melpet-client-search-form"
+        className="admin-user-create-section admin-user-search-section melpet-admin-pet-search-card melpet-admin-pet-status-search-card"
         onSubmit={loadPetStatusSearch}
       >
-        <label>
-          Pesquisar cliente, código ou pet
+        <div className="admin-user-section-title">
+          <span>Pesquisa</span>
+          <h3>Ativar / Inativar Pet</h3>
+        </div>
+        <label className="admin-user-search-field">
+          Buscar pet
           <input
             type="search"
             value={petStatusSearchTerm}
             onChange={(event) => setPetStatusSearchTerm(event.target.value)}
-            placeholder="Nome do cliente, código ou nome do pet"
+            placeholder="Nome do tutor ou nome do pet"
           />
         </label>
-        <Button type="submit" disabled={loadingPetStatus}>
-          {loadingPetStatus ? "Pesquisando..." : "Pesquisar"}
-        </Button>
+        <div className="admin-page-actions admin-user-search-actions">
+          <Button type="submit" disabled={loadingPetStatus}>
+            {loadingPetStatus ? "Pesquisando..." : "Pesquisar"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={resetAdminPetSearch}
+            disabled={loadingPetStatus}
+          >
+            Limpar
+          </Button>
+        </div>
       </form>
 
       {petStatusError ? <p className="melpet-error">{petStatusError}</p> : null}
 
-      <div className="melpet-pet-status-results">
-        {loadingPetStatus ? (
-          <p>Carregando clientes e pets...</p>
-        ) : petStatusResults.length ? (
-          petStatusResults.map((cliente) => (
-            <article className="melpet-pet-status-client" key={cliente.id}>
-              <header>
-                <strong>{cliente.nome || "Cliente sem nome"}</strong>
-                <span>Código {cliente.id}</span>
-              </header>
+      {petStatusSubmitted ? (
+        <section className="admin-user-create-section admin-user-search-results-section melpet-admin-pet-results-card melpet-admin-pet-status-results-card">
+          <div className="admin-user-section-title">
+            <span>Resultado</span>
+            <h3>Pets encontrados</h3>
+          </div>
+          <div className="admin-user-search-results melpet-admin-pet-status-results">
+            {loadingPetStatus ? (
+              <p>Carregando clientes e pets...</p>
+            ) : petStatusResults.length ? (
+              petStatusResults.map((cliente) => (
+                <article className="melpet-admin-pet-maintenance-client melpet-admin-pet-status-client" key={cliente.id}>
+                  <div className="melpet-admin-pet-maintenance-client-title">
+                    <strong>{cliente.nome || "Tutor sem nome"}</strong>
+                    <span className="melpet-admin-pet-count-text">{cliente.pets?.length || 0} pet(s)</span>
+                  </div>
 
-              {cliente.pets?.length ? (
-                <ul>
-                  {cliente.pets.map((pet) => (
-                    <li className="melpet-pet-status-row" key={pet.id}>
-                      <div>
-                        <strong>{pet.nome || "Pet sem nome"}</strong>
-                        <em
-                          className={`melpet-client-pet-status ${
-                            pet.ativo
-                              ? "melpet-client-pet-status--active"
-                              : "melpet-client-pet-status--inactive"
-                          }`}
-                        >
-                          {pet.ativo ? "Ativo" : "Inativo"}
-                        </em>
-                      </div>
-                      <Button
-                        type="button"
-                        variant={pet.ativo ? "danger" : "success"}
-                        size="sm"
-                        onClick={() => toggleAdminPetStatus(pet)}
-                        disabled={savingPetStatusId === pet.id}
-                      >
-                        {savingPetStatusId === pet.id
-                          ? "Salvando..."
-                          : pet.ativo
-                            ? "Inativar"
-                            : "Ativar"}
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>Nenhum pet cadastrado para este cliente.</p>
-              )}
-            </article>
-          ))
-        ) : petStatusSubmitted ? (
-          <p>Nenhum cliente encontrado.</p>
-        ) : (
-          <p>Pesquise por cliente, código ou nome do pet.</p>
-        )}
-      </div>
+                  {cliente.pets?.length ? (
+                    <div className="melpet-admin-pet-maintenance-pets">
+                      {cliente.pets.map((pet) => (
+                        <article className="melpet-admin-pet-maintenance-pick melpet-admin-pet-status-item" key={pet.id}>
+                          <span className="melpet-admin-pet-result-content">
+                            <strong className="melpet-admin-pet-result-name">
+                              {pet.nome || "Pet sem nome"}
+                            </strong>
+                            <span className="melpet-admin-pet-info-badge">
+                              <small>{pet.raca || "Tipo nao informado"}</small>
+                              <small>
+                                {formatPetAge(pet.idade) || "Idade nao informada"}
+                              </small>
+                              <small>
+                                {formatPetWeight(pet.pesoAproximado) ||
+                                  "Peso nao informado"}
+                              </small>
+                              <em
+                                className={
+                                  pet.ativo
+                                    ? "melpet-client-pet-status melpet-client-pet-status--active"
+                                    : "melpet-client-pet-status melpet-client-pet-status--inactive"
+                                }
+                              >
+                                {pet.ativo ? "Ativo" : "Inativo"}
+                              </em>
+                            </span>
+                          </span>
+                          <Button
+                            type="button"
+                            variant={pet.ativo ? "danger" : "success"}
+                            size="sm"
+                            onClick={() => toggleAdminPetStatus(pet)}
+                            disabled={savingPetStatusId === pet.id}
+                          >
+                            {savingPetStatusId === pet.id
+                              ? "Salvando..."
+                              : pet.ativo
+                                ? "Inativar"
+                                : "Ativar"}
+                          </Button>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p>Nenhum pet cadastrado para este tutor.</p>
+                  )}
+                </article>
+              ))
+            ) : (
+              <p>Nenhum pet encontrado.</p>
+            )}
+          </div>
+        </section>
+      ) : null}
     </section>
   );
+  const adminDocumentApprovalContent = (
+    <section className="melpet-section-content melpet-admin-document-approval-content">
+      <div className="admin-user-create-section melpet-admin-document-pending-card">
+        <div className="melpet-admin-document-card-heading">
+          <span>Documentos pendentes</span>
+          <strong>Aprovar Documentos</strong>
+        </div>
 
+        <div className="melpet-admin-document-pending-band">
+          <p className="melpet-validate-subtitle">
+            Usuários com documentos pendentes de conferência:
+          </p>
+          {loadingPendingUsers ? (
+            <p className="melpet-validate-message">Carregando usuários...</p>
+          ) : pendingUsersError ? (
+            <p className="melpet-error">{pendingUsersError}</p>
+          ) : pendingUsers.length ? (
+            <ul className="melpet-pending-users-list melpet-admin-document-user-list">
+              {pendingUsers.map((u) => (
+                <li key={u.usuarioId || u.nome}>
+                  <button
+                    type="button"
+                    className="melpet-pending-user-btn melpet-admin-document-user-btn"
+                    onClick={() => handleOpenUserDocuments(u)}
+                  >
+                    <span>{u.nome}</span>
+                    <em>Abrir</em>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="melpet-validate-message">
+              Nenhum usuário com documentos pendentes no momento.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {selectedPendingUser ? (
+        <div className="admin-user-create-section melpet-admin-document-details-card">
+          <div className="melpet-admin-document-card-heading">
+            <span>Conferência</span>
+            <strong>Documentos de {selectedPendingUser?.nome || "usuário"}</strong>
+          </div>
+
+          <div className="melpet-user-registration-card melpet-admin-document-registration-card">
+            <h4>Dados do cadastro</h4>
+            <dl>
+              <div>
+                <dt>Nome</dt>
+                <dd>
+                  {selectedPendingUser?.cadastro?.nome ||
+                    selectedPendingUser?.nome ||
+                    "-"}
+                </dd>
+              </div>
+              <div>
+                <dt>RG</dt>
+                <dd>{selectedPendingUser?.cadastro?.rg || "-"}</dd>
+              </div>
+              <div>
+                <dt>CPF</dt>
+                <dd>
+                  {selectedPendingUser?.cadastro?.cpf
+                    ? maskCpf(selectedPendingUser.cadastro.cpf)
+                    : "-"}
+                </dd>
+              </div>
+              <div className="melpet-user-registration-address">
+                <dt>Endereço</dt>
+                <dd>{selectedPendingUser?.cadastro?.endereco || "-"}</dd>
+              </div>
+            </dl>
+          </div>
+
+          {loadingSelectedUserFiles ? (
+            <p className="melpet-validate-message">Carregando documentos...</p>
+          ) : selectedUserFilesError ? (
+            <p className="melpet-error">{selectedUserFilesError}</p>
+          ) : (
+            <div className="melpet-docs-table-wrap melpet-admin-document-table-wrap">
+              <table className="melpet-docs-table">
+                <thead>
+                  <tr>
+                    <th>Nome do documento</th>
+                    <th>Tipo de documento</th>
+                    <th>Visualizar</th>
+                    <th>Aprovar</th>
+                    <th>Reprovar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedUserFiles.length ? (
+                    (() => {
+                      return selectedUserFiles.map((file, index) => {
+                        const url = buildFileUrl(file.fileUrl);
+                        const isConferido = Boolean(file?.conferido);
+                        const itemKey = buildConferirKey(file);
+                        const isConferindo = isConferindoItem(itemKey);
+                        const isRejectingDocument =
+                          isRejectingDocumentItem(itemKey);
+                        const canRejectDocument =
+                          file?.tipoRegistro === "contrato"
+                            ? Number(file?.contratoId) > 0
+                            : file?.tipoRegistro === "documento" &&
+                              Number(file?.documentoId) > 0;
+                        const hasConferirTarget =
+                          file?.tipoRegistro === "contrato"
+                            ? Number(file?.contratoId) > 0
+                            : Number(file?.documentoId) > 0;
+                        return (
+                          <tr
+                            key={`${file.filePath || file.nomeDocumento}-${index}`}
+                          >
+                            <td>{file.nomeDocumento}</td>
+                            <td>{file.tipoDocumento}</td>
+                            <td>
+                              <button
+                                type="button"
+                                className="melpet-view-doc-btn"
+                                disabled={!url}
+                                onClick={() => handleOpenDocumentPreview(file)}
+                              >
+                                Visualizar documento
+                              </button>
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="melpet-review-btn melpet-review-btn--approve"
+                                disabled={
+                                  isConferido ||
+                                  isConferindo ||
+                                  !hasConferirTarget
+                                }
+                                onClick={() => handleConferirDocumento(file)}
+                              >
+                                {isConferindo
+                                  ? "Aprovando..."
+                                  : isConferido
+                                    ? "Aprovado"
+                                    : "Aprovar"}
+                              </button>
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="melpet-review-btn melpet-review-btn--reject"
+                                disabled={
+                                  isConferido ||
+                                  isRejectingDocument ||
+                                  !canRejectDocument
+                                }
+                                onClick={() => openRejectDocumentModal(file)}
+                              >
+                                {isRejectingDocument
+                                  ? "Reprovando..."
+                                  : "Reprovar"}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()
+                  ) : (
+                    <tr>
+                      <td colSpan={5}>Nenhum documento encontrado.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="melpet-user-docs-actions melpet-admin-document-actions">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCloseUserDocuments}
+            >
+              Fechar
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
   const petAdminMenus = new Set([
     "cadastroPets",
     "aprovarCarteiraVacinacao",
@@ -6472,6 +6766,161 @@ export default function MelPetHostel({
       .values(),
   );
 
+  const isPixConfigAdminMenu =
+    activeMenu === "configurarPix" || initialAdminMenu === "configurarPix";
+
+  const adminVaccineApprovalContent = (
+    <section className="melpet-section-content melpet-admin-vaccine-approval-content">
+      <div className="admin-user-create-section melpet-admin-vaccine-pending-card">
+        <div className="melpet-admin-document-card-heading">
+          <span>Carteiras pendentes</span>
+          <strong>Aprovar Carteira de Vacinação</strong>
+        </div>
+
+        <div className="melpet-admin-vaccine-pending-band">
+          <p className="melpet-validate-subtitle">
+            Usuários com carteira de vacinação pendente de conferência:
+          </p>
+          {loadingVaccineCards ? (
+            <p className="melpet-validate-message">Carregando carteiras...</p>
+          ) : vaccineCardsError ? (
+            <p className="melpet-error">{vaccineCardsError}</p>
+          ) : pendingVaccineUsers.length ? (
+            <ul className="melpet-pending-users-list melpet-admin-vaccine-user-list">
+              {pendingVaccineUsers.map((user) => (
+                <li key={user.key}>
+                  <button
+                    type="button"
+                    className="melpet-pending-user-btn melpet-admin-vaccine-user-btn"
+                    onClick={() => handleOpenVaccineUser(user)}
+                  >
+                    <span>{user.nome}</span>
+                    <em>Abrir</em>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="melpet-validate-message">
+              Nenhuma carteira de vacinação pendente no momento.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {selectedVaccineUser ? (
+        <div className="admin-user-create-section melpet-admin-vaccine-details-card">
+          <div className="melpet-vaccine-review-stack">
+            {selectedVaccinePetGroups.length ? (
+              selectedVaccinePetGroups.map((group) => (
+                <article className="melpet-vaccine-review-card" key={group.key}>
+                  <header className="melpet-vaccine-review-header">
+                    <strong>Cliente {group.clienteNome}</strong>
+                    <span>Pet: {group.petNome}</span>
+                  </header>
+
+                  <div className="melpet-vaccine-review-docs">
+                    {[
+                      ["frente", "Documento frente"],
+                      ["verso", "Documento verso"],
+                    ].map(([side, label]) => {
+                      const card = group.documentos[side];
+                      const isApproving = approvingVaccineCardId === card?.id;
+                      const isRejecting = rejectingVaccineCardId === card?.id;
+                      return (
+                        <div
+                          className="melpet-vaccine-review-doc"
+                          key={`${group.key}-${side}`}
+                        >
+                          <span>{label}</span>
+                          {card ? (
+                            <div className="melpet-vaccine-review-actions">
+                              <button
+                                type="button"
+                                className="melpet-view-doc-btn"
+                                disabled={!buildFileUrl(card.fileUrl)}
+                                onClick={() =>
+                                  handleOpenDocumentPreview({
+                                    fileUrl: card.fileUrl,
+                                    nomeDocumento:
+                                      card.nomeArquivo ||
+                                      getVaccineDocumentName(card),
+                                    tipoDocumento: getVaccineDocumentName(card),
+                                  })
+                                }
+                              >
+                                Visualizar
+                              </button>
+                              <button
+                                type="button"
+                                className="melpet-review-btn melpet-review-btn--approve"
+                                disabled={isApproving}
+                                onClick={() => handleApproveVaccineCard(card)}
+                              >
+                                {isApproving ? "Aprovando..." : "Aprovar"}
+                              </button>
+                              <button
+                                type="button"
+                                className="melpet-review-btn melpet-review-btn--reject"
+                                disabled={isRejecting}
+                                onClick={() => openRejectVaccineCardModal(card)}
+                              >
+                                {isRejecting ? "Reprovando..." : "Reprovar"}
+                              </button>
+                            </div>
+                          ) : (
+                            <em>Não enviado</em>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <section className="melpet-vaccine-review-info">
+                    <h4>Informações adicionais</h4>
+                    {group.vacinas.length ? (
+                      <ul>
+                        {group.vacinas.map((item) => {
+                          const vencimento = item.duracao
+                            ? addMonthsToDate(item.dataAplicacao, item.duracao)
+                            : "";
+                          return (
+                            <li key={`${group.key}-${item.configId}`}>
+                              <div className="melpet-vaccine-review-vaccine-main">
+                                <strong>{item.descricao || "Vacina"}</strong>
+                                <em>{item.tipo || "Tipo não informado"}</em>
+                              </div>
+                              <div className="melpet-vaccine-review-dates">
+                                <span>
+                                  Data: {formatBrazilDate(item.dataAplicacao)}
+                                </span>
+                                <span>
+                                  Vencimento:{" "}
+                                  {vencimento
+                                    ? formatBrazilDate(vencimento)
+                                    : "Não informado"}
+                                </span>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p>Nenhuma informação preenchida.</p>
+                    )}
+                  </section>
+                </article>
+              ))
+            ) : (
+              <p className="melpet-validate-message">
+                Nenhuma carteira de vacinação encontrada.
+              </p>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
   const adminMenuPanels = [
     {
       id: "admin-melpethostel",
@@ -6479,17 +6928,23 @@ export default function MelPetHostel({
         ? "Cadastro de Pets"
         : isPlanosAdminMenu
           ? "Controle de Planos"
-          : "Mel Pet Hostel",
+          : isPixConfigAdminMenu
+            ? "Configurar PIX"
+            : "Mel Pet Hostel",
       summary: isPetAdminMenu
         ? "Acesse as ferramentas administrativas dos pets."
         : isPlanosAdminMenu
           ? "Gerencie os planos do pet hotel."
-          : "Acesse as ferramentas administrativas do pet hotel.",
+          : isPixConfigAdminMenu
+            ? "Configure a chave PIX global usada nas hospedagens."
+            : "Acesse as ferramentas administrativas do pet hotel.",
       ariaLabel: isPetAdminMenu
         ? "Cadastro de Pets"
         : isPlanosAdminMenu
           ? "Controle de Planos"
-          : "Menu da Mel Pet Hostel",
+          : isPixConfigAdminMenu
+            ? "Configurar PIX"
+            : "Menu da Mel Pet Hostel",
       items: isPetAdminMenu
         ? [
             {
@@ -6497,54 +6952,38 @@ export default function MelPetHostel({
               title: "Pesquisar Pets",
               summary:
                 "Acesse a ficha do pet, envie carteirinha e preencha vacinas.",
-              isOpen: activeMenu === "pesquisarPets",
               onAction: () => {
                 resetAdminPetSearch();
-                setActiveMenu((prev) =>
-                  prev === "pesquisarPets" ? "" : "pesquisarPets",
-                );
+                setActiveMenu("pesquisarPets");
               },
-              content: adminPetSearchContent,
             },
             {
               id: "aprovar-carteira-vacinacao",
               title: "Aprovar Carteira de Vacinação",
               summary: "Conferir e aprovar carteiras enviadas pelos tutores.",
-              isOpen: activeMenu === "aprovarCarteiraVacinacao",
               onAction: () => {
-                setActiveMenu((prev) =>
-                  prev === "aprovarCarteiraVacinacao"
-                    ? ""
-                    : "aprovarCarteiraVacinacao",
-                );
                 setSelectedVaccineUser(null);
+                setActiveMenu("aprovarCarteiraVacinacao");
               },
             },
             {
               id: "vacinas-outros",
               title: "Criação e Edição de Vacinas / Outros",
               summary: "Gerenciar cadastros auxiliares de vacinação.",
-              isOpen: activeMenu === "vacinasOutros",
               onAction: () => {
-                setActiveMenu((prev) =>
-                  prev === "vacinasOutros" ? "" : "vacinasOutros",
-                );
                 resetVaccineConfigForm();
+                setActiveMenu("vacinasOutros");
               },
-              content: vaccineManagementContent,
             },
             {
               id: "ativar-inativar-pet",
               title: "Ativar / Inativar Pet",
               summary: "Alterar a situação cadastral dos pets.",
-              isOpen: activeMenu === "ativarInativarPet",
               onAction: () => {
-                setActiveMenu((prev) =>
-                  prev === "ativarInativarPet" ? "" : "ativarInativarPet",
-                );
+                resetAdminPetSearch();
                 setPetStatusError("");
+                setActiveMenu("ativarInativarPet");
               },
-              content: petStatusManagementContent,
             },
           ]
         : isPlanosAdminMenu
@@ -6562,96 +7001,89 @@ export default function MelPetHostel({
                 content: planosContent,
               },
             ]
-          : [
-              {
-                id: "conferir-documentos",
-                title: "Aprovar Documentos",
-                summary: "Conferir e aprovar documentos enviados.",
-                isOpen: activeMenu === "conferirDocumentos",
-                onAction: () => {
-                  setActiveMenu((prev) =>
-                    prev === "conferirDocumentos" ? "" : "conferirDocumentos",
-                  );
-                  setSelectedPendingUser(null);
-                  setSelectedUserFiles([]);
-                  setSelectedUserFilesError("");
+          : isPixConfigAdminMenu
+            ? []
+            : [
+                {
+                  id: "pesquisar-clientes",
+                  title: "Pesquisar Cliente",
+                  isOpen: activeMenu === "pesquisarClientes",
+                  onAction: () => {
+                    setActiveMenu((prev) =>
+                      prev === "pesquisarClientes" ? "" : "pesquisarClientes",
+                    );
+                    setSelectedPendingUser(null);
+                    setSelectedUserFiles([]);
+                    setSelectedUserFilesError("");
+                  },
+                  content: clientSearchContent,
                 },
-              },
-              {
-                id: "pesquisar-clientes",
-                title: "Pesquisar Cliente",
-                summary:
-                  "Pesquise por código ou nome e confira cadastro, endereço e pets.",
-                isOpen: activeMenu === "pesquisarClientes",
-                onAction: () => {
-                  setActiveMenu((prev) =>
-                    prev === "pesquisarClientes" ? "" : "pesquisarClientes",
-                  );
-                  setSelectedPendingUser(null);
-                  setSelectedUserFiles([]);
-                  setSelectedUserFilesError("");
+                {
+                  id: "conferir-documentos",
+                  title: "Aprovar Documentos",
+                  summary: "Conferir e aprovar documentos enviados.",
+                  isOpen: activeMenu === "conferirDocumentos",
+                  onAction: () => {
+                    setActiveMenu((prev) =>
+                      prev === "conferirDocumentos" ? "" : "conferirDocumentos",
+                    );
+                    setSelectedPendingUser(null);
+                    setSelectedUserFiles([]);
+                    setSelectedUserFilesError("");
+                  },
+                  content: adminDocumentApprovalContent,
                 },
-                content: clientSearchContent,
-              },
-              {
-                id: "configurar-pix",
-                title: "Configurar PIX",
-                isOpen: activeMenu === "configurarPix",
-                onAction: () => {
-                  setActiveMenu((prev) =>
-                    prev === "configurarPix" ? "" : "configurarPix",
-                  );
-                  loadPixConfig();
+                {
+                  id: "aprovar-hospedagens",
+                  title: "Aprovar Hospedagens",
+                  summary: "Conferir e aprovar hospedagens pendentes.",
+                  isOpen: activeMenu === "aprovarHospedagens",
+                  onAction: () => {
+                    const shouldOpen = activeMenu !== "aprovarHospedagens";
+                    setActiveMenu(shouldOpen ? "aprovarHospedagens" : "");
+                    setSelectedPendingHostingId(null);
+                    if (shouldOpen) {
+                      loadPendingHostingRequests();
+                    } else {
+                      setPendingHostingRequests([]);
+                      setPendingHostingRequestsError("");
+                    }
+                  },
+                  content: adminHostingApprovalContent,
                 },
-                content: adminPixConfigContent,
-              },
-              {
-                id: "aprovar-hospedagens",
-                title: "Aprovar Hospedagens",
-                summary: "Conferir e aprovar hospedagens pendentes.",
-                isOpen: activeMenu === "aprovarHospedagens",
-                onAction: () => {
-                  const shouldOpen = activeMenu !== "aprovarHospedagens";
-                  setActiveMenu(shouldOpen ? "aprovarHospedagens" : "");
-                  setSelectedPendingHostingId(null);
-                  if (shouldOpen) {
-                    loadPendingHostingRequests();
-                  } else {
-                    setPendingHostingRequests([]);
-                    setPendingHostingRequestsError("");
-                  }
+                {
+                  id: "analise-comprovantes",
+                  title: "Análise de Comprovantes",
+                  summary:
+                    "Conferir comprovantes de pagamento das hospedagens.",
+                  isOpen: activeMenu === "analisarComprovantes",
+                  onAction: () => {
+                    setActiveMenu((prev) =>
+                      prev === "analisarComprovantes"
+                        ? ""
+                        : "analisarComprovantes",
+                    );
+                    loadPendingHostingPaymentReceipts();
+                  },
+                  content: adminHostingPaymentReviewContent,
                 },
-                content: adminHostingApprovalContent,
-              },
-              {
-                id: "analise-comprovantes",
-                title: "Análise de Comprovantes",
-                summary: "Conferir comprovantes de pagamento das hospedagens.",
-                isOpen: activeMenu === "analisarComprovantes",
-                onAction: () => {
-                  setActiveMenu((prev) =>
-                    prev === "analisarComprovantes"
-                      ? ""
-                      : "analisarComprovantes",
-                  );
-                  loadPendingHostingPaymentReceipts();
+                {
+                  id: "enviar-link-pagamento",
+                  title: "Enviar Link de Pagamento",
+                  summary: "Enviar link de cartão de crédito para o tutor.",
+                  isOpen: activeMenu === "enviarLinkPagamento",
+                  onAction: () => {
+                    setActiveMenu((prev) =>
+                      prev === "enviarLinkPagamento"
+                        ? ""
+                        : "enviarLinkPagamento",
+                    );
+                    loadPendingCardPaymentRequests();
+                  },
+                  content: adminCardPaymentLinkContent,
                 },
-                content: adminHostingPaymentReviewContent,
-              },
-              {
-                id: "enviar-link-pagamento",
-                title: "Enviar Link de Pagamento",
-                summary: "Enviar link de cartão de crédito para o tutor.",
-                isOpen: activeMenu === "enviarLinkPagamento",
-                onAction: () => {
-                  setActiveMenu((prev) =>
-                    prev === "enviarLinkPagamento" ? "" : "enviarLinkPagamento",
-                  );
-                  loadPendingCardPaymentRequests();
-                },
-                content: adminCardPaymentLinkContent,
-              },
-            ],
+              ],
+      children: isPixConfigAdminMenu ? adminPixConfigContent : null,
       after: (
         <div className="pet-main-actions">
           <Button
@@ -6927,6 +7359,201 @@ export default function MelPetHostel({
       </div>
     </Modal>
   );
+  if (isAdmin && activeMenu === "ativarInativarPet") {
+    return (
+      <>
+        <main className="admin-page admin-user-create-page melpet-admin-pet-search-page melpet-admin-pet-status-page">
+          <div className="admin-page-panel admin-page-form admin-user-create-card melpet-admin-pet-search-window melpet-admin-pet-status-window">
+            <header className="admin-user-create-header">
+              <div className="admin-user-create-heading">
+                <span>Mel Pet Hostel</span>
+                <h2>Ativar / Inativar Pet</h2>
+              </div>
+              <p className="admin-user-create-subtitle">
+                Consulte o tutor ou pet e altere a situação cadastral quando necessário.
+              </p>
+            </header>
+
+            {petStatusManagementContent}
+
+            <div className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleBackToPetAdminMenu}
+              >
+                Voltar
+              </Button>
+            </div>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  if (isAdmin && activeMenu === "vacinasOutros") {
+    return (
+      <>
+        <main className="admin-page admin-user-create-page melpet-admin-pet-search-page melpet-admin-vaccine-config-page">
+          <div className="admin-page-panel admin-page-form admin-user-create-card melpet-admin-pet-search-window melpet-admin-vaccine-config-window">
+            <header className="admin-user-create-header">
+              <div className="admin-user-create-heading">
+                <span>Mel Pet Hostel</span>
+                <h2>Criação e Edição de Vacinas / Outros</h2>
+              </div>
+              <p className="admin-user-create-subtitle">
+                Cadastre e organize os itens de vacinação usados nas fichas dos pets.
+              </p>
+            </header>
+
+            {vaccineManagementContent}
+
+            <div className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleBackToPetAdminMenu}
+              >
+                Voltar
+              </Button>
+            </div>
+          </div>
+        </main>
+        <Modal
+          isOpen={Boolean(deleteWarningVaccineConfig)}
+          onClose={cancelDeleteVaccineConfig}
+          title="Atenção"
+          closeOnBackdropClick={false}
+          showCloseButton={false}
+          containerStyle={{ width: "min(94%, 520px)" }}
+        >
+          <div className="admin-page-delete-modal">
+            <p>
+              Atenção!! Ao clicar em CONFIRMAR, você irá excluir este item de
+              vacinas / outros: <strong>{deleteWarningVaccineConfig?.descricao}</strong>.
+              Ele não aparecerá mais para novos cadastros.
+            </p>
+
+            <div className="modal-actions">
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => acknowledgeDeleteVaccineConfig(deleteWarningVaccineConfig)}
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      </>
+    );
+  }
+
+  if (isAdmin && activeMenu === "aprovarCarteiraVacinacao") {
+    return (
+      <>
+        <main className="admin-page admin-user-create-page melpet-admin-pet-search-page melpet-admin-vaccine-approval-page">
+          <div className="admin-page-panel admin-page-form admin-user-create-card melpet-admin-pet-search-window melpet-admin-vaccine-approval-window">
+            <header className="admin-user-create-header">
+              <div className="admin-user-create-heading">
+                <span>Mel Pet Hostel</span>
+                <h2>Aprovar Carteira de Vacinação</h2>
+              </div>
+              <p className="admin-user-create-subtitle">
+                Confira carteirinhas enviadas pelos tutores e aprove ou reprove cada documento.
+              </p>
+            </header>
+
+            {adminVaccineApprovalContent}
+
+            <div className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions">
+              <Button type="button" variant="outline" onClick={handleBackToPetAdminMenu}>
+                Voltar
+              </Button>
+            </div>
+          </div>
+        </main>
+        {rejectVaccineCardModal}
+        <Modal
+          isOpen={documentPreviewOpen}
+          onClose={handleCloseDocumentPreview}
+          title={documentPreviewTitle || "Visualizar documento"}
+          containerStyle={{ width: "min(96%, 1100px)", maxWidth: 1100 }}
+          contentStyle={{ padding: 0 }}
+        >
+          <div className="melpet-preview-modal-body">
+            <PdfViewer src={documentPreviewSrc} title={documentPreviewTitle} />
+          </div>
+        </Modal>
+      </>
+    );
+  }
+
+  if (isAdmin && activeMenu === "pesquisarPets" && !selectedAdminPet) {
+    return (
+      <>
+        <main className="admin-page admin-user-create-page melpet-admin-pet-search-page">
+          <div className="admin-page-panel admin-page-form admin-user-create-card melpet-admin-pet-search-window">
+            <header className="admin-user-create-header">
+              <div className="admin-user-create-heading">
+                <span>Mel Pet Hostel</span>
+                <h2>Pesquisar Pets</h2>
+              </div>
+              <p className="admin-user-create-subtitle">
+                Pesquise um pet pelo nome, tutor ou codigo e acesse a ficha completa.
+              </p>
+            </header>
+
+            {adminPetSearchContent}
+
+            <div className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleBackToPetAdminMenu}
+              >
+                Voltar
+              </Button>
+            </div>
+          </div>
+        </main>
+        {deletePetModal}
+      </>
+    );
+  }
+
+  if (isAdmin && activeMenu === "pesquisarClientes" && selectedClient) {
+    return (
+      <>
+        <main className="melpet-admin-standalone-screen">
+          <section className="melpet-admin-pet-screen melpet-admin-client-screen">
+            {adminClientDetailsContent}
+            <footer className="melpet-admin-pet-footer">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleBackToClientSearch}
+              >
+                Voltar
+              </Button>
+            </footer>
+          </section>
+        </main>
+        <Modal
+          isOpen={documentPreviewOpen}
+          onClose={handleCloseDocumentPreview}
+          title={documentPreviewTitle || "Visualizar documento"}
+          containerStyle={{ width: "min(96%, 1100px)", maxWidth: 1100 }}
+          contentStyle={{ padding: 0 }}
+        >
+          <div className="melpet-preview-modal-body">
+            <PdfViewer src={documentPreviewSrc} title={documentPreviewTitle} />
+          </div>
+        </Modal>
+      </>
+    );
+  }
+
 
   if (
     isAdmin &&
@@ -7127,418 +7754,7 @@ export default function MelPetHostel({
           </MenuPanel>
         ) : acessoDiretoMenu || petCadastroObrigatorio ? (
           <>
-            {isAdmin && activeMenu === "aprovarCarteiraVacinacao" ? (
-              <section className="melpet-section-content">
-                <div className="melpet-outer-card melpet-validate-card">
-                  <div className="melpet-outer-card-header">
-                    <h3>Aprovar Carteira de Vacinação</h3>
-                  </div>
 
-                  <div className="melpet-categories-card">
-                    <div className="melpet-card-body">
-                      <p className="melpet-validate-subtitle">
-                        Usuários com carteira de vacinação pendente de
-                        conferência:
-                      </p>
-                      {loadingVaccineCards ? (
-                        <p className="melpet-validate-message">
-                          Carregando carteiras...
-                        </p>
-                      ) : vaccineCardsError ? (
-                        <p className="melpet-error">{vaccineCardsError}</p>
-                      ) : pendingVaccineUsers.length ? (
-                        <ul className="melpet-pending-users-list">
-                          {pendingVaccineUsers.map((user) => (
-                            <li key={user.key}>
-                              <button
-                                type="button"
-                                className="melpet-pending-user-btn"
-                                onClick={() => handleOpenVaccineUser(user)}
-                              >
-                                {user.nome}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="melpet-validate-message">
-                          Nenhuma carteira de vacinação pendente no momento.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  {selectedVaccineUser ? (
-                    <div className="melpet-user-docs-container">
-                      <div className="melpet-vaccine-review-stack">
-                        {selectedVaccinePetGroups.length ? (
-                          selectedVaccinePetGroups.map((group) => (
-                            <article
-                              className="melpet-vaccine-review-card"
-                              key={group.key}
-                            >
-                              <header className="melpet-vaccine-review-header">
-                                <strong>Cliente {group.clienteNome}</strong>
-                                <span>Pet: {group.petNome}</span>
-                              </header>
-
-                              <div className="melpet-vaccine-review-docs">
-                                {[
-                                  ["frente", "Documento frente"],
-                                  ["verso", "Documento verso"],
-                                ].map(([side, label]) => {
-                                  const card = group.documentos[side];
-                                  const isApproving =
-                                    approvingVaccineCardId === card?.id;
-                                  const isRejecting =
-                                    rejectingVaccineCardId === card?.id;
-                                  return (
-                                    <div
-                                      className="melpet-vaccine-review-doc"
-                                      key={`${group.key}-${side}`}
-                                    >
-                                      <span>{label}</span>
-                                      {card ? (
-                                        <div className="melpet-vaccine-review-actions">
-                                          <button
-                                            type="button"
-                                            className="melpet-view-doc-btn"
-                                            disabled={
-                                              !buildFileUrl(card.fileUrl)
-                                            }
-                                            onClick={() =>
-                                              handleOpenDocumentPreview({
-                                                fileUrl: card.fileUrl,
-                                                nomeDocumento:
-                                                  card.nomeArquivo ||
-                                                  getVaccineDocumentName(card),
-                                                tipoDocumento:
-                                                  getVaccineDocumentName(card),
-                                              })
-                                            }
-                                          >
-                                            Visualizar
-                                          </button>
-                                          <button
-                                            type="button"
-                                            className="melpet-review-btn melpet-review-btn--approve"
-                                            disabled={isApproving}
-                                            onClick={() =>
-                                              handleApproveVaccineCard(card)
-                                            }
-                                          >
-                                            {isApproving
-                                              ? "Aprovando..."
-                                              : "Aprovar"}
-                                          </button>
-                                          <button
-                                            type="button"
-                                            className="melpet-review-btn melpet-review-btn--reject"
-                                            disabled={isRejecting}
-                                            onClick={() =>
-                                              openRejectVaccineCardModal(card)
-                                            }
-                                          >
-                                            {isRejecting
-                                              ? "Reprovando..."
-                                              : "Reprovar"}
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <em>Não enviado</em>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-
-                              <section className="melpet-vaccine-review-info">
-                                <h4>Informações adicionais</h4>
-                                {group.vacinas.length ? (
-                                  <ul>
-                                    {group.vacinas.map((item) => {
-                                      const vencimento = item.duracao
-                                        ? addMonthsToDate(
-                                            item.dataAplicacao,
-                                            item.duracao,
-                                          )
-                                        : "";
-                                      return (
-                                        <li
-                                          key={`${group.key}-${item.configId}`}
-                                        >
-                                          <div className="melpet-vaccine-review-vaccine-main">
-                                            <strong>
-                                              {item.descricao || "Vacina"}
-                                            </strong>
-                                            <em>
-                                              {item.tipo ||
-                                                "Tipo não informado"}
-                                            </em>
-                                          </div>
-                                          <div className="melpet-vaccine-review-dates">
-                                            <span>
-                                              Data:{" "}
-                                              {formatBrazilDate(
-                                                item.dataAplicacao,
-                                              )}
-                                            </span>
-                                            <span>
-                                              Vencimento:{" "}
-                                              {vencimento
-                                                ? formatBrazilDate(vencimento)
-                                                : "Não informado"}
-                                            </span>
-                                          </div>
-                                        </li>
-                                      );
-                                    })}
-                                  </ul>
-                                ) : (
-                                  <p>Nenhuma informação preenchida.</p>
-                                )}
-                              </section>
-                            </article>
-                          ))
-                        ) : (
-                          <p className="melpet-validate-message">
-                            Nenhuma carteira de vacinação encontrada.
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="melpet-user-docs-actions">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={handleCloseVaccineUser}
-                        >
-                          Fechar
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </section>
-            ) : null}
-
-            {isAdmin && activeMenu === "conferirDocumentos" ? (
-              <section className="melpet-section-content">
-                <div className="melpet-outer-card melpet-validate-card">
-                  <div className="melpet-outer-card-header">
-                    <h3>Aprovar Documentos</h3>
-                  </div>
-
-                  <div className="melpet-categories-card">
-                    <div className="melpet-card-body">
-                      <p className="melpet-validate-subtitle">
-                        Usuários com documentos pendentes de conferência:
-                      </p>
-                      {loadingPendingUsers ? (
-                        <p className="melpet-validate-message">
-                          Carregando usuários...
-                        </p>
-                      ) : pendingUsersError ? (
-                        <p className="melpet-error">{pendingUsersError}</p>
-                      ) : pendingUsers.length ? (
-                        <ul className="melpet-pending-users-list">
-                          {pendingUsers.map((u) => (
-                            <li key={u.usuarioId || u.nome}>
-                              <button
-                                type="button"
-                                className="melpet-pending-user-btn"
-                                onClick={() => handleOpenUserDocuments(u)}
-                              >
-                                {u.nome}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="melpet-validate-message">
-                          Nenhum usuário com documentos pendentes no momento.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {selectedPendingUser ? (
-                  <div className="melpet-outer-card melpet-user-docs-container">
-                    <div className="melpet-outer-card-header">
-                      <h3>
-                        Documentos de {selectedPendingUser?.nome || "usuário"}
-                      </h3>
-                    </div>
-
-                    <div className="melpet-categories-card melpet-docs-card-shell">
-                      <div className="melpet-card-body melpet-docs-card-body">
-                        <div className="melpet-user-registration-card">
-                          <h4>Dados do cadastro</h4>
-                          <dl>
-                            <div>
-                              <dt>Nome</dt>
-                              <dd>
-                                {selectedPendingUser?.cadastro?.nome ||
-                                  selectedPendingUser?.nome ||
-                                  "-"}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt>RG</dt>
-                              <dd>
-                                {selectedPendingUser?.cadastro?.rg || "-"}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt>CPF</dt>
-                              <dd>
-                                {selectedPendingUser?.cadastro?.cpf
-                                  ? maskCpf(selectedPendingUser.cadastro.cpf)
-                                  : "-"}
-                              </dd>
-                            </div>
-                            <div className="melpet-user-registration-address">
-                              <dt>Endereço</dt>
-                              <dd>
-                                {selectedPendingUser?.cadastro?.endereco || "-"}
-                              </dd>
-                            </div>
-                          </dl>
-                        </div>
-                        {loadingSelectedUserFiles ? (
-                          <p className="melpet-validate-message">
-                            Carregando documentos...
-                          </p>
-                        ) : selectedUserFilesError ? (
-                          <p className="melpet-error">
-                            {selectedUserFilesError}
-                          </p>
-                        ) : (
-                          <div className="melpet-docs-table-wrap">
-                            <table className="melpet-docs-table">
-                              <thead>
-                                <tr>
-                                  <th>Nome do documento</th>
-                                  <th>Tipo de documento</th>
-                                  <th>Visualizar</th>
-                                  <th>Aprovar</th>
-                                  <th>Reprovar</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {selectedUserFiles.length ? (
-                                  (() => {
-                                    return selectedUserFiles.map(
-                                      (file, index) => {
-                                        const url = buildFileUrl(file.fileUrl);
-                                        const isConferido = Boolean(
-                                          file?.conferido,
-                                        );
-                                        const itemKey = buildConferirKey(file);
-                                        const isConferindo =
-                                          isConferindoItem(itemKey);
-                                        const isRejectingDocument =
-                                          isRejectingDocumentItem(itemKey);
-                                        const canRejectDocument =
-                                          file?.tipoRegistro === "contrato"
-                                            ? Number(file?.contratoId) > 0
-                                            : file?.tipoRegistro ===
-                                                "documento" &&
-                                              Number(file?.documentoId) > 0;
-                                        const hasConferirTarget =
-                                          file?.tipoRegistro === "contrato"
-                                            ? Number(file?.contratoId) > 0
-                                            : Number(file?.documentoId) > 0;
-                                        return (
-                                          <tr
-                                            key={`${file.filePath || file.nomeDocumento}-${index}`}
-                                          >
-                                            <td>{file.nomeDocumento}</td>
-                                            <td>{file.tipoDocumento}</td>
-                                            <td>
-                                              <button
-                                                type="button"
-                                                className="melpet-view-doc-btn"
-                                                disabled={!url}
-                                                onClick={() =>
-                                                  handleOpenDocumentPreview(
-                                                    file,
-                                                  )
-                                                }
-                                              >
-                                                Visualizar documento
-                                              </button>
-                                            </td>
-                                            <td>
-                                              <button
-                                                type="button"
-                                                className="melpet-review-btn melpet-review-btn--approve"
-                                                disabled={
-                                                  isConferido ||
-                                                  isConferindo ||
-                                                  !hasConferirTarget
-                                                }
-                                                onClick={() =>
-                                                  handleConferirDocumento(file)
-                                                }
-                                              >
-                                                {isConferindo
-                                                  ? "Aprovando..."
-                                                  : isConferido
-                                                    ? "Aprovado"
-                                                    : "Aprovar"}
-                                              </button>
-                                            </td>
-                                            <td>
-                                              <button
-                                                type="button"
-                                                className="melpet-review-btn melpet-review-btn--reject"
-                                                disabled={
-                                                  isConferido ||
-                                                  isRejectingDocument ||
-                                                  !canRejectDocument
-                                                }
-                                                onClick={() =>
-                                                  openRejectDocumentModal(file)
-                                                }
-                                              >
-                                                {isRejectingDocument
-                                                  ? "Reprovando..."
-                                                  : "Reprovar"}
-                                              </button>
-                                            </td>
-                                          </tr>
-                                        );
-                                      },
-                                    );
-                                  })()
-                                ) : (
-                                  <tr>
-                                    <td colSpan={5}>
-                                      Nenhum documento encontrado.
-                                    </td>
-                                  </tr>
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="melpet-user-docs-actions">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleCloseUserDocuments}
-                      >
-                        Fechar
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-              </section>
-            ) : null}
           </>
         ) : (
           <MenuPanel

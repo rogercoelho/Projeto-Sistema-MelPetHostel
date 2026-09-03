@@ -99,24 +99,88 @@
   gap: var(--spacing-sm);
 }
 
-.melpet-client-search-form label {
+.melpet-client-search-toolbar {
   display: grid;
-  gap: 6px;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.2);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top left, rgba(var(--cor-azul-rgb), 0.26), transparent 34%),
+    linear-gradient(135deg, #eef9fb 0%, #f7eddc 58%, #fff7ec 100%);
+  box-shadow: 0 14px 34px rgba(47, 37, 26, 0.08);
+}
+
+.melpet-client-search-heading {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(var(--cor-marrom-rgb), 0.16);
+}
+
+.melpet-client-search-heading strong {
   color: var(--cor-marrom);
-  font-weight: 800;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.melpet-client-search-heading span {
+  color: #6f6257;
+  font-size: 0.9rem;
+  font-weight: 700;
   line-height: 1.35;
+}
+
+.melpet-client-search-controls {
+  display: grid;
+  gap: 12px;
+}
+
+.melpet-client-search-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.melpet-client-search-field span {
+  color: var(--cor-marrom);
+  font-size: 0.84rem;
+  font-weight: 900;
+  line-height: 1.25;
 }
 
 .melpet-client-search-form input,
 .melpet-client-search-form select {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid rgba(var(--cor-marrom-rgb), 0.28);
-  border-radius: 8px;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.24);
+  border-radius: 10px;
   background: var(--cor-branco);
   color: #111827;
   font: inherit;
-  padding: 10px 11px;
+  padding: 11px 12px;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.melpet-client-search-form input:focus,
+.melpet-client-search-form select:focus {
+  border-color: rgba(var(--cor-azul-rgb), 0.72);
+  box-shadow: 0 0 0 3px rgba(var(--cor-azul-rgb), 0.16);
+}
+
+.melpet-client-search-controls .btn {
+  width: 100%;
+  min-height: 46px;
+  align-self: end;
 }
 
 .melpet-client-search-grid {
@@ -311,6 +375,163 @@
   gap: var(--spacing-md);
 }
 
+.melpet-admin-pet-maintenance-layout {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.melpet-admin-pet-search-page {
+  align-items: start;
+  min-height: 100vh;
+  padding: clamp(14px, 4vw, 34px) clamp(14px, 4vw, 34px) clamp(28px, 6vw, 56px);
+}
+
+.melpet-admin-pet-search-window {
+  overflow: hidden;
+  border-color: rgba(var(--cor-marrom-rgb), 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 248, 249, 0.92)),
+    var(--cor-branco);
+  padding-bottom: clamp(28px, 5vw, 52px);
+}
+
+.melpet-admin-pet-search-window > .melpet-admin-pet-maintenance-layout {
+  margin-top: 4px;
+}
+
+.melpet-admin-pet-search-window .admin-user-search-section,
+.melpet-admin-pet-search-window .admin-user-search-results-section {
+  border-color: rgba(var(--cor-marrom-rgb), 0.16);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.melpet-admin-pet-search-page-actions {
+  margin-top: 2px;
+  padding: 14px clamp(10px, 2.5vw, 24px) 0 0;
+}
+
+.melpet-admin-pet-search-card,
+.melpet-admin-pet-results-card {
+  box-sizing: border-box;
+  width: auto;
+}
+
+.melpet-admin-pet-search-card {
+  border: 2px solid rgba(84, 116, 139, 0.42);
+}
+
+.melpet-admin-pet-maintenance-results {
+  gap: 12px;
+}
+
+.melpet-admin-pet-maintenance-client {
+  display: grid;
+  gap: 10px;
+}
+
+.melpet-admin-pet-maintenance-client-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+}
+
+.melpet-admin-pet-maintenance-client-title strong {
+  color: var(--cor-marrom);
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.melpet-admin-pet-maintenance-client-title span {
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.14);
+  border-radius: 999px;
+  background: rgba(var(--cor-marrom-rgb), 0.06);
+  color: var(--cor-marrom);
+  font-size: 0.82rem;
+  font-weight: 900;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
+.melpet-admin-pet-maintenance-pets {
+  display: grid;
+  gap: 10px;
+}
+
+.melpet-admin-pet-maintenance-pick {
+  display: block;
+  width: 100%;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.74);
+  padding: 10px;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.melpet-admin-pet-maintenance-pick:hover {
+  border-color: rgba(var(--cor-azul-rgb), 0.38);
+  box-shadow: 0 12px 26px rgba(47, 36, 31, 0.08);
+  transform: translateY(-1px);
+}
+
+.melpet-admin-pet-result-content {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.melpet-admin-pet-result-name {
+  color: var(--cor-marrom);
+  font-size: 1rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.melpet-admin-pet-info-badge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  border: 1px solid rgba(var(--cor-azul-rgb), 0.26);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(var(--cor-azul-rgb), 0.16), rgba(255, 255, 255, 0.86));
+  color: var(--cor-marrom);
+  padding: 6px 8px;
+  overflow-wrap: anywhere;
+}
+
+.melpet-admin-pet-info-badge small {
+  color: var(--cor-marrom);
+  font-size: 0.86rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.melpet-admin-pet-info-badge small + small::before,
+.melpet-admin-pet-info-badge .melpet-client-pet-status::before {
+  content: "|";
+  margin: 0 8px 0 0;
+  color: rgba(var(--cor-marrom-rgb), 0.5);
+  font-weight: 900;
+}
+
+.melpet-admin-pet-info-badge .melpet-client-pet-status {
+  min-height: 28px;
+  margin-left: 0;
+  padding: 5px 10px;
+}
+
 .melpet-admin-pet-search-header {
   display: grid;
   gap: 4px;
@@ -347,6 +568,73 @@
   color: var(--cor-marrom);
   font-size: 0.86rem;
   font-weight: 900;
+}
+
+.melpet-admin-client-search-form {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.melpet-admin-client-results {
+  margin-top: 2px;
+}
+
+.melpet-admin-client-result-card .melpet-client-admin-badge {
+  margin-left: 0;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 5px 9px;
+}
+
+.melpet-admin-client-open-button > em {
+  border-radius: 999px;
+  background: rgba(var(--cor-azul-rgb), 0.18);
+  color: var(--cor-marrom);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.melpet-admin-client-screen {
+  width: 100%;
+}
+
+.melpet-admin-client-card .melpet-client-admin-badge {
+  vertical-align: middle;
+}
+
+.melpet-admin-client-simple-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.melpet-admin-client-simple-list > li {
+  min-width: 0;
+  border: 1px solid rgba(var(--cor-marrom-rgb), 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--cor-marrom);
+  font-weight: 800;
+  padding: 10px;
+  overflow-wrap: anywhere;
+}
+
+.melpet-admin-client-pets-section .melpet-client-pet-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (min-width: 760px) {
+  .melpet-admin-client-search-form {
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 240px) auto;
+  }
 }
 
 .melpet-pet-status-results {
@@ -1611,7 +1899,6 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24);
 }
 
-
 .melpet-hosting-history-status.has-payment-pending {
   align-items: flex-start;
   flex-direction: column;
@@ -2223,59 +2510,12 @@
   width: 100%;
 }
 
-.melpet-outer-card {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  background: var(--cor-branco);
-  border-radius: var(--radius-lg);
-  padding: 12px;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-sizing: border-box;
-}
-
-.melpet-outer-card-header h3 {
-  margin: 0;
-  color: var(--cor-marrom);
-  font-size: 1.15rem;
-}
-
-.melpet-categories-card {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  margin-top: var(--spacing-sm);
-  background: transparent;
-  border-radius: 16px;
-  padding: 0;
-  box-shadow: none;
-  border: 2px solid #4b5563;
-  box-sizing: border-box;
-}
-
-.melpet-card-body {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  background: #0b2333;
-  border-radius: var(--radius-md);
-  padding: 10px;
-  box-sizing: border-box;
-}
-
 .melpet-validate-subtitle,
 .melpet-validate-message {
   color: #ffffff;
 }
 
 .melpet-validate-subtitle {
-  color: var(--cor-areia);
-  text-align: center;
-}
-
-.melpet-card-body .melpet-validate-subtitle {
   color: var(--cor-areia);
   text-align: center;
 }
@@ -2396,22 +2636,6 @@
   color: #ffffff;
 }
 
-.melpet-docs-card-shell {
-  margin-top: var(--spacing-sm);
-  background: transparent;
-  border-radius: 16px;
-  padding: 0;
-  box-shadow: none;
-  border: 2px solid #4b5563;
-}
-
-.melpet-docs-card-body {
-  overflow: hidden;
-  background: #0b2333;
-  border-radius: var(--radius-md);
-  padding: 10px;
-}
-
 .melpet-view-doc-btn {
   max-width: 100%;
   border: 1px solid rgba(77, 50, 39, 0.3);
@@ -2456,11 +2680,6 @@
   opacity: 0.55;
   cursor: not-allowed;
   filter: none;
-}
-
-.melpet-user-docs-container {
-  margin-top: 12px;
-  min-width: 0;
 }
 
 .melpet-user-docs-actions {
@@ -3340,9 +3559,14 @@
     padding: 16px;
   }
 
-  .melpet-client-search-form {
+  .melpet-client-search-controls {
     grid-template-columns: minmax(0, 1fr) minmax(180px, 240px) auto;
-    align-items: end;
+    align-items: stretch;
+  }
+
+  .melpet-client-search-controls .btn {
+    width: auto;
+    min-width: 132px;
   }
 
   .melpet-vaccine-type-inputs {
@@ -3484,7 +3708,6 @@
   background: rgba(255, 255, 255, 0.82);
 }
 
-
 @media (min-width: 820px) {
   .melpet-admin-anamnesis-groups dl {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3552,7 +3775,6 @@
   color: #92400e;
 }
 
-
 .melpet-admin-standard-card,
 .melpet-hosting-payment-card {
   display: grid;
@@ -3569,7 +3791,6 @@
   color: #70482f;
   font-size: 1.45rem;
 }
-
 
 .melpet-hosting-payment-options {
   display: grid;
@@ -3647,7 +3868,6 @@
   color: #28556b;
 }
 
-
 .melpet-hosting-payment-change {
   display: grid;
   gap: 10px;
@@ -3703,9 +3923,6 @@
     justify-self: center;
   }
 }
-
-
-
 
 .melpet-hosting-card-payment-info {
   display: grid;
@@ -3852,7 +4069,6 @@
   background: rgba(255, 255, 255, 0.72);
 }
 
-
 .melpet-hosting-payment-installment.is-rejected {
   border-color: #fca5a5;
   background: #fff7f7;
@@ -3979,7 +4195,6 @@
   color: #166534;
 }
 
-
 .melpet-hosting-pix-copy-field {
   display: grid;
   gap: 8px;
@@ -3997,7 +4212,6 @@
   }
 }
 
-
 .melpet-hosting-payment-search {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -4009,4 +4223,289 @@
   .melpet-hosting-payment-search {
     grid-template-columns: 1fr;
   }
+}
+
+.admin-user-create-section.melpet-admin-pet-search-card {
+  box-sizing: border-box;
+  width: auto;
+  border: 2px solid rgba(84, 116, 139, 0.42);
+}
+
+.melpet-admin-pet-results-card .melpet-admin-pet-maintenance-results {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.melpet-admin-pet-results-card .melpet-admin-pet-maintenance-client {
+  width: 100%;
+}
+
+/* Pet search result external border */
+.melpet-admin-pet-search-window .admin-user-create-section.admin-user-search-results-section.melpet-admin-pet-results-card {
+  border: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-left: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-radius: 20px;
+}
+
+/* Modern vaccine config management */
+.melpet-admin-vaccine-config-content {
+  display: grid;
+  gap: 18px;
+}
+
+.melpet-admin-vaccine-config-card,
+.melpet-admin-vaccine-config-list-card {
+  overflow: hidden;
+  display: grid;
+  gap: 16px;
+  width: auto;
+  min-height: 0;
+  border: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-left: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbf8f0 100%);
+  box-shadow: 0 16px 34px rgba(69, 49, 39, 0.08);
+  padding: 0;
+}
+
+.melpet-admin-vaccine-config-card > label,
+.melpet-admin-vaccine-config-card > .melpet-vaccine-type-list,
+.melpet-admin-vaccine-config-card > .admin-page-message,
+.melpet-admin-vaccine-config-card > .admin-page-actions,
+.melpet-admin-vaccine-config-list-card > p,
+.melpet-admin-vaccine-config-list-card > .admin-page-list {
+  margin-left: 16px;
+  margin-right: 16px;
+}
+
+.melpet-admin-vaccine-config-card > label {
+  color: var(--cor-marrom);
+  display: grid;
+  gap: 8px;
+  font-weight: 900;
+}
+
+.melpet-admin-vaccine-config-card input[type="text"] {
+  border: 1px solid rgba(73, 150, 190, 0.24);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--cor-marrom);
+  min-height: 44px;
+  padding: 10px 12px;
+}
+
+.melpet-admin-vaccine-config-card input[type="text"]:focus {
+  border-color: rgba(73, 150, 190, 0.58);
+  box-shadow: 0 0 0 3px rgba(73, 150, 190, 0.14);
+  outline: none;
+}
+
+.melpet-admin-vaccine-config-card .melpet-vaccine-type-inputs {
+  border: 1px solid rgba(73, 150, 190, 0.18);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(235, 248, 252, 0.74), rgba(255, 255, 255, 0.92));
+  padding: 12px;
+}
+
+.melpet-admin-vaccine-config-card .melpet-vaccine-type-list {
+  border: 1px solid rgba(73, 150, 190, 0.18);
+  border-radius: 16px;
+  background: rgba(235, 248, 252, 0.58);
+  padding: 10px;
+}
+
+.melpet-admin-vaccine-config-card .melpet-vaccine-type-list li {
+  border-color: rgba(73, 150, 190, 0.22);
+  background: #ffffff;
+  color: var(--cor-marrom);
+}
+
+.melpet-admin-vaccine-config-card .admin-page-checkbox-field {
+  align-items: center;
+  display: inline-flex;
+  flex-direction: row;
+  gap: 10px;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  border: 1px solid rgba(73, 150, 190, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  padding: 8px 12px;
+}
+
+.melpet-admin-vaccine-config-card .admin-page-checkbox-field input {
+  margin: 0;
+}
+
+.melpet-admin-vaccine-config-card .admin-page-actions {
+  justify-content: flex-end;
+  margin-bottom: 16px;
+  padding-top: 0;
+}
+
+.melpet-admin-vaccine-config-list-card .admin-page-list {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.melpet-admin-vaccine-config-list-card .admin-page-list article {
+  align-items: start;
+  border: 1px solid rgba(73, 150, 190, 0.2);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(235, 248, 252, 0.88));
+  box-shadow: 0 10px 22px rgba(47, 36, 31, 0.06);
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.melpet-admin-vaccine-config-list-card .admin-page-list article strong {
+  color: var(--cor-marrom);
+  font-weight: 950;
+}
+
+.melpet-admin-vaccine-config-list-card .admin-page-list article span {
+  border-radius: 999px;
+  background: rgba(73, 150, 190, 0.14);
+  color: rgb(43, 96, 124);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 950;
+  margin-top: 6px;
+  padding: 5px 9px;
+}
+
+.melpet-admin-vaccine-config-list-card .melpet-vaccine-config-type-lines {
+  margin-top: 10px;
+}
+
+.melpet-admin-vaccine-config-list-card .melpet-vaccine-config-type-lines li {
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--cor-marrom-claro);
+  font-weight: 850;
+  padding: 6px 8px;
+}
+
+.melpet-admin-vaccine-config-list-card .admin-page-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+@media (min-width: 760px) {
+  .melpet-admin-vaccine-config-card > label,
+  .melpet-admin-vaccine-config-card > .melpet-vaccine-type-list,
+  .melpet-admin-vaccine-config-card > .admin-page-message,
+  .melpet-admin-vaccine-config-card > .admin-page-actions,
+  .melpet-admin-vaccine-config-list-card > p,
+  .melpet-admin-vaccine-config-list-card > .admin-page-list {
+    margin-left: 18px;
+    margin-right: 18px;
+  }
+
+  .melpet-admin-vaccine-config-list-card .admin-page-list article {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+
+/* Vaccine config item type highlight */
+.melpet-admin-vaccine-config-list-card .melpet-vaccine-config-type-lines {
+  display: grid;
+  gap: 8px;
+}
+
+.melpet-admin-vaccine-config-list-card .melpet-vaccine-config-type-lines li {
+  border: 1.5px solid rgba(73, 150, 190, 0.34);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(232, 247, 252, 0.94), rgba(221, 244, 241, 0.9));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 6px 14px rgba(47, 36, 31, 0.05);
+  color: var(--cor-marrom);
+  font-weight: 900;
+  padding: 8px 10px;
+}
+
+.melpet-admin-vaccine-config-card .melpet-vaccine-type-list li {
+  border: 1.5px solid rgba(73, 150, 190, 0.34);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(232, 247, 252, 0.88));
+}
+
+/* Modern pet status management */
+.melpet-admin-pet-status-search-card,
+.melpet-admin-pet-status-results-card {
+  border: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-left: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-radius: 20px;
+}
+
+.melpet-admin-pet-status-content {
+  display: grid;
+  gap: 18px;
+}
+
+.melpet-admin-pet-status-results-card .melpet-admin-pet-status-results {
+  display: grid;
+  gap: 14px;
+}
+
+.melpet-admin-pet-status-client {
+  border: 1px solid rgba(73, 150, 190, 0.2);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(235, 248, 252, 0.84));
+  box-shadow: 0 10px 22px rgba(47, 36, 31, 0.06);
+}
+
+.melpet-admin-pet-status-item {
+  align-items: stretch;
+  cursor: default;
+}
+
+.melpet-admin-pet-status-item:hover,
+.melpet-admin-pet-status-item:focus-within {
+  border-color: rgba(73, 150, 190, 0.42);
+  background: linear-gradient(135deg, rgba(241, 249, 252, 0.98), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 14px 28px rgba(47, 36, 31, 0.1);
+}
+
+.melpet-admin-pet-status-item > .btn {
+  justify-self: stretch;
+  min-height: 42px;
+}
+
+@media (min-width: 760px) {
+  .melpet-admin-pet-status-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .melpet-admin-pet-status-item > .btn {
+    justify-self: end;
+    min-width: 118px;
+  }
+}
+
+/* Pet status tutor container gradient border */
+.melpet-admin-pet-status-results-card .melpet-admin-pet-status-client {
+  border: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-left: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(232, 247, 252, 0.96) 0%, rgba(221, 244, 241, 0.9) 55%, rgba(255, 255, 255, 0.96) 100%);
+  box-shadow: 0 12px 26px rgba(47, 36, 31, 0.08);
+}
+
+.melpet-admin-pet-status-results-card .melpet-admin-pet-status-client:hover,
+.melpet-admin-pet-status-results-card .melpet-admin-pet-status-client:focus-within {
+  border-color: rgba(73, 150, 190, 0.58);
+  background: linear-gradient(135deg, rgba(214, 241, 250, 0.98) 0%, rgba(205, 240, 235, 0.94) 55%, rgba(255, 255, 255, 0.98) 100%);
+  box-shadow: 0 16px 32px rgba(47, 36, 31, 0.12);
+}
+
+.melpet-admin-pet-status-results-card .melpet-admin-pet-status-item {
+  border: 1px solid rgba(73, 150, 190, 0.22);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 8px 18px rgba(47, 36, 31, 0.05);
 }

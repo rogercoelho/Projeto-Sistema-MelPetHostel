@@ -132,6 +132,15 @@ function Dashboard() {
     setView("mel");
   }
 
+  function openMelPetPixConfig() {
+    setMelPetRegistrationOnly(false);
+    setMelComplianceGate(false);
+    setMelInitialAdminMenu("configurarPix");
+    setMelUserMenu("");
+    setOpenDashboardSection("");
+    setView("mel");
+  }
+
   const melPetHostelItems = isAdmin
     ? [
         {
@@ -223,6 +232,15 @@ function Dashboard() {
               onAction: () => openView("telegram-test"),
             },
           ],
+        }
+      : null,
+    isAdmin
+      ? {
+          id: "pix",
+          title: "Configurar PIX",
+          summary: "Configure a chave PIX global usada nas hospedagens.",
+          onAction: openMelPetPixConfig,
+          directAction: true,
         }
       : null,
   ].filter(Boolean);
@@ -459,27 +477,36 @@ function Dashboard() {
             title: "Painel Administrativo",
             summary: "Acesse os menus administrativos do sistema.",
             ariaLabel: "Menus administrativos",
-            items: dashboardSections.map((section) => ({
-              id: section.id,
-              title: section.title,
-              summary: section.summary,
-              isOpen: openDashboardSection === section.id,
-              onAction: () =>
-                setOpenDashboardSection((current) =>
-                  current === section.id ? "" : section.id,
-                ),
-              content: (
-                <MenuList ariaLabel={section.title}>
-                  {section.items.map(renderDashboardItem)}
-                  {section.actionLabel ? (
-                    <MenuItem
-                      onAction={section.onAction}
-                      title={section.actionLabel}
-                    />
-                  ) : null}
-                </MenuList>
-              ),
-            })),
+            items: dashboardSections.map((section) =>
+              section.directAction
+                ? {
+                    id: section.id,
+                    title: section.title,
+                    summary: section.summary,
+                    onAction: section.onAction,
+                  }
+                : {
+                    id: section.id,
+                    title: section.title,
+                    summary: section.summary,
+                    isOpen: openDashboardSection === section.id,
+                    onAction: () =>
+                      setOpenDashboardSection((current) =>
+                        current === section.id ? "" : section.id,
+                      ),
+                    content: (
+                      <MenuList ariaLabel={section.title}>
+                        {section.items.map(renderDashboardItem)}
+                        {section.actionLabel ? (
+                          <MenuItem
+                            onAction={section.onAction}
+                            title={section.actionLabel}
+                          />
+                        ) : null}
+                      </MenuList>
+                    ),
+                  },
+            ),
           },
         ]}
       />
@@ -535,25 +562,46 @@ function Dashboard() {
         isAdmin ? (
           renderAdminDashboardSections()
         ) : (
-          <MenuTemplate>
-            {dashboardSections.map((section) => (
-              <MenuPanel
-                key={section.id}
-                summary={section.summary}
-                title={section.title}
-              >
-                <MenuList ariaLabel={section.title}>
-                  {section.items.map(renderDashboardItem)}
-                  {section.actionLabel ? (
-                    <MenuItem
-                      onAction={section.onAction}
-                      title={section.actionLabel}
-                    />
-                  ) : null}
-                </MenuList>
-              </MenuPanel>
-            ))}
-          </MenuTemplate>
+          <MenuTemplate
+            panels={[
+              {
+                id: "user-home",
+                title: "Painel do Usuário",
+                summary: "Acesse os menus disponiveis para o seu cadastro.",
+                ariaLabel: "Menus do usuário",
+                items: dashboardSections.map((section) =>
+                  section.directAction
+                    ? {
+                        id: section.id,
+                        title: section.title,
+                        summary: section.summary,
+                        onAction: section.onAction,
+                      }
+                    : {
+                        id: section.id,
+                        title: section.title,
+                        summary: section.summary,
+                        isOpen: openDashboardSection === section.id,
+                        onAction: () =>
+                          setOpenDashboardSection((current) =>
+                            current === section.id ? "" : section.id,
+                          ),
+                        content: (
+                          <MenuList ariaLabel={section.title}>
+                            {section.items.map(renderDashboardItem)}
+                            {section.actionLabel ? (
+                              <MenuItem
+                                onAction={section.onAction}
+                                title={section.actionLabel}
+                              />
+                            ) : null}
+                          </MenuList>
+                        ),
+                      },
+                ),
+              },
+            ]}
+          />
         )
       ) : view === "mel" ? (
         <MelPetHostel
