@@ -211,7 +211,7 @@ function AdminGroupsPage({ onBack }) {
               Pesquisar
             </Button>
             <Button
-              type="button"
+              className="melpet-clear-button" type="button"
               variant="outline"
               onClick={clearGroupSearch}
               disabled={loading && !hasSearchedGroups}

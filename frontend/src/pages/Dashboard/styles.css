@@ -1697,15 +1697,6 @@
   min-height: 54px;
 }
 
-.melpet-admin-vaccine-approval-window .melpet-pending-user-btn::after {
-  content: "Abrir";
-  border-radius: 999px;
-  background: rgba(73, 150, 190, 0.16);
-  color: rgb(43, 96, 124);
-  font-size: 0.78rem;
-  font-weight: 900;
-  padding: 6px 10px;
-}
 
 .melpet-admin-vaccine-approval-window .melpet-vaccine-review-card {
   border: 1.5px solid rgba(73, 150, 190, 0.24);
@@ -1883,12 +1874,6 @@
   box-shadow: 0 14px 28px rgba(47, 36, 31, 0.1);
 }
 
-.melpet-admin-vaccine-approval-window .melpet-pending-user-btn::after {
-  border: 1px solid rgba(73, 150, 190, 0.18);
-  background: rgba(232, 246, 252, 0.98);
-  color: rgb(43, 96, 124);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-}
 
 /* Softer vaccine approval background */
 .melpet-admin-vaccine-approval-page .admin-user-create-card {
@@ -2562,5 +2547,32 @@
   .admin-page:has(.telegram-admin-preview) .admin-page-header .melpet-back-button {
     width: auto;
     min-width: 170px;
+  }
+}
+
+
+/* Standard clear button layout */
+.melpet-clear-button.btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  border-radius: 999px;
+  border-color: rgba(77, 50, 39, 0.62);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--cor-marrom);
+  box-shadow: 0 10px 24px rgba(77, 50, 39, 0.12);
+}
+
+.melpet-clear-button.btn:hover:not(:disabled) {
+  border-color: rgba(77, 50, 39, 0.82);
+  background: linear-gradient(135deg, rgba(232, 247, 252, 0.96), rgba(221, 232, 226, 0.98), rgba(226, 210, 174, 0.96));
+  color: var(--cor-marrom);
+  box-shadow: 0 14px 30px rgba(77, 50, 39, 0.18);
+}
+
+@media (min-width: 720px) {
+  .melpet-clear-button.btn {
+    width: auto;
+    min-width: 150px;
   }
 }

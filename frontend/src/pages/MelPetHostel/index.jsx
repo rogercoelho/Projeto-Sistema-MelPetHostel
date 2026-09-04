@@ -64,7 +64,10 @@ function getSupportDocKeyFromTypeName(value) {
 
 function calculatePetAgeParts(dataNascimento) {
   if (!dataNascimento) return null;
-  const [year, month, day] = String(dataNascimento).slice(0, 10).split("-").map(Number);
+  const [year, month, day] = String(dataNascimento)
+    .slice(0, 10)
+    .split("-")
+    .map(Number);
   if (!year || !month || !day) return null;
 
   const today = new Date();
@@ -74,7 +77,8 @@ function calculatePetAgeParts(dataNascimento) {
   let years = today.getFullYear() - year;
   const currentMonth = today.getMonth() + 1;
   const currentDay = today.getDate();
-  if (currentMonth < month || (currentMonth === month && currentDay < day)) years -= 1;
+  if (currentMonth < month || (currentMonth === month && currentDay < day))
+    years -= 1;
 
   let months = (today.getFullYear() - year) * 12 + (currentMonth - month);
   if (currentDay < day) months -= 1;
@@ -3120,7 +3124,14 @@ export default function MelPetHostel({
   }
 
   function handleBackFromPetAdminMenu() {
-    if (["pesquisarPets", "aprovarCarteiraVacinacao", "vacinasOutros", "ativarInativarPet"].includes(activeMenu)) {
+    if (
+      [
+        "pesquisarPets",
+        "aprovarCarteiraVacinacao",
+        "vacinasOutros",
+        "ativarInativarPet",
+      ].includes(activeMenu)
+    ) {
       handleBackToPetAdminMenu();
       return;
     }
@@ -3597,13 +3608,13 @@ export default function MelPetHostel({
       after: deveBloquearVoltarNoFluxoPet ? null : (
         <div className="pet-main-actions melpet-back-actions">
           <Button
-                type="button"
-                variant="outline"
-                onClick={handleBackFromPetAdminMenu}
-                className="melpet-back-button"
-              >
-                Voltar
-              </Button>
+            type="button"
+            variant="outline"
+            onClick={handleBackFromPetAdminMenu}
+            className="melpet-back-button"
+          >
+            Voltar
+          </Button>
         </div>
       ),
     },
@@ -3747,7 +3758,9 @@ export default function MelPetHostel({
     if (!petDocsPet) return null;
     const vaccineStatus = getPetVaccineStatus(petDocsPet);
     const isAdminPetFicha = Boolean(isAdmin && petDocsPet?.clienteId);
-    const isReadOnlyVaccineUpload = false;
+    const isReadOnlyVaccineUpload = Boolean(
+      petVaccineResponsesSaved && !editingAdminPetVaccines,
+    );
     const documentStatuses = [
       ["frente", "Carteirinha de vacinação frente"],
       ["verso", "Carteirinha de vacinação verso"],
@@ -4314,6 +4327,7 @@ export default function MelPetHostel({
 
         <div className="melpet-hosting-actions melpet-hosting-actions--top">
           <Button
+            className="melpet-clear-button"
             type="button"
             variant="secondary"
             disabled={sendingHostingRequest}
@@ -4330,21 +4344,46 @@ export default function MelPetHostel({
           <>
             <ul>
               {hostingItems.map((item) => (
-                <li key={item.pet.id}>
-                  <span>
+                <li className="melpet-hosting-summary-item" key={item.pet.id}>
+                  <div className="melpet-hosting-summary-item-main">
                     <strong>{item.pet.nome}</strong>
-                    <small>
-                      {item.plano
-                        ? item.recurring
-                          ? `${item.tipo} / ${item.quantity} ${item.plano.tempoUnidade || "dia"} - início ${formatStartMonth(item.inicioMes)} - mensal`
-                          : item.dayUse
-                            ? `${item.tipo} / ${formatPlanTempo(item.plano)} - ${formatBrazilDate(item.entrada)} - ${formatCurrency(item.dailyValue)} x 1 dia`
-                            : `${item.tipo} / ${formatPlanTempo(item.plano)} - ${formatCurrency(item.dailyValue)} ->
-                            ${formatBrazilDate(item.entrada)} a ${formatBrazilDate(item.saida)} x ${item.days || 0} dias`
-                        : "Sem valor configurado para este pet"}
-                    </small>
-                  </span>
-                  <strong>{formatCurrency(item.total)}</strong>
+                    {item.plano ? (
+                      <div className="melpet-hosting-summary-item-details">
+                        <span className="melpet-hosting-summary-chip">
+                          {item.tipo}
+                        </span>
+                        <span className="melpet-hosting-summary-chip">
+                          {formatPlanTempo(item.plano)}
+                        </span>
+                        <span className="melpet-hosting-summary-chip is-price">
+                          {formatCurrency(item.dailyValue)} / dia
+                        </span>
+                        <small>
+                          {item.recurring
+                            ? "Início " +
+                              formatStartMonth(item.inicioMes) +
+                              " · " +
+                              item.quantity +
+                              " " +
+                              (item.plano.tempoUnidade || "dia") +
+                              " · mensal"
+                            : item.dayUse
+                              ? formatBrazilDate(item.entrada) + " · 1 dia"
+                              : formatBrazilDate(item.entrada) +
+                                " a " +
+                                formatBrazilDate(item.saida) +
+                                " · " +
+                                (item.days || 0) +
+                                " dias"}
+                        </small>
+                      </div>
+                    ) : (
+                      <small>Sem valor configurado para este pet</small>
+                    )}
+                  </div>
+                  <strong className="melpet-hosting-summary-item-total">
+                    {formatCurrency(item.total)}
+                  </strong>
                 </li>
               ))}
             </ul>
@@ -4776,8 +4815,9 @@ export default function MelPetHostel({
                                           </a>
                                         ) : (
                                           <span>
-                                            Aguardando geração do link de
-                                            pagamento.
+                                            Aguarde a geração do link de
+                                            pagamento. Avisaremos quando estiver
+                                            disponível.
                                           </span>
                                         )}
                                       </div>
@@ -4952,7 +4992,10 @@ export default function MelPetHostel({
 
   const adminPixConfigContent = (
     <section className="melpet-section-content melpet-admin-pix-config">
-      <form className="admin-user-create-section melpet-admin-pix-config-card" onSubmit={savePixConfig}>
+      <form
+        className="admin-user-create-section melpet-admin-pix-config-card"
+        onSubmit={savePixConfig}
+      >
         <div className="melpet-admin-document-card-heading">
           <span>Pagamentos</span>
           <strong>Configuração PIX</strong>
@@ -5001,8 +5044,12 @@ export default function MelPetHostel({
           </label>
         </div>
 
-        {pixConfigError ? <p className="melpet-error">{pixConfigError}</p> : null}
-        {loadingPixConfig ? <p className="melpet-validate-message">Carregando configuração...</p> : null}
+        {pixConfigError ? (
+          <p className="melpet-error">{pixConfigError}</p>
+        ) : null}
+        {loadingPixConfig ? (
+          <p className="melpet-validate-message">Carregando configuração...</p>
+        ) : null}
 
         <div className="melpet-hosting-history-actions melpet-admin-pix-actions">
           <Button type="submit" disabled={savingPixConfig}>
@@ -5657,7 +5704,9 @@ export default function MelPetHostel({
                 <span>
                   <strong>{cliente.nome || "Cliente sem nome"}</strong>
                   <small>
-                    {cliente.telefone || cliente.email || "Abrir ficha do cliente"}
+                    {cliente.telefone ||
+                      cliente.email ||
+                      "Abrir ficha do cliente"}
                   </small>
                 </span>
                 <em>Abrir</em>
@@ -6394,6 +6443,7 @@ export default function MelPetHostel({
             {loadingPetStatus ? "Pesquisando..." : "Pesquisar"}
           </Button>
           <Button
+            className="melpet-clear-button"
             type="button"
             variant="outline"
             onClick={resetAdminPetSearch}
@@ -6423,7 +6473,9 @@ export default function MelPetHostel({
                 >
                   <div className="melpet-admin-pet-maintenance-client-title">
                     <strong>{cliente.nome || "Tutor sem nome"}</strong>
-                    <span className="melpet-admin-pet-count-text">{cliente.pets?.length || 0} pet(s)</span>
+                    <span className="melpet-admin-pet-count-text">
+                      {cliente.pets?.length || 0} pet(s)
+                    </span>
                   </div>
 
                   {cliente.pets?.length ? (
@@ -6442,7 +6494,9 @@ export default function MelPetHostel({
                             <span className="melpet-admin-pet-info-badge">
                               <small>{pet.raca || "Tipo nao informado"}</small>
                               <small>
-                                {formatPetAge(calculatePetAgeLabel(pet.dataNascimento)) || "Idade nao informada"}
+                                {formatPetAge(
+                                  calculatePetAgeLabel(pet.dataNascimento),
+                                ) || "Idade nao informada"}
                               </small>
                               <small>
                                 {formatPetWeight(pet.pesoAproximado) ||
@@ -6500,6 +6554,7 @@ export default function MelPetHostel({
             {loadingPetStatus ? "Pesquisando..." : "Pesquisar"}
           </Button>
           <Button
+            className="melpet-clear-button"
             type="button"
             variant="outline"
             onClick={resetAdminPetSearch}
@@ -6523,16 +6578,24 @@ export default function MelPetHostel({
               <p>Carregando clientes e pets...</p>
             ) : petStatusResults.length ? (
               petStatusResults.map((cliente) => (
-                <article className="melpet-admin-pet-maintenance-client melpet-admin-pet-status-client" key={cliente.id}>
+                <article
+                  className="melpet-admin-pet-maintenance-client melpet-admin-pet-status-client"
+                  key={cliente.id}
+                >
                   <div className="melpet-admin-pet-maintenance-client-title">
                     <strong>{cliente.nome || "Tutor sem nome"}</strong>
-                    <span className="melpet-admin-pet-count-text">{cliente.pets?.length || 0} pet(s)</span>
+                    <span className="melpet-admin-pet-count-text">
+                      {cliente.pets?.length || 0} pet(s)
+                    </span>
                   </div>
 
                   {cliente.pets?.length ? (
                     <div className="melpet-admin-pet-maintenance-pets">
                       {cliente.pets.map((pet) => (
-                        <article className="melpet-admin-pet-maintenance-pick melpet-admin-pet-status-item" key={pet.id}>
+                        <article
+                          className="melpet-admin-pet-maintenance-pick melpet-admin-pet-status-item"
+                          key={pet.id}
+                        >
                           <span className="melpet-admin-pet-result-content">
                             <strong className="melpet-admin-pet-result-name">
                               {pet.nome || "Pet sem nome"}
@@ -6540,7 +6603,9 @@ export default function MelPetHostel({
                             <span className="melpet-admin-pet-info-badge">
                               <small>{pet.raca || "Tipo nao informado"}</small>
                               <small>
-                                {formatPetAge(calculatePetAgeLabel(pet.dataNascimento)) || "Idade nao informada"}
+                                {formatPetAge(
+                                  calculatePetAgeLabel(pet.dataNascimento),
+                                ) || "Idade nao informada"}
                               </small>
                               <small>
                                 {formatPetWeight(pet.pesoAproximado) ||
@@ -6629,7 +6694,9 @@ export default function MelPetHostel({
         <div className="admin-user-create-section melpet-admin-document-details-card">
           <div className="melpet-admin-document-card-heading">
             <span>Conferência</span>
-            <strong>Documentos de {selectedPendingUser?.nome || "usuário"}</strong>
+            <strong>
+              Documentos de {selectedPendingUser?.nome || "usuário"}
+            </strong>
           </div>
 
           <div className="melpet-user-registration-card melpet-admin-document-registration-card">
@@ -7418,7 +7485,8 @@ export default function MelPetHostel({
                 <h2>Ativar / Inativar Pet</h2>
               </div>
               <p className="admin-user-create-subtitle">
-                Consulte o tutor ou pet e altere a situação cadastral quando necessário.
+                Consulte o tutor ou pet e altere a situação cadastral quando
+                necessário.
               </p>
             </header>
 
@@ -7451,7 +7519,8 @@ export default function MelPetHostel({
                 <h2>Criação e Edição de Vacinas / Outros</h2>
               </div>
               <p className="admin-user-create-subtitle">
-                Cadastre e organize os itens de vacinação usados nas fichas dos pets.
+                Cadastre e organize os itens de vacinação usados nas fichas dos
+                pets.
               </p>
             </header>
 
@@ -7480,15 +7549,18 @@ export default function MelPetHostel({
           <div className="admin-page-delete-modal">
             <p>
               Atenção!! Ao clicar em CONFIRMAR, você irá excluir este item de
-              vacinas / outros: <strong>{deleteWarningVaccineConfig?.descricao}</strong>.
-              Ele não aparecerá mais para novos cadastros.
+              vacinas / outros:{" "}
+              <strong>{deleteWarningVaccineConfig?.descricao}</strong>. Ele não
+              aparecerá mais para novos cadastros.
             </p>
 
             <div className="modal-actions">
               <Button
                 type="button"
                 variant="danger"
-                onClick={() => acknowledgeDeleteVaccineConfig(deleteWarningVaccineConfig)}
+                onClick={() =>
+                  acknowledgeDeleteVaccineConfig(deleteWarningVaccineConfig)
+                }
               >
                 OK
               </Button>
@@ -7510,7 +7582,8 @@ export default function MelPetHostel({
                 <h2>Aprovar Carteira de Vacinação</h2>
               </div>
               <p className="admin-user-create-subtitle">
-                Confira carteirinhas enviadas pelos tutores e aprove ou reprove cada documento.
+                Confira carteirinhas enviadas pelos tutores e aprove ou reprove
+                cada documento.
               </p>
             </header>
 
@@ -7555,7 +7628,8 @@ export default function MelPetHostel({
                 <h2>Pesquisar Pets</h2>
               </div>
               <p className="admin-user-create-subtitle">
-                Pesquise um pet pelo nome, tutor ou codigo e acesse a ficha completa.
+                Pesquise um pet pelo nome, tutor ou codigo e acesse a ficha
+                completa.
               </p>
             </header>
 
@@ -7600,7 +7674,6 @@ export default function MelPetHostel({
       </>
     );
   }
-
 
   if (
     isAdmin &&
@@ -7815,9 +7888,7 @@ export default function MelPetHostel({
             <p className="melpet-error">{statusError}</p>
           </MenuPanel>
         ) : acessoDiretoMenu || petCadastroObrigatorio ? (
-          <>
-
-          </>
+          <></>
         ) : (
           <MenuPanel
             className="melpet-upload-home"

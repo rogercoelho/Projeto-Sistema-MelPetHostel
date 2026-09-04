@@ -5018,3 +5018,286 @@
   margin-top: 4px;
   color: #b91c1c;
 }
+
+/* Hosting pet selection highlight */
+.melpet-hosting-pet-card {
+  overflow: hidden;
+  border: 1.5px solid rgba(73, 150, 190, 0.28);
+  border-left: 1.5px solid rgba(73, 150, 190, 0.28);
+  border-radius: 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(232, 247, 252, 0.86) 52%,
+    rgba(250, 245, 233, 0.92) 100%
+  );
+  box-shadow: 0 10px 24px rgba(47, 36, 31, 0.07);
+}
+
+.melpet-hosting-pet-card.is-selected {
+  border-color: rgba(22, 163, 74, 0.42);
+  border-left-color: rgba(22, 163, 74, 0.42);
+  background: linear-gradient(
+    135deg,
+    rgba(240, 253, 244, 0.98) 0%,
+    rgba(220, 252, 231, 0.92) 48%,
+    rgba(232, 247, 252, 0.88) 100%
+  );
+  box-shadow: 0 12px 28px rgba(22, 101, 52, 0.12);
+}
+
+.melpet-hosting-pet-select {
+  padding: 14px;
+}
+
+.melpet-hosting-pet-select:hover,
+.melpet-hosting-pet-select:focus-visible {
+  background: rgba(255, 255, 255, 0.38);
+}
+
+
+/* Stronger hosting pet selection gradient */
+.melpet-hosting-pet-card {
+  border-color: rgba(73, 150, 190, 0.38);
+  border-left-color: rgba(73, 150, 190, 0.38);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(203, 237, 248, 0.9) 46%,
+    rgba(238, 225, 194, 0.96) 100%
+  );
+  box-shadow: 0 12px 28px rgba(47, 36, 31, 0.1);
+}
+
+.melpet-hosting-pet-card.is-selected {
+  border-color: rgba(22, 163, 74, 0.52);
+  border-left-color: rgba(22, 163, 74, 0.52);
+  background: linear-gradient(
+    135deg,
+    rgba(220, 252, 231, 1) 0%,
+    rgba(187, 247, 208, 0.94) 48%,
+    rgba(203, 237, 248, 0.9) 100%
+  );
+  box-shadow: 0 14px 30px rgba(22, 101, 52, 0.16);
+}
+
+/* Standard clear button layout */
+.melpet-clear-button.btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  border-radius: 999px;
+  border-color: rgba(77, 50, 39, 0.62);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--cor-marrom);
+  box-shadow: 0 10px 24px rgba(77, 50, 39, 0.12);
+}
+
+.melpet-clear-button.btn:hover:not(:disabled) {
+  border-color: rgba(77, 50, 39, 0.82);
+  background: linear-gradient(135deg, rgba(232, 247, 252, 0.96), rgba(221, 232, 226, 0.98), rgba(226, 210, 174, 0.96));
+  color: var(--cor-marrom);
+  box-shadow: 0 14px 30px rgba(77, 50, 39, 0.18);
+}
+
+@media (min-width: 720px) {
+  .melpet-clear-button.btn {
+    width: auto;
+    min-width: 150px;
+  }
+}
+
+/* Hosting request UI refinement */
+.melpet-hosting-request,
+.melpet-hosting-summary {
+  border: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-left: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-radius: 20px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(241, 248, 249, 0.94) 50%,
+    rgba(234, 224, 195, 0.5) 100%
+  );
+  box-shadow: 0 18px 42px rgba(47, 36, 31, 0.12);
+  padding: clamp(14px, 3vw, 22px);
+}
+
+.melpet-hosting-guidance {
+  border: 1.5px solid rgba(73, 150, 190, 0.28);
+  border-left: 1.5px solid rgba(73, 150, 190, 0.28);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(203, 237, 248, 0.86), rgba(255, 255, 255, 0.84), rgba(238, 225, 194, 0.76));
+  box-shadow: 0 10px 24px rgba(47, 36, 31, 0.07);
+  color: var(--cor-marrom);
+}
+
+.melpet-hosting-pets h3,
+.melpet-hosting-summary h3 {
+  border-bottom: 1.5px solid rgba(73, 150, 190, 0.22);
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(135deg, rgba(232, 247, 252, 0.92), rgba(255, 255, 255, 0.88));
+  color: var(--cor-marrom);
+  font-size: 1.08rem;
+  font-weight: 950;
+  margin: 0 0 2px;
+  padding: 13px 14px;
+}
+
+.melpet-hosting-pet-list,
+.melpet-hosting-summary ul {
+  gap: 12px;
+}
+
+.melpet-hosting-pet-period {
+  border-top: 1.5px solid rgba(73, 150, 190, 0.22);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(232, 247, 252, 0.42));
+  padding: 14px;
+}
+
+.melpet-hosting-pet-period label {
+  border: 1.5px solid rgba(73, 150, 190, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 10px;
+}
+
+.melpet-hosting-summary ul {
+  padding: 2px;
+}
+
+.melpet-hosting-summary li {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  border: 2px solid rgba(73, 150, 190, 0.32);
+  border-left: 2px solid rgba(73, 150, 190, 0.32);
+  border-radius: 18px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 1) 0%,
+    rgba(203, 237, 248, 0.78) 48%,
+    rgba(238, 225, 194, 0.84) 100%
+  );
+  box-shadow: 0 14px 30px rgba(47, 36, 31, 0.11);
+  padding: 14px;
+}
+
+.melpet-hosting-summary li span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.melpet-hosting-summary li span > strong {
+  color: var(--cor-marrom);
+  font-size: 1.05rem;
+  font-weight: 950;
+}
+
+.melpet-hosting-summary li small {
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.74);
+  color: var(--cor-marrom-claro);
+  font-size: 0.86rem;
+  font-weight: 850;
+  line-height: 1.45;
+  padding: 9px 10px;
+}
+
+.melpet-hosting-summary li > strong {
+  justify-self: start;
+  border: 1px solid rgba(22, 101, 52, 0.22);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(220, 252, 231, 0.96), rgba(240, 253, 244, 0.96));
+  color: #166534;
+  font-size: 1rem;
+  font-weight: 950;
+  padding: 8px 12px;
+}
+
+.melpet-hosting-total {
+  border: 2px solid rgba(22, 101, 52, 0.22);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(220, 252, 231, 0.94), rgba(255, 255, 255, 0.92));
+  box-shadow: 0 12px 28px rgba(22, 101, 52, 0.1);
+}
+
+.melpet-hosting-total strong {
+  font-size: 1.18rem;
+  font-weight: 950;
+}
+
+@media (min-width: 760px) {
+  .melpet-hosting-summary li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .melpet-hosting-summary li > strong {
+    justify-self: end;
+  }
+}
+
+/* Hosting summary item detail refinement */
+.melpet-hosting-summary-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.melpet-hosting-summary-item::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: linear-gradient(180deg, rgba(73, 150, 190, 0.95), rgba(112, 72, 47, 0.58));
+}
+
+.melpet-hosting-summary-item-main {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding-left: 4px;
+}
+
+.melpet-hosting-summary-item-main > strong {
+  color: var(--cor-marrom);
+  font-size: 1.12rem;
+  font-weight: 950;
+}
+
+.melpet-hosting-summary-item-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.melpet-hosting-summary-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border: 1px solid rgba(73, 150, 190, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--cor-marrom);
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1.2;
+  padding: 6px 10px;
+}
+
+.melpet-hosting-summary-chip.is-price {
+  border-color: rgba(22, 101, 52, 0.22);
+  background: rgba(220, 252, 231, 0.86);
+  color: #166534;
+}
+
+.melpet-hosting-summary-item-details small {
+  flex-basis: 100%;
+  border: 1px solid rgba(73, 150, 190, 0.18);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.melpet-hosting-summary-item-total {
+  align-self: center;
+}

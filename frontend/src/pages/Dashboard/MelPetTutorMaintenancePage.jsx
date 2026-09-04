@@ -365,7 +365,7 @@ function MelPetTutorMaintenancePage({ onBack }) {
           </label>
           <div className="admin-page-actions admin-user-search-actions">
             <Button type="submit" disabled={loading}>{loading ? "Pesquisando..." : "Pesquisar"}</Button>
-            <Button type="button" variant="outline" onClick={clearSearch} disabled={loading}>Limpar</Button>
+            <Button className="melpet-clear-button" type="button" variant="outline" onClick={clearSearch} disabled={loading}>Limpar</Button>
           </div>
         </form>
 

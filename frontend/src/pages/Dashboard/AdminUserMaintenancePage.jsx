@@ -359,7 +359,7 @@ function AdminUserMaintenancePage({ onBack }) {
               Pesquisar
             </Button>
             <Button
-              type="button"
+              className="melpet-clear-button" type="button"
               variant="outline"
               onClick={clearUserSearch}
               disabled={loading && !hasSearchedUsers}
