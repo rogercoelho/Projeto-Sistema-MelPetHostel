@@ -99,6 +99,7 @@
 }
 
 .user-badge {
+  border: 2px solid rgba(77, 50, 39, 0.28);
   background-color: var(--cor-areia);
   color: var(--cor-marrom);
   padding: 2px 8px;
@@ -1139,7 +1140,7 @@
   color: var(--cor-erro);
 }
 
-/* Nome do usuÃ¡rio clicÃ¡vel */
+/* Nome do usuario clicavel */
 .user-name {
   cursor: pointer;
   transition: opacity 0.2s ease;
@@ -1157,7 +1158,7 @@
   opacity: 0.9;
 }
 
-/* FormulÃ¡rio de senha no modal */
+/* Formulario de senha no modal */
 .form-senha {
   display: flex;
   flex-direction: column;
@@ -2575,4 +2576,51 @@
     width: auto;
     min-width: 150px;
   }
+}
+/* Standard badge system */
+.telegram-admin-pill,
+.melpet-admin-pet-info-badge,
+.melpet-client-pet-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 28px;
+  border: 1px solid rgba(126, 91, 62, 0.18);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 242, 235, 0.92) 100%);
+  box-shadow: 0 8px 18px rgba(47, 36, 31, 0.08);
+  color: var(--cor-marrom);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.15;
+  padding: 5px 10px;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.telegram-admin-pill.enabled,
+.telegram-admin-pill.success,
+.telegram-admin-pill.active,
+.melpet-client-pet-status--active {
+  border-color: rgba(34, 197, 94, 0.36);
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  color: #166534;
+}
+
+.telegram-admin-pill.pending,
+.telegram-admin-pill.warning {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
+}
+
+.telegram-admin-pill.disabled,
+.telegram-admin-pill.error,
+.melpet-client-pet-status--inactive {
+  border-color: rgba(239, 68, 68, 0.34);
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  color: #991b1b;
 }

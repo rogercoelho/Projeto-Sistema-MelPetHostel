@@ -1375,6 +1375,78 @@ router.get("/hospedagens/comprovantes/pendentes", async (req, res) => {
   }
 });
 
+router.get("/hospedagens/checkin/pendentes", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const solicitacoes = await listHostingRequests(req, { status: "confirmado" });
+    if (!solicitacoes)
+      return res.status(500).json({
+        status: "erro",
+        mensagem: "Tabelas de hospedagem nao encontradas.",
+      });
+    return res.json({ status: "sucesso", solicitacoes });
+  } catch (error) {
+    console.error(
+      "Error in GET /melpethostel/hospedagens/checkin/pendentes:",
+      error,
+    );
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
+
+router.patch("/hospedagens/solicitacoes/:id/checkin", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const solicitacaoId = Number(req.params?.id);
+    if (!Number.isInteger(solicitacaoId) || solicitacaoId <= 0)
+      return res
+        .status(400)
+        .json({ status: "erro", mensagem: "Solicitacao invalida." });
+
+    const table = await resolveTableName(
+      req,
+      TABLE_NAMES.hospedagemSolicitacoes,
+    );
+    if (!table)
+      return res.status(500).json({
+        status: "erro",
+        mensagem: "Tabela de hospedagens nao encontrada.",
+      });
+
+    const [rows] = await dbFor(req).query(
+      "SELECT id, status FROM " + qtable(table) + " WHERE id = ? LIMIT 1",
+      [solicitacaoId],
+    );
+    const solicitacao = rows && rows[0] ? rows[0] : null;
+    if (!solicitacao)
+      return res
+        .status(404)
+        .json({ status: "erro", mensagem: "Solicitacao nao encontrada." });
+    if (normalizeHostingStatus(solicitacao.status) !== "confirmado")
+      return res.status(409).json({
+        status: "erro",
+        mensagem:
+          "O check-in so pode ser confirmado em hospedagens com pagamento confirmado.",
+      });
+
+    await dbFor(req).query(
+      "UPDATE " + qtable(table) + " SET status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?",
+      ["concluido", solicitacaoId],
+    );
+
+    return res.json({
+      status: "sucesso",
+      mensagem: "Check-in confirmado com sucesso.",
+      solicitacao: { id: solicitacaoId, status: "concluido" },
+    });
+  } catch (error) {
+    console.error(
+      "Error in PATCH /melpethostel/hospedagens/solicitacoes/:id/checkin:",
+      error,
+    );
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
 router.get("/hospedagens/pagamentos/:id/preview", async (req, res) => {
   try {
     if (!(await requireHostingAdmin(req, res))) return;

@@ -418,6 +418,12 @@ export default function MelPetHostel({
     useState(false);
   const [sendingCardPaymentLinkId, setSendingCardPaymentLinkId] =
     useState(null);
+  const [pendingHostingCheckinRequests, setPendingHostingCheckinRequests] =
+    useState([]);
+  const [loadingHostingCheckinRequests, setLoadingHostingCheckinRequests] =
+    useState(false);
+  const [confirmingHostingCheckinId, setConfirmingHostingCheckinId] =
+    useState(null);
   const [approvingHostingPaymentId, setApprovingHostingPaymentId] =
     useState(null);
   const [rejectHostingPaymentTarget, setRejectHostingPaymentTarget] =
@@ -1056,7 +1062,8 @@ export default function MelPetHostel({
       showToast("Carteira de vacinação aprovada com sucesso.", "success");
     } catch (error) {
       showToast(
-        error?.message || "Não foi possível aprovar a carteira de vacinação.",
+        error?.message ||
+          "Não foi possível aprovar a carteira de vacinação.",
         "error",
       );
     } finally {
@@ -1165,7 +1172,8 @@ export default function MelPetHostel({
       closeRejectVaccineCardModal();
     } catch (error) {
       showToast(
-        error?.message || "Não foi possível reprovar a carteira de vacinação.",
+        error?.message ||
+          "Não foi possível reprovar a carteira de vacinação.",
         "error",
       );
     } finally {
@@ -1276,7 +1284,7 @@ export default function MelPetHostel({
     if (tone === "confirmed") return "✓";
     if (tone === "completed") return "✓";
     if (tone === "canceled") return "×";
-    return "⬢";
+    return "•";
   }
 
   function getHostingRequestStatusKey(status) {
@@ -1350,7 +1358,9 @@ export default function MelPetHostel({
       setPlanos(Array.isArray(data?.planos) ? data.planos : []);
     } catch (error) {
       setPlanos([]);
-      setPlanosError(error?.message || "Não foi possível carregar os planos.");
+      setPlanosError(
+        error?.message || "Não foi possível carregar os planos.",
+      );
     } finally {
       setLoadingPlanos(false);
     }
@@ -1628,6 +1638,49 @@ export default function MelPetHostel({
     }
   }
 
+  async function loadPendingHostingCheckinRequests() {
+    if (loadingHostingCheckinRequests) return pendingHostingCheckinRequests;
+    setLoadingHostingCheckinRequests(true);
+    try {
+      const data = await api.get("/melpethostel/hospedagens/checkin/pendentes");
+      const solicitacoes = Array.isArray(data?.solicitacoes)
+        ? data.solicitacoes
+        : [];
+      setPendingHostingCheckinRequests(solicitacoes);
+      return solicitacoes;
+    } catch (error) {
+      setPendingHostingCheckinRequests([]);
+      showToast(
+        error?.message || "Nao foi possivel carregar check-ins pendentes.",
+        "error",
+      );
+      return [];
+    } finally {
+      setLoadingHostingCheckinRequests(false);
+    }
+  }
+
+  async function confirmHostingCheckin(request) {
+    if (!request?.id) return;
+    setConfirmingHostingCheckinId(request.id);
+    try {
+      await api.patch(
+        "/melpethostel/hospedagens/solicitacoes/" + request.id + "/checkin",
+      );
+      showToast("Check-in confirmado.", "success");
+      setPendingHostingCheckinRequests((current) =>
+        current.filter((item) => Number(item.id) !== Number(request.id)),
+      );
+      await loadHostingRequests();
+    } catch (error) {
+      showToast(
+        error?.message || "Nao foi possivel confirmar o check-in.",
+        "error",
+      );
+    } finally {
+      setConfirmingHostingCheckinId(null);
+    }
+  }
   async function loadPendingHostingPaymentReceipts() {
     if (loadingHostingPaymentReceipts) return pendingHostingPaymentRequests;
     setLoadingHostingPaymentReceipts(true);
@@ -2749,7 +2802,8 @@ export default function MelPetHostel({
         console.error("Erro ao carregar pets cadastrados:", error);
         if (!ignore) {
           showToast(
-            error?.message || "Não foi possível carregar os pets cadastrados.",
+            error?.message ||
+              "Não foi possível carregar os pets cadastrados.",
             "error",
           );
         }
@@ -3090,7 +3144,8 @@ export default function MelPetHostel({
       setVaccineCardItems(Array.isArray(data?.itens) ? data.itens : []);
     } catch (error) {
       setVaccineCardInfoError(
-        error?.message || "Não foi possível carregar a carteira de vacinação.",
+        error?.message ||
+          "Não foi possível carregar a carteira de vacinação.",
       );
     } finally {
       setLoadingVaccineCardInfo(false);
@@ -3333,7 +3388,10 @@ export default function MelPetHostel({
         onPetRegistered?.();
       }
     } catch (error) {
-      showToast(error?.message || "Não foi possível salvar vacinas.", "error");
+      showToast(
+        error?.message || "Não foi possível salvar vacinas.",
+        "error",
+      );
     } finally {
       setSavingPetVaccines(false);
     }
@@ -4134,7 +4192,8 @@ export default function MelPetHostel({
       <section className="melpet-hosting-request">
         <div className="melpet-hosting-guidance">
           Hotel e Pet Day usam período por diária. Creche, Lar Temporário e
-          Residência usam pagamento recorrente, com quantidade e mês de início.
+          Residência usam pagamento recorrente, com quantidade e mês de
+          início.
         </div>
 
         <section className="melpet-hosting-pets">
@@ -4417,8 +4476,8 @@ export default function MelPetHostel({
           </span>
           <h3>Meus Pedidos de Hospedagem</h3>
           <p>
-            Consulte suas solicitações, acompanhe o status e revise os itens de
-            cada pedido em um só lugar.
+            Consulte suas solicitações, acompanhe o status e revise os itens
+            de cada pedido em um só lugar.
           </p>
         </div>
 
@@ -4439,7 +4498,9 @@ export default function MelPetHostel({
       </header>
 
       <div className="melpet-hosting-history-toolbar">
-        <p>Veja aqui os pedidos enviados e o andamento de cada solicitação.</p>
+        <p>
+          Veja aqui os pedidos enviados e o andamento de cada solicitação.
+        </p>
       </div>
 
       <div className="melpet-hosting-history-filters-card">
@@ -4482,6 +4543,13 @@ export default function MelPetHostel({
           {hostingRequestsVisible.map((request) => {
             const isOpen = hostingRequestOpenId === request.id;
             const requestTotal = request.valorFinal ?? request.valorTotal;
+            const requestStatusTone = getHostingRequestStatusTone(
+              request.status,
+            );
+            const showPaymentPendingStatus =
+              requestStatusTone === "approved" || hasPendingHostingPayment(request);
+            const isUsedHosting =
+              getHostingRequestStatusKey(request.status) === "concluido";
             return (
               <article
                 key={request.id}
@@ -4510,16 +4578,23 @@ export default function MelPetHostel({
                     </div>
                   </div>
                   <span
-                    className={`melpet-hosting-history-status is-${getHostingRequestStatusTone(request.status)} ${hasPendingHostingPayment(request) ? "has-payment-pending" : ""}`}
+                    className={`melpet-hosting-history-status is-${requestStatusTone} ${showPaymentPendingStatus ? "has-payment-pending" : ""}`}
                   >
                     <strong>
                       {getHostingRequestStatusLabel(request.status)}
                     </strong>
-                    <span>
-                      {getHostingRequestStatusTone(request.status) ===
+                    <span
+                      className={
+                        showPaymentPendingStatus
+                          ? "melpet-hosting-payment-pending-label"
+                          : undefined
+                      }
+
+                    >
+                      {requestStatusTone ===
                       "confirmed"
                         ? formatHostingCheckInOut(request)
-                        : hasPendingHostingPayment(request)
+                        : showPaymentPendingStatus
                           ? "Pagamento Pendente"
                           : getHostingRequestStatusDetail(request.status)}
                     </span>
@@ -4570,9 +4645,9 @@ export default function MelPetHostel({
                                 {item.petNome || `Pet ${item.petId}`}
                               </strong>
                               <small>
-                                {item.tipo} / {item.tempoQuantidade}{" "}
-                                {item.tempoUnidade} {"->"}{" "}
-                                {formatCurrency(item.valorDiaria)}
+                                {isUsedHosting
+                                  ? "Hospedagem Utilizada"
+                                  : `${item.tipo} / ${item.tempoQuantidade} ${item.tempoUnidade} -> ${formatCurrency(item.valorDiaria)}`}
                               </small>
                               <small>{formatHostingItemPeriod(item)}</small>
                               <strong>{formatCurrency(itemTotal)}</strong>
@@ -4589,7 +4664,8 @@ export default function MelPetHostel({
                       </div>
                     ) : null}
 
-                    {["approved", "confirmed"].includes(
+                    {!isUsedHosting &&
+                    ["approved", "confirmed"].includes(
                       getHostingRequestStatusTone(request.status),
                     )
                       ? (() => {
@@ -4798,8 +4874,8 @@ export default function MelPetHostel({
                                       <div className="melpet-hosting-card-payment-info">
                                         <p>
                                           Iremos gerar um link de pagamento para
-                                          a opção de cartão de crédito. Assim
-                                          que o link for gerado, ficará
+                                          a opção de cartão de crédito.
+                                          Assim que o link for gerado, ficará
                                           disponivel abaixo e você também
                                           receberá por email. Depois do
                                           pagamento, envie o comprovante neste
@@ -5048,7 +5124,9 @@ export default function MelPetHostel({
           <p className="melpet-error">{pixConfigError}</p>
         ) : null}
         {loadingPixConfig ? (
-          <p className="melpet-validate-message">Carregando configuração...</p>
+          <p className="melpet-validate-message">
+            Carregando configuração...
+          </p>
         ) : null}
 
         <div className="melpet-hosting-history-actions melpet-admin-pix-actions">
@@ -5290,7 +5368,8 @@ export default function MelPetHostel({
           <span className="melpet-hosting-history-kicker">Hospedagens</span>
           <h3>Enviar Link de Pagamento</h3>
           <p>
-            Cole o link de cartão de crédito para o tutor finalizar o pagamento.
+            Cole o link de cartão de crédito para o tutor finalizar o
+            pagamento.
           </p>
         </div>
         <div className="melpet-hosting-history-stats">
@@ -5438,6 +5517,95 @@ export default function MelPetHostel({
     </section>
   );
 
+  const adminHostingCheckinContent = (
+    <section className="melpet-hosting-history melpet-admin-hosting-checkin">
+      <header className="melpet-hosting-history-hero">
+        <div>
+          <span className="melpet-hosting-history-kicker">Hospedagens</span>
+          <h3>Fazer Check-in</h3>
+          <p>Confirme o check-in das hospedagens com pagamentos aprovados.</p>
+        </div>
+        <div className="melpet-hosting-history-stats">
+          <div>
+            <strong>{pendingHostingCheckinRequests.length}</strong>
+            <span>Confirmadas</span>
+          </div>
+        </div>
+      </header>
+
+      <div className="melpet-hosting-payment-card">
+        <div>
+          <span className="melpet-hosting-history-kicker">Check-in</span>
+          <h3>Hospedagens Confirmadas</h3>
+        </div>
+        {loadingHostingCheckinRequests ? (
+          <p>Carregando hospedagens confirmadas...</p>
+        ) : pendingHostingCheckinRequests.length ? (
+          <div className="melpet-hosting-history-list">
+            {pendingHostingCheckinRequests.map((request) => {
+              const requestTotal = request.valorFinal ?? request.valorTotal;
+              return (
+                <article
+                  className="melpet-hosting-history-card is-open"
+                  key={"checkin-" + request.id}
+                >
+                  <div className="melpet-hosting-history-card-header">
+                    <div>
+                      <strong>
+                        {request.clienteNome || request.usuarioLogin || "Tutor"}
+                      </strong>
+                      <small>
+                        Pedido #{request.id} - {formatCurrency(requestTotal)}
+                      </small>
+                    </div>
+                    <span className="melpet-hosting-history-status is-confirmed">
+                      <strong>Confirmado</strong>
+                      <span>{formatHostingCheckInOut(request)}</span>
+                    </span>
+                  </div>
+                  <dl className="melpet-hosting-history-meta">
+                    <div>
+                      <dt>Serviço</dt>
+                      <dd>{request.tipo || "-"}</dd>
+                    </div>
+                    <div>
+                      <dt>Período</dt>
+                      <dd>{formatHostingRequestPeriod(request)}</dd>
+                    </div>
+                    <div>
+                      <dt>Pet</dt>
+                      <dd>
+                        {(request.itens || [])
+                          .map((item) => item.petNome || `Pet ${item.petId}`)
+                          .join(", ") || "-"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Total</dt>
+                      <dd>{formatCurrency(requestTotal)}</dd>
+                    </div>
+                  </dl>
+                  <div className="melpet-hosting-history-actions">
+                    <Button
+                      type="button"
+                      disabled={confirmingHostingCheckinId === request.id}
+                      onClick={() => confirmHostingCheckin(request)}
+                    >
+                      {confirmingHostingCheckinId === request.id
+                        ? "Confirmando..."
+                        : "Fazer Check-in"}
+                    </Button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <p>Nenhuma hospedagem confirmada aguardando check-in.</p>
+        )}
+      </div>
+    </section>
+  );
   const adminHostingApprovalContent = (
     <section className="melpet-hosting-history melpet-admin-hosting-approval">
       <header className="melpet-hosting-history-hero">
@@ -5445,8 +5613,8 @@ export default function MelPetHostel({
           <span className="melpet-hosting-history-kicker">Hospedagens</span>
           <h3>Aprovar Hospedagens Pendentes</h3>
           <p>
-            Consulte as solicitações enviadas pelos tutores e aprove ou reprove
-            cada pedido.
+            Consulte as solicitações enviadas pelos tutores e aprove ou
+            reprove cada pedido.
           </p>
         </div>
         <div className="melpet-hosting-history-stats">
@@ -7187,14 +7355,23 @@ export default function MelPetHostel({
                   summary: "Enviar link de cartão de crédito para o tutor.",
                   isOpen: activeMenu === "enviarLinkPagamento",
                   onAction: () => {
-                    setActiveMenu((prev) =>
-                      prev === "enviarLinkPagamento"
-                        ? ""
-                        : "enviarLinkPagamento",
-                    );
-                    loadPendingCardPaymentRequests();
+                    const shouldOpen = activeMenu !== "enviarLinkPagamento";
+                    setActiveMenu(shouldOpen ? "enviarLinkPagamento" : "");
+                    if (shouldOpen) loadPendingCardPaymentRequests();
                   },
                   content: adminCardPaymentLinkContent,
+                },
+                {
+                  id: "fazer-check-in",
+                  title: "Fazer Check-in",
+                  summary: "Confirmar check-in de hospedagens liberadas.",
+                  isOpen: activeMenu === "fazerCheckin",
+                  onAction: () => {
+                    const shouldOpen = activeMenu !== "fazerCheckin";
+                    setActiveMenu(shouldOpen ? "fazerCheckin" : "");
+                    if (shouldOpen) loadPendingHostingCheckinRequests();
+                  },
+                  content: adminHostingCheckinContent,
                 },
               ],
       children: isPixConfigAdminMenu ? adminPixConfigContent : null,
@@ -7519,8 +7696,8 @@ export default function MelPetHostel({
                 <h2>Criação e Edição de Vacinas / Outros</h2>
               </div>
               <p className="admin-user-create-subtitle">
-                Cadastre e organize os itens de vacinação usados nas fichas dos
-                pets.
+                Cadastre e organize os itens de vacinação usados nas fichas
+                dos pets.
               </p>
             </header>
 
@@ -7548,8 +7725,8 @@ export default function MelPetHostel({
         >
           <div className="admin-page-delete-modal">
             <p>
-              Atenção!! Ao clicar em CONFIRMAR, você irá excluir este item de
-              vacinas / outros:{" "}
+              Atenção!! Ao clicar em CONFIRMAR, você irá excluir este item
+              de vacinas / outros:{" "}
               <strong>{deleteWarningVaccineConfig?.descricao}</strong>. Ele não
               aparecerá mais para novos cadastros.
             </p>

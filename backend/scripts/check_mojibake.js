@@ -23,7 +23,25 @@ const TEXT_EXTENSIONS = new Set([
   ".example",
   ".txt",
 ]);
-const MOJIBAKE_PATTERN = /Ã£|Ã¡|Ã¢|Ã©|Ãª|Ã­|Ã³|Ã´|Ãµ|Ãº|Ã§|Â|�/;
+const MOJIBAKE_TOKENS = [
+  "\u00c3\u00a1",
+  "\u00c3\u00a2",
+  "\u00c3\u00a3",
+  "\u00c3\u00a7",
+  "\u00c3\u00a9",
+  "\u00c3\u00aa",
+  "\u00c3\u00ad",
+  "\u00c3\u00b3",
+  "\u00c3\u00b4",
+  "\u00c3\u00b5",
+  "\u00c3\u00ba",
+  "\u00c2",
+  "\ufffd",
+];
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const MOJIBAKE_PATTERN = new RegExp(
+  MOJIBAKE_TOKENS.map(escapeRegex).join("|"),
+);
 
 function isTextFile(filePath) {
   const name = path.basename(filePath);
@@ -49,31 +67,24 @@ function walk(dir, files = []) {
 }
 
 const findings = [];
-const scannedRoots = new Set(
-  TARGET_DIRS.map((dir) => path.join(ROOT, dir)).filter((dir) => fs.existsSync(dir)),
-);
 
-for (const rootDir of scannedRoots) {
-  for (const filePath of walk(rootDir)) {
+for (const target of TARGET_DIRS) {
+  const targetPath = path.join(ROOT, target);
+  for (const filePath of walk(targetPath)) {
     const content = fs.readFileSync(filePath, "utf8");
     const lines = content.split(/\r?\n/);
     lines.forEach((line, index) => {
       if (MOJIBAKE_PATTERN.test(line)) {
-        findings.push({
-          filePath: path.relative(ROOT, filePath),
-          line: index + 1,
-          text: line.trim(),
-        });
+        findings.push(
+          `${path.relative(ROOT, filePath)}:${index + 1}: ${line.trim()}`,
+        );
       }
     });
   }
 }
 
 if (findings.length) {
-  console.error("Mojibake encontrado. Corrija os textos antes de continuar:\n");
-  for (const finding of findings) {
-    console.error(`${finding.filePath}:${finding.line}: ${finding.text}`);
-  }
+  console.error("Mojibake encontrado:\n" + findings.join("\n"));
   process.exit(1);
 }
 

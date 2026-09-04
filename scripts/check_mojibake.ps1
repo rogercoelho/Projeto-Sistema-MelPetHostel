@@ -1,7 +1,22 @@
 $ErrorActionPreference = "Stop"
 
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
-$patterns = "Ã£|Ã¡|Ã¢|Ã©|Ãª|Ã­|Ã³|Ã´|Ãµ|Ãº|Ã§|Â|�"
+$tokens = @(
+  ([string][char]0x00C3 + [string][char]0x00A1),
+  ([string][char]0x00C3 + [string][char]0x00A2),
+  ([string][char]0x00C3 + [string][char]0x00A3),
+  ([string][char]0x00C3 + [string][char]0x00A7),
+  ([string][char]0x00C3 + [string][char]0x00A9),
+  ([string][char]0x00C3 + [string][char]0x00AA),
+  ([string][char]0x00C3 + [string][char]0x00AD),
+  ([string][char]0x00C3 + [string][char]0x00B3),
+  ([string][char]0x00C3 + [string][char]0x00B4),
+  ([string][char]0x00C3 + [string][char]0x00B5),
+  ([string][char]0x00C3 + [string][char]0x00BA),
+  ([string][char]0x00C2),
+  ([string][char]0xFFFD)
+)
+$patterns = ($tokens | ForEach-Object { [regex]::Escape($_) }) -join "|"
 $extensions = @("*.js", "*.jsx", "*.css", "*.html", "*.json", "*.md", "*.sql", "*.env", "*.txt")
 $excludeDirs = @("\node_modules\", "\dist\", "\build\", "\coverage\", "\uploads\", "\.git\")
 $findings = New-Object System.Collections.Generic.List[string]
