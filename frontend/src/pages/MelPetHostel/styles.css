@@ -2052,6 +2052,62 @@
   overflow-wrap: anywhere;
 }
 
+
+.melpet-hosting-history-items.is-used-hosting {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.melpet-hosting-history-items.is-used-hosting h4 {
+  color: #1d4ed8;
+}
+
+.melpet-hosting-history-items.is-used-hosting li {
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.96) 0%, rgba(219, 234, 254, 0.9) 100%);
+  box-shadow: 0 14px 30px rgba(59, 130, 246, 0.12);
+}
+
+.melpet-hosting-history-items.is-used-hosting li > strong:first-child {
+  color: #1e3a8a;
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.melpet-hosting-history-items.is-used-hosting li small:first-of-type {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1d4ed8;
+  font-size: 0.74rem;
+  font-weight: 950;
+  line-height: 1.15;
+  padding: 4px 10px;
+  text-transform: uppercase;
+}
+
+.melpet-hosting-history-items.is-used-hosting li small:last-of-type {
+  color: #1e40af;
+  font-weight: 850;
+}
+
+.melpet-hosting-history-items.is-used-hosting li > strong:last-child {
+  justify-self: start;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #1d4ed8;
+  padding: 6px 10px;
+}
 .melpet-hosting-history-note {
   display: grid;
   gap: 4px;
@@ -5524,4 +5580,85 @@
   border-color: rgba(59, 130, 246, 0.34);
   background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
   color: #1d4ed8;
+}
+/* Responsive hosting stat badges */
+.melpet-hosting-history-hero {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.melpet-hosting-history-stats {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+}
+
+.melpet-hosting-history-stats div {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.melpet-hosting-history-stats strong,
+.melpet-hosting-history-stats span {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 760px) {
+  .melpet-hosting-history-stats {
+    grid-template-columns: repeat(3, minmax(86px, 1fr));
+  }
+}
+/* Fluid content width enforcement */
+.melpet-shell {
+  width: calc(100% - var(--spacing-sm) - var(--spacing-sm)) !important;
+  max-width: 1440px !important;
+}
+
+.melpet-panel,
+.melpet-admin-standalone-screen,
+.melpet-admin-pet-screen,
+.melpet-admin-pet-card,
+.melpet-admin-pet-search-window,
+.melpet-admin-pet-status-window,
+.melpet-admin-vaccine-config-window,
+.melpet-admin-vaccine-approval-window,
+.melpet-hosting-history,
+.melpet-hosting-history-filters-card,
+.melpet-hosting-history-card,
+.melpet-hosting-payment-card,
+.melpet-hosting-summary,
+.melpet-vaccine-card-container,
+.pet-registration-container,
+.pet-registration-form,
+.admin-page,
+.admin-user-create-card,
+.admin-user-create-section {
+  width: 100%;
+  max-width: 100% !important;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .melpet-shell {
+    width: 96vw !important;
+    max-width: 1440px !important;
+  }
+
+  .melpet-admin-standalone-screen,
+  .melpet-admin-pet-screen,
+  .admin-page {
+    width: 100%;
+    max-width: 100% !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .melpet-shell {
+    width: 94vw !important;
+    max-width: 1520px !important;
+  }
 }

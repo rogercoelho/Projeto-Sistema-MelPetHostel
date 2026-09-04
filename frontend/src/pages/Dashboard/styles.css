@@ -2624,3 +2624,51 @@
   background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
   color: #991b1b;
 }
+/* Fluid content width enforcement */
+.header-content,
+.admin-page {
+  width: calc(100% - var(--spacing-sm) - var(--spacing-sm)) !important;
+  max-width: 1440px !important;
+}
+
+.admin-page-header,
+.admin-page-layout,
+.admin-page-panel,
+.admin-user-create-card,
+.admin-user-create-section,
+.admin-user-search-section,
+.admin-user-search-results-section,
+.client-profile-readonly,
+.melpet-admin-pet-search-window,
+.melpet-admin-pet-search-card,
+.melpet-admin-pet-results-card,
+.melpet-admin-pet-status-window,
+.melpet-admin-vaccine-config-window,
+.melpet-admin-vaccine-approval-window,
+.melpet-admin-document-approval-content,
+.melpet-admin-vaccine-approval-content,
+.melpet-admin-vaccine-config-content,
+.melpet-admin-pet-maintenance-layout,
+.telegram-admin-status-grid,
+.telegram-admin-status-card,
+.telegram-admin-preview {
+  width: 100%;
+  max-width: 100% !important;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .header-content,
+  .admin-page {
+    width: 96vw !important;
+    max-width: 1440px !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .header-content,
+  .admin-page {
+    width: 94vw !important;
+    max-width: 1520px !important;
+  }
+}

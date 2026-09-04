@@ -175,3 +175,16 @@ ul li {
 .mt-lg {
   margin-top: var(--spacing-lg);
 }
+/* Fluid global containers */
+.container {
+  width: calc(100% - var(--spacing-sm) - var(--spacing-sm));
+  max-width: 1520px;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .container {
+    width: 94vw;
+    max-width: 1520px;
+  }
+}

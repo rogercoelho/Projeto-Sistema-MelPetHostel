@@ -4634,7 +4634,7 @@ export default function MelPetHostel({
                       </div>
                     ) : null}
 
-                    <div className="melpet-hosting-history-items">
+                    <div className={`melpet-hosting-history-items ${isUsedHosting ? "is-used-hosting" : ""}`}>
                       <h4>Itens</h4>
                       <ul>
                         {(request.itens || []).map((item) => {
