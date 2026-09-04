@@ -9,7 +9,12 @@ function AdminPageShell({ title, description, onBack, children }) {
           <h2>{title}</h2>
           <p>{description}</p>
         </div>
-        <Button type="button" variant="outline" onClick={onBack}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onBack}
+          className="melpet-back-button"
+        >
           Voltar
         </Button>
       </header>

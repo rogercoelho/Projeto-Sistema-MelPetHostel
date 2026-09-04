@@ -21,11 +21,36 @@ function optionId(fieldName, option, index) {
     .toLowerCase()}`;
 }
 
+function renderFieldLabelText(label, required = false) {
+  const parts = String(label || "").split("\n");
+  const requiredMark = required ? <span aria-hidden="true"> *</span> : null;
+
+  if (parts.length === 1) {
+    return (
+      <>
+        {label}
+        {requiredMark}
+      </>
+    );
+  }
+
+  return parts.map((part, index) => {
+    const isLast = index === parts.length - 1;
+    return index === 0 ? (
+      part
+    ) : (
+      <span className="pet-form-label-note" key={index}>
+        {part}
+        {isLast ? requiredMark : null}
+      </span>
+    );
+  });
+}
+
 function FieldLabel({ field, htmlFor }) {
   return (
     <label className="pet-form-label" htmlFor={htmlFor}>
-      {field.label}
-      {field.required ? <span aria-hidden="true"> *</span> : null}
+      {renderFieldLabelText(field.label, field.required)}
     </label>
   );
 }
@@ -81,8 +106,7 @@ function ChoiceField({
   return (
     <div className={`${fieldClassName(field)} pet-form-field--choices`}>
       <span className="pet-form-label">
-        {field.label}
-        {field.required ? <span aria-hidden="true"> *</span> : null}
+        {renderFieldLabelText(field.label, field.required)}
       </span>
       <div className="pet-choice-grid" role="group" aria-label={field.label}>
         {field.options.map((option, index) => {

@@ -1,4 +1,4 @@
-﻿export const YES_NO_OPTIONS = ["Sim", "Não"];
+export const YES_NO_OPTIONS = ["Sim", "Não"];
 export const YES_NO_UNKNOWN_OPTIONS = ["Sim", "Não", "Não sei"];
 
 const veracityText =
@@ -70,7 +70,12 @@ export const PET_ANAMNESIS_SECTIONS = [
         required: true,
       },
       { name: "raca", label: "Raça", type: "text", required: true },
-      { name: "dataNascimento", label: "Data de nascimento", type: "date", required: true },
+      {
+        name: "dataNascimento",
+        label: "Data de nascimento",
+        type: "date",
+        required: true,
+      },
       {
         name: "pesoAproximado",
         label: "Peso aproximado",
@@ -122,7 +127,7 @@ export const PET_ANAMNESIS_SECTIONS = [
       {
         name: "autorizaAtendimentoEmergencial",
         label:
-          "Você autoriza atendimento veterinário emergencial com profissional de nossa confiança, caso seu veterinário cadastrado não atenda o contato?",
+          "Você autoriza atendimento veterinário emergencial com profissional de nossa confiança, caso seu veterinário cadastrado não atenda o contato?\nObs: Todos os custos serão de responsabilidade do tutor.",
         type: "radio",
         options: YES_NO_OPTIONS,
         required: true,

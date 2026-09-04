@@ -4951,9 +4951,14 @@ export default function MelPetHostel({
   );
 
   const adminPixConfigContent = (
-    <section className="melpet-hosting-history melpet-admin-pix-config">
-      <form className="melpet-admin-standard-card" onSubmit={savePixConfig}>
-        <div className="pet-form-grid">
+    <section className="melpet-section-content melpet-admin-pix-config">
+      <form className="admin-user-create-section melpet-admin-pix-config-card" onSubmit={savePixConfig}>
+        <div className="melpet-admin-document-card-heading">
+          <span>Pagamentos</span>
+          <strong>Configuração PIX</strong>
+        </div>
+
+        <div className="pet-form-grid melpet-admin-pix-config-grid">
           <label className="pet-form-field">
             Chave PIX
             <input
@@ -4995,11 +5000,11 @@ export default function MelPetHostel({
             />
           </label>
         </div>
-        {pixConfigError ? (
-          <p className="melpet-error">{pixConfigError}</p>
-        ) : null}
-        {loadingPixConfig ? <p>Carregando configuração...</p> : null}
-        <div className="melpet-hosting-history-actions">
+
+        {pixConfigError ? <p className="melpet-error">{pixConfigError}</p> : null}
+        {loadingPixConfig ? <p className="melpet-validate-message">Carregando configuração...</p> : null}
+
+        <div className="melpet-hosting-history-actions melpet-admin-pix-actions">
           <Button type="submit" disabled={savingPixConfig}>
             {savingPixConfig ? "Salvando..." : "Salvar PIX"}
           </Button>
@@ -5570,13 +5575,13 @@ export default function MelPetHostel({
       after: (
         <div className="pet-main-actions melpet-back-actions">
           <Button
-                type="button"
-                variant="outline"
-                onClick={handleBackToMainMenu}
-                className="melpet-back-button"
-              >
-                Voltar
-              </Button>
+            type="button"
+            variant="outline"
+            onClick={handleBackToMainMenu}
+            className="melpet-back-button"
+          >
+            Voltar
+          </Button>
         </div>
       ),
     },
@@ -7129,13 +7134,13 @@ export default function MelPetHostel({
       after: (
         <div className="pet-main-actions melpet-back-actions">
           <Button
-                type="button"
-                variant="outline"
-                onClick={handleBackToMainMenu}
-                className="melpet-back-button"
-              >
-                Voltar
-              </Button>
+            type="button"
+            variant="outline"
+            onClick={handleBackToMainMenu}
+            className="melpet-back-button"
+          >
+            Voltar
+          </Button>
         </div>
       ),
     },

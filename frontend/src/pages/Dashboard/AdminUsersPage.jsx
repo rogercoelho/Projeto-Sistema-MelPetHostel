@@ -471,8 +471,13 @@ function AdminUsersPage({ onBack }) {
         ) : null}
 
 
-        <div className="admin-user-create-footer">
-          <Button type="button" variant="outline" onClick={onBack}>
+        <div className="admin-user-create-footer melpet-back-actions">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onBack}
+            className="melpet-back-button"
+          >
             Voltar
           </Button>
         </div>

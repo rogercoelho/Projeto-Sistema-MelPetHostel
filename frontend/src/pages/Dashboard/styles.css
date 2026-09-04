@@ -2208,3 +2208,359 @@
   border: 2.5px solid rgba(73, 150, 190, 0.42);
   border-radius: 20px;
 }
+
+/* Mel Pet standard block for user administration screens */
+.admin-user-create-page {
+  align-items: start;
+  padding: clamp(14px, 4vw, 34px) clamp(14px, 4vw, 34px) clamp(32px, 6vw, 58px);
+}
+
+.admin-user-create-card {
+  overflow: hidden;
+  border: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-left: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-radius: 20px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(241, 248, 249, 0.94) 48%,
+    rgba(234, 224, 195, 0.5) 100%
+  );
+  box-shadow: 0 18px 42px rgba(47, 36, 31, 0.12);
+  padding: 0;
+}
+
+.admin-user-create-header {
+  border-bottom: 2px solid rgba(73, 150, 190, 0.3);
+  background: linear-gradient(
+    135deg,
+    rgba(73, 150, 190, 0.26) 0%,
+    rgba(232, 247, 252, 0.94) 54%,
+    rgba(255, 255, 255, 0.96) 100%
+  );
+  padding: clamp(18px, 4vw, 28px);
+}
+
+.admin-user-create-header::after {
+  content: none;
+}
+
+.admin-user-create-heading span,
+.admin-user-section-title span {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgb(43, 96, 124);
+  padding: 0;
+  letter-spacing: 0;
+}
+
+.admin-user-create-section,
+.admin-user-maintenance-selected {
+  border: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-left: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 12px 28px rgba(47, 36, 31, 0.08);
+}
+
+.admin-user-create-section {
+  margin: clamp(14px, 3vw, 22px);
+  padding: clamp(14px, 3vw, 20px);
+}
+
+.admin-user-section-title {
+  border-bottom: 1.5px solid rgba(73, 150, 190, 0.2);
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(
+    135deg,
+    rgba(232, 247, 252, 0.92) 0%,
+    rgba(255, 255, 255, 0.88) 100%
+  );
+  margin: calc(clamp(14px, 3vw, 20px) * -1) calc(clamp(14px, 3vw, 20px) * -1) 16px;
+  padding: 14px clamp(14px, 3vw, 20px);
+}
+
+.admin-user-create-grid label,
+.admin-page-form-grid label,
+.admin-user-search-field,
+.address-grid label,
+.address-primary-toggle,
+.admin-user-active-toggle,
+.admin-page-checkbox-field {
+  min-width: 0;
+  border: 1.5px solid rgba(73, 150, 190, 0.22);
+  border-radius: 14px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(232, 247, 252, 0.78) 100%
+  );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  padding: 10px;
+}
+
+.admin-user-create-card input,
+.admin-user-create-card select,
+.admin-user-create-card textarea,
+.address-grid input {
+  border-color: rgba(var(--cor-marrom-rgb), 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.admin-user-search-results article,
+.address-fieldset,
+.client-profile-readonly-grid div,
+.client-profile-address-list li {
+  border: 1.5px solid rgba(73, 150, 190, 0.24);
+  border-radius: 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(232, 247, 252, 0.82) 100%
+  );
+  box-shadow: 0 8px 18px rgba(47, 36, 31, 0.06);
+}
+
+.admin-user-search-results article.is-selected {
+  border-color: rgba(73, 150, 190, 0.7);
+  background: linear-gradient(135deg, rgba(232, 247, 252, 0.98), rgba(255, 255, 255, 0.94));
+  box-shadow: 0 12px 28px rgba(73, 150, 190, 0.18);
+}
+
+.admin-user-search-result-pick {
+  border-radius: 14px;
+  padding: 2px;
+}
+
+.admin-user-search-result-pick:focus-visible {
+  outline: 3px solid rgba(73, 150, 190, 0.24);
+  outline-offset: 3px;
+}
+
+.admin-user-maintenance-selected {
+  display: grid;
+  gap: 14px;
+  margin: clamp(14px, 3vw, 22px);
+  padding: clamp(14px, 3vw, 20px);
+}
+
+.admin-user-maintenance-selected > .admin-user-section-title {
+  margin: calc(clamp(14px, 3vw, 20px) * -1) calc(clamp(14px, 3vw, 20px) * -1) 0;
+}
+
+.admin-user-maintenance-selected > .admin-user-create-section {
+  margin: 0;
+}
+
+.admin-user-maintenance-subsection {
+  border-top: 0;
+  margin-top: 16px;
+  padding-top: 0;
+}
+
+.admin-user-create-actions .btn,
+.admin-user-search-actions .btn,
+.admin-user-maintenance-actions .btn,
+.address-fields-header .btn,
+.address-fieldset-actions .btn {
+  border-radius: 999px;
+}
+
+.admin-user-active-toggle,
+.admin-page-checkbox-field,
+.address-primary-toggle {
+  min-height: 38px;
+  width: fit-content;
+}
+
+.admin-user-active-toggle input,
+.admin-page-checkbox-field input,
+.address-primary-toggle input {
+  flex: 0 0 18px;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+}
+
+.admin-user-create-footer,
+.admin-user-create-card > .admin-page-message {
+  margin-right: clamp(14px, 3vw, 22px);
+  margin-left: clamp(14px, 3vw, 22px);
+}
+
+@media (min-width: 760px) {
+  .admin-user-create-section,
+  .admin-user-maintenance-selected {
+    margin: clamp(18px, 3vw, 24px);
+  }
+
+  .admin-user-search-section {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+@media (max-width: 719px) {
+  .admin-user-create-card,
+  .admin-user-create-section,
+  .admin-user-maintenance-selected {
+    border-radius: 16px;
+  }
+
+  .admin-user-search-actions,
+  .admin-user-create-actions,
+  .admin-user-maintenance-actions {
+    justify-content: stretch;
+  }
+
+  .admin-user-search-actions .btn,
+  .admin-user-create-actions .btn,
+  .admin-user-maintenance-actions .btn {
+    width: 100%;
+  }
+}
+
+/* Standard back button layout for Dashboard admin screens */
+.admin-user-create-footer.melpet-back-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  margin: clamp(14px, 3vw, 24px) clamp(14px, 3vw, 24px) clamp(24px, 5vw, 44px);
+  padding: 0;
+  border-top: 0;
+}
+
+.admin-user-create-footer .melpet-back-button.btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(77, 50, 39, 0.16);
+}
+
+@media (min-width: 720px) {
+  .admin-user-create-footer .melpet-back-button.btn {
+    width: auto;
+    min-width: 170px;
+  }
+}
+
+/* Telegram admin pages standard block */
+.admin-page:has(.telegram-admin-status-grid),
+.admin-page:has(.telegram-admin-status-card),
+.admin-page:has(.telegram-admin-preview) {
+  padding: clamp(14px, 4vw, 34px) clamp(14px, 4vw, 34px) clamp(32px, 6vw, 58px);
+}
+
+.admin-page:has(.telegram-admin-status-grid) .admin-page-header,
+.admin-page:has(.telegram-admin-status-card) .admin-page-header,
+.admin-page:has(.telegram-admin-preview) .admin-page-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  overflow: hidden;
+  border: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-left: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-radius: 20px;
+  background: linear-gradient(
+    135deg,
+    rgba(73, 150, 190, 0.26) 0%,
+    rgba(232, 247, 252, 0.94) 54%,
+    rgba(255, 255, 255, 0.96) 100%
+  );
+  box-shadow: 0 18px 42px rgba(47, 36, 31, 0.12);
+  padding: clamp(18px, 4vw, 28px);
+}
+
+.admin-page:has(.telegram-admin-status-grid) .admin-page-header .melpet-back-button,
+.admin-page:has(.telegram-admin-status-card) .admin-page-header .melpet-back-button,
+.admin-page:has(.telegram-admin-preview) .admin-page-header .melpet-back-button {
+  justify-self: stretch;
+  width: 100%;
+  min-height: 46px;
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(77, 50, 39, 0.16);
+}
+
+.admin-page:has(.telegram-admin-status-grid) .admin-page-panel,
+.admin-page:has(.telegram-admin-status-card) .admin-page-panel,
+.admin-page:has(.telegram-admin-preview) .admin-page-panel {
+  overflow: hidden;
+  border: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-left: 2.5px solid rgba(73, 150, 190, 0.42);
+  border-radius: 20px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(241, 248, 249, 0.94) 52%,
+    rgba(234, 224, 195, 0.46) 100%
+  );
+  box-shadow: 0 12px 28px rgba(47, 36, 31, 0.08);
+  padding: clamp(14px, 3vw, 20px);
+}
+
+.admin-page:has(.telegram-admin-status-grid) .admin-page-panel-title,
+.admin-page:has(.telegram-admin-status-card) .admin-page-panel-title,
+.admin-page:has(.telegram-admin-preview) .admin-page-panel-title {
+  border-bottom: 1.5px solid rgba(73, 150, 190, 0.2);
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(
+    135deg,
+    rgba(232, 247, 252, 0.92) 0%,
+    rgba(255, 255, 255, 0.88) 100%
+  );
+  margin: calc(clamp(14px, 3vw, 20px) * -1) calc(clamp(14px, 3vw, 20px) * -1) 16px;
+  padding: 14px clamp(14px, 3vw, 20px);
+}
+
+.admin-page:has(.telegram-admin-status-grid) .admin-page-form label,
+.admin-page:has(.telegram-admin-status-card) .admin-page-form label,
+.admin-page:has(.telegram-admin-preview) .admin-page-form label,
+.telegram-admin-status-grid article,
+.telegram-admin-status-card,
+.telegram-admin-preview {
+  border: 1.5px solid rgba(73, 150, 190, 0.24);
+  border-radius: 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(232, 247, 252, 0.82) 100%
+  );
+  box-shadow: 0 8px 18px rgba(47, 36, 31, 0.06);
+}
+
+.admin-page:has(.telegram-admin-status-grid) .admin-page-actions,
+.admin-page:has(.telegram-admin-status-card) .admin-page-actions,
+.admin-page:has(.telegram-admin-preview) .admin-page-actions {
+  justify-content: flex-end;
+}
+
+.admin-page:has(.telegram-admin-status-grid) .admin-page-actions .btn,
+.admin-page:has(.telegram-admin-status-card) .admin-page-actions .btn,
+.admin-page:has(.telegram-admin-preview) .admin-page-actions .btn,
+.admin-page:has(.telegram-admin-status-grid) .admin-page-form > .btn,
+.admin-page:has(.telegram-admin-status-card) .admin-page-form > .btn,
+.admin-page:has(.telegram-admin-preview) .admin-page-form > .btn {
+  border-radius: 999px;
+  min-height: 44px;
+}
+
+@media (min-width: 720px) {
+  .admin-page:has(.telegram-admin-status-grid) .admin-page-header,
+  .admin-page:has(.telegram-admin-status-card) .admin-page-header,
+  .admin-page:has(.telegram-admin-preview) .admin-page-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .admin-page:has(.telegram-admin-status-grid) .admin-page-header .melpet-back-button,
+  .admin-page:has(.telegram-admin-status-card) .admin-page-header .melpet-back-button,
+  .admin-page:has(.telegram-admin-preview) .admin-page-header .melpet-back-button {
+    width: auto;
+    min-width: 170px;
+  }
+}
