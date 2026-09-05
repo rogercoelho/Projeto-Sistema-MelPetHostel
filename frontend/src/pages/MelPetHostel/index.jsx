@@ -5803,16 +5803,18 @@ export default function MelPetHostel({
   ];
 
   const clientSearchContent = (
-    <section className="melpet-client-search melpet-pet-status-admin melpet-admin-pet-search melpet-admin-client-search">
-      <header className="melpet-admin-pet-search-header">
-        <span>Cadastro de clientes</span>
-        <h3>Pesquisar clientes</h3>
-      </header>
+    <section className="melpet-client-search melpet-admin-client-search melpet-admin-document-approval-content">
+      <div className="admin-user-create-section melpet-admin-document-pending-card melpet-admin-client-search-card">
+        <div className="melpet-admin-document-card-heading">
+          <span>Cadastro de clientes</span>
+          <strong>Pesquisar Cliente</strong>
+        </div>
 
-      <form
-        className="melpet-client-search-form melpet-admin-pet-search-form melpet-admin-client-search-form"
-        onSubmit={loadClientSearch}
-      >
+        <div className="melpet-admin-document-pending-band melpet-admin-client-search-band">
+          <form
+            className="melpet-client-search-form melpet-admin-pet-search-form melpet-admin-client-search-form"
+            onSubmit={loadClientSearch}
+          >
         <label>
           <span>Cliente ou codigo</span>
           <input
@@ -5886,6 +5888,8 @@ export default function MelPetHostel({
         ) : (
           <p>Pesquise por codigo ou nome do cliente.</p>
         )}
+        </div>
+      </div>
       </div>
     </section>
   );

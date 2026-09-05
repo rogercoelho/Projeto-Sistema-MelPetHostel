@@ -177,7 +177,7 @@ ul li {
 }
 /* Fluid global containers */
 .container {
-  width: calc(100% - var(--spacing-sm) - var(--spacing-sm));
+  width: calc(100vw - var(--spacing-sm) - var(--spacing-sm));
   max-width: 1520px;
   min-width: 0;
 }

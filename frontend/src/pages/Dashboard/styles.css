@@ -2627,7 +2627,7 @@
 /* Fluid content width enforcement */
 .header-content,
 .admin-page {
-  width: calc(100% - var(--spacing-sm) - var(--spacing-sm)) !important;
+  width: calc(100vw - var(--spacing-sm) - var(--spacing-sm)) !important;
   max-width: 1440px !important;
 }
 
