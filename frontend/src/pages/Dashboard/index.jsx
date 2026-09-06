@@ -42,6 +42,7 @@ function Dashboard() {
   const [melPetRegistrationOnly, setMelPetRegistrationOnly] = useState(false);
   const [melInitialAdminMenu, setMelInitialAdminMenu] = useState("");
   const [melUserMenu, setMelUserMenu] = useState("");
+  const [melInitialAdminPet, setMelInitialAdminPet] = useState(null);
   const [contractPromptRequest, setContractPromptRequest] = useState(0);
   const [clientProfileModalOpen, setClientProfileModalOpen] = useState(false);
   const [clientProfileInitial, setClientProfileInitial] = useState(null);
@@ -62,13 +63,67 @@ function Dashboard() {
     : ["melpethostel"];
   const hasMelPetHostelAccess = allowedModules.includes("melpethostel");
 
+  function resetMelPetNavigationState() {
+    setMelComplianceGate(false);
+    setMelPetRegistrationOnly(false);
+    setMelInitialAdminMenu("");
+    setMelUserMenu("");
+    setMelInitialAdminPet(null);
+    setOpenDashboardSection("");
+  }
+
+  function handleDashboardBack(origin = "home") {
+    const backNavigationMatrix = {
+      home: () => {
+        resetMelPetNavigationState();
+        setView("home");
+      },
+      melTutorMaintenance: () => {
+        setMelComplianceGate(false);
+        setMelPetRegistrationOnly(false);
+        setMelInitialAdminMenu("");
+        setMelUserMenu("");
+        setMelInitialAdminPet(null);
+        setOpenDashboardSection("");
+        setView("mel-tutor-maintenance");
+      },
+    };
+
+    (backNavigationMatrix[origin] || backNavigationMatrix.home)();
+  }
+
+  function handleBackFromMelPet() {
+    if (isAdmin) {
+      handleDashboardBack("home");
+      return;
+    }
+
+    setMelComplianceGate(melPetRegistrationOnly);
+    setMelPetRegistrationOnly(false);
+    setMelInitialAdminMenu("");
+    setMelUserMenu("");
+    setMelInitialAdminPet(null);
+    setView("home");
+  }
+
   function openMelPetTutorMaintenance() {
     setMelPetRegistrationOnly(false);
     setMelComplianceGate(false);
     setMelInitialAdminMenu("");
     setMelUserMenu("");
+    setMelInitialAdminPet(null);
     setOpenDashboardSection("");
     setView("mel-tutor-maintenance");
+  }
+
+  function openMelPetFichaFromTutor(tutor, pet) {
+    setMelPetRegistrationOnly(false);
+    setMelComplianceGate(false);
+    setMelUserMenu("");
+    setMelInitialAdminPet({ source: "tutorMaintenance", tutor, pet });
+    setMelInitialAdminMenu("pesquisarPets");
+    setOpenDashboardSection("");
+    setView("mel");
   }
 
   function openMelPetRegistration() {
@@ -623,6 +678,9 @@ function Dashboard() {
           enforceContractGate={melComplianceGate}
           initialAdminMenu={melInitialAdminMenu}
           userMenu={melUserMenu}
+          initialAdminPet={melInitialAdminPet}
+          onBackToInitialAdminPetSource={() => handleDashboardBack("melTutorMaintenance")}
+
           petRegistrationOnly={!isAdmin && melPetRegistrationOnly}
           contractPromptRequest={contractPromptRequest}
           onPetRegistered={() => {
@@ -631,27 +689,30 @@ function Dashboard() {
           }}
         />
       ) : view === "admin-users" ? (
-        <AdminUsersPage onBack={() => setView("home")} />
+        <AdminUsersPage onBack={() => handleDashboardBack("home")} />
       ) : view === "client-profile" ? (
         <ClientProfilePage
           cliente={clientProfileInitial}
           loading={clientProfilePageLoading}
           error={clientProfilePageError}
-          onBack={() => setView("home")}
+          onBack={() => handleDashboardBack("home")}
           onReload={openClientProfilePage}
         />
       ) : view === "admin-groups" ? (
-        <AdminGroupsPage onBack={() => setView("home")} />
+        <AdminGroupsPage onBack={() => handleDashboardBack("home")} />
       ) : view === "admin-user-maintenance" ? (
-        <AdminUserMaintenancePage onBack={() => setView("home")} />
+        <AdminUserMaintenancePage onBack={() => handleDashboardBack("home")} />
       ) : view === "mel-tutor-maintenance" ? (
-        <MelPetTutorMaintenancePage onBack={() => setView("home")} />
+        <MelPetTutorMaintenancePage
+          onBack={() => handleDashboardBack("home")}
+          onOpenPetFicha={openMelPetFichaFromTutor}
+        />
       ) : view === "telegram-token" ? (
-        <TelegramTokenPage onBack={() => setView("home")} />
+        <TelegramTokenPage onBack={() => handleDashboardBack("home")} />
       ) : view === "telegram-status" ? (
-        <TelegramStatusPage onBack={() => setView("home")} />
+        <TelegramStatusPage onBack={() => handleDashboardBack("home")} />
       ) : view === "telegram-test" ? (
-        <TelegramTestPage onBack={() => setView("home")} />
+        <TelegramTestPage onBack={() => handleDashboardBack("home")} />
       ) : null}
 
       <ChangePasswordModal

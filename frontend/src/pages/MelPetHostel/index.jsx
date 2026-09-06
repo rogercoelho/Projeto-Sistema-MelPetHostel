@@ -288,6 +288,8 @@ export default function MelPetHostel({
   enforceContractGate = false,
   initialAdminMenu = "",
   userMenu = "",
+  initialAdminPet = null,
+  onBackToInitialAdminPetSource,
   petRegistrationOnly = false,
   contractPromptRequest = 0,
   onPetRegistered,
@@ -404,15 +406,11 @@ export default function MelPetHostel({
     useState(null);
   const [pendingHostingPaymentRequests, setPendingHostingPaymentRequests] =
     useState([]);
-  const [selectedHostingPaymentRequestId, setSelectedHostingPaymentRequestId] =
-    useState("");
   const [loadingHostingPaymentReceipts, setLoadingHostingPaymentReceipts] =
     useState(false);
   const [pendingCardPaymentRequests, setPendingCardPaymentRequests] = useState(
     [],
   );
-  const [selectedCardPaymentRequestId, setSelectedCardPaymentRequestId] =
-    useState("");
   const [cardPaymentLinks, setCardPaymentLinks] = useState({});
   const [loadingCardPaymentRequests, setLoadingCardPaymentRequests] =
     useState(false);
@@ -434,41 +432,13 @@ export default function MelPetHostel({
   const [activeMenu, setActiveMenu] = useState(
     initialAdminMenu === "cadastroPets" ? "" : initialAdminMenu,
   );
-  const [clientSearchTerm, setClientSearchTerm] = useState("");
-  const [clientSearchOrder, setClientSearchOrder] = useState("codigo_asc");
-  const [clientSearchResults, setClientSearchResults] = useState([]);
-  const [selectedClient, setSelectedClient] = useState(null);
-  const [selectedClientFiles, setSelectedClientFiles] = useState([]);
-  const [loadingSelectedClientFiles, setLoadingSelectedClientFiles] =
-    useState(false);
-  const [selectedClientFilesError, setSelectedClientFilesError] = useState("");
-  const [loadingClientSearch, setLoadingClientSearch] = useState(false);
-  const [clientSearchSubmitted, setClientSearchSubmitted] = useState(false);
-  const [clientSearchError, setClientSearchError] = useState("");
   const [petStatusSearchTerm, setPetStatusSearchTerm] = useState("");
   const [petStatusResults, setPetStatusResults] = useState([]);
   const [loadingPetStatus, setLoadingPetStatus] = useState(false);
   const [petStatusSubmitted, setPetStatusSubmitted] = useState(false);
   const [petStatusError, setPetStatusError] = useState("");
   const [selectedAdminPet, setSelectedAdminPet] = useState(null);
-  const [adminUploadType, setAdminUploadType] = useState("contrato");
-  const [adminUploadPetId, setAdminUploadPetId] = useState("");
-  const [adminUploadSide, setAdminUploadSide] = useState("frente");
-  const [adminUploadFile, setAdminUploadFile] = useState(null);
-  const [adminUploadingDocument, setAdminUploadingDocument] = useState(false);
   const [savingPetStatusId, setSavingPetStatusId] = useState(null);
-  const [pendingUsers, setPendingUsers] = useState([]);
-  const [loadingPendingUsers, setLoadingPendingUsers] = useState(false);
-  const [pendingUsersError, setPendingUsersError] = useState("");
-  const [selectedPendingUser, setSelectedPendingUser] = useState(null);
-  const [selectedUserFiles, setSelectedUserFiles] = useState([]);
-  const [loadingSelectedUserFiles, setLoadingSelectedUserFiles] =
-    useState(false);
-  const [selectedUserFilesError, setSelectedUserFilesError] = useState("");
-  const [conferindoItemKeys, setConferindoItemKeys] = useState({});
-  const [rejectDocumentTarget, setRejectDocumentTarget] = useState(null);
-  const [rejectDocumentReason, setRejectDocumentReason] = useState("");
-  const [rejectingDocumentKeys, setRejectingDocumentKeys] = useState({});
   const [pendingVaccineCards, setPendingVaccineCards] = useState([]);
   const [loadingVaccineCards, setLoadingVaccineCards] = useState(false);
   const [vaccineCardsError, setVaccineCardsError] = useState("");
@@ -532,6 +502,12 @@ export default function MelPetHostel({
     }
   }, [initialAdminMenu, isAdmin]);
 
+  useEffect(() => {
+    if (!isAdmin || !initialAdminPet?.pet) return;
+    setActiveMenu("pesquisarPets");
+    handleOpenAdminPetFicha(initialAdminPet.tutor || {}, initialAdminPet.pet);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialAdminPet, isAdmin]);
   useEffect(() => {
     if (!isAdmin || activeMenu === "aprovarHospedagens") return;
     setPendingHostingRequests([]);
@@ -771,128 +747,6 @@ export default function MelPetHostel({
     }
   }
 
-  async function loadPendingValidationUsers() {
-    setLoadingPendingUsers(true);
-    setPendingUsersError("");
-    try {
-      const data = await api.get("/melpethostel/documentos/pendentes");
-      const users = Array.isArray(data?.usuarios) ? data.usuarios : [];
-      setPendingUsers(users);
-    } catch (error) {
-      console.error("Erro ao carregar usuários pendentes:", error);
-      setPendingUsers([]);
-      setPendingUsersError(
-        error?.message || "Não foi possível carregar os usuários pendentes.",
-      );
-    } finally {
-      setLoadingPendingUsers(false);
-    }
-  }
-
-  async function loadSelectedUserFiles(user) {
-    if (!user?.usuarioId) return;
-    setLoadingSelectedUserFiles(true);
-    setSelectedUserFilesError("");
-    try {
-      const data = await api.get(
-        `/melpethostel/documentos/usuario/${encodeURIComponent(user.usuarioId)}/arquivos`,
-      );
-      const files = Array.isArray(data?.arquivos) ? data.arquivos : [];
-      setSelectedUserFiles(files);
-      if (data?.usuario?.nome) {
-        setSelectedPendingUser((prev) => ({
-          ...(prev || user),
-          nome: data.usuario.nome,
-          usuarioId: data.usuario.id || user.usuarioId,
-          contratoId: data?.contratoId || (prev && prev.contratoId) || null,
-          cadastro:
-            data.usuario.cadastro || prev?.cadastro || user?.cadastro || null,
-        }));
-      }
-    } catch (error) {
-      console.error("Erro ao carregar documentos do usuário:", error);
-      setSelectedUserFiles([]);
-      setSelectedUserFilesError(
-        error?.message || "Não foi possível carregar os documentos.",
-      );
-    } finally {
-      setLoadingSelectedUserFiles(false);
-    }
-  }
-
-  function handleOpenUserDocuments(user) {
-    const sameUserOpen =
-      selectedPendingUser &&
-      String(selectedPendingUser.usuarioId || "") ===
-        String(user?.usuarioId || "");
-
-    if (sameUserOpen) {
-      handleCloseUserDocuments();
-      return;
-    }
-
-    setSelectedPendingUser(user);
-    setSelectedUserFiles([]);
-    setSelectedUserFilesError("");
-    loadSelectedUserFiles(user);
-  }
-
-  function handleCloseUserDocuments() {
-    setSelectedPendingUser(null);
-    setSelectedUserFiles([]);
-    setSelectedUserFilesError("");
-  }
-
-  async function loadSelectedClientFiles(cliente) {
-    if (!cliente?.usuarioId) {
-      setSelectedClientFiles([]);
-      setSelectedClientFilesError("Usuario do cliente nao encontrado.");
-      return;
-    }
-
-    setLoadingSelectedClientFiles(true);
-    setSelectedClientFilesError("");
-    try {
-      const data = await api.get(
-        "/melpethostel/documentos/usuario/" +
-          encodeURIComponent(cliente.usuarioId) +
-          "/arquivos?incluirConferidos=1",
-      );
-      setSelectedClientFiles(
-        Array.isArray(data?.arquivos) ? data.arquivos : [],
-      );
-    } catch (error) {
-      console.error("Erro ao carregar documentos do cliente:", error);
-      setSelectedClientFiles([]);
-      setSelectedClientFilesError(
-        error?.message || "Nao foi possivel carregar os documentos do cliente.",
-      );
-    } finally {
-      setLoadingSelectedClientFiles(false);
-    }
-  }
-
-  function handleSelectClient(cliente) {
-    setSelectedClient((current) => {
-      const shouldClose = current?.id === cliente.id;
-      if (shouldClose) {
-        setSelectedClientFiles([]);
-        setSelectedClientFilesError("");
-        return null;
-      }
-
-      setSelectedClientFiles([]);
-      setSelectedClientFilesError("");
-      loadSelectedClientFiles(cliente);
-      return cliente;
-    });
-  }
-
-  function handleBackToClientSearch() {
-    setSelectedClient(null);
-    setSelectedClientFiles([]);
-    setSelectedClientFilesError("");
-  }
   function buildDocumentPreviewUrl(file) {
     const tipo = file?.tipoRegistro === "contrato" ? "contrato" : "documento";
     const id =
@@ -920,87 +774,6 @@ export default function MelPetHostel({
     setDocumentPreviewOpen(false);
     setDocumentPreviewTitle("");
     setDocumentPreviewSrc("");
-  }
-
-  function buildConferirKey(file) {
-    if (file?.tipoRegistro === "contrato") {
-      return `contrato-${Number(file?.contratoId) || 0}`;
-    }
-    return `documento-${Number(file?.documentoId) || 0}`;
-  }
-
-  function setConferindoItem(itemKey, value) {
-    setConferindoItemKeys((current) => ({
-      ...current,
-      [itemKey]: Boolean(value),
-    }));
-  }
-
-  function isConferindoItem(itemKey) {
-    return Boolean(conferindoItemKeys[itemKey]);
-  }
-
-  function setRejectingDocument(itemKey, value) {
-    setRejectingDocumentKeys((current) => ({
-      ...current,
-      [itemKey]: Boolean(value),
-    }));
-  }
-
-  function isRejectingDocumentItem(itemKey) {
-    return Boolean(rejectingDocumentKeys[itemKey]);
-  }
-
-  async function handleConferirDocumento(file) {
-    const isContrato = file?.tipoRegistro === "contrato";
-    const targetId = isContrato
-      ? Number(file?.contratoId)
-      : Number(file?.documentoId);
-    if (!Number.isInteger(targetId) || targetId <= 0) {
-      showToast("Este item não pode ser conferido.", "error");
-      return;
-    }
-
-    if (file?.conferido) {
-      showToast("Documento já está conferido.", "info");
-      return;
-    }
-
-    try {
-      const conferirKey = buildConferirKey(file);
-      setConferindoItem(conferirKey, true);
-      if (isContrato) {
-        await api.post(`/melpethostel/contratos/${targetId}/conferir`, {});
-      } else {
-        await api.post(`/melpethostel/documentos/${targetId}/conferir`, {});
-      }
-      showToast(
-        isContrato
-          ? "Contrato conferido com sucesso."
-          : "Documento conferido com sucesso.",
-        "success",
-      );
-
-      setSelectedUserFiles((prev) =>
-        (prev || []).filter((item) => buildConferirKey(item) !== conferirKey),
-      );
-
-      if (isContrato && selectedPendingUser?.usuarioId) {
-        setPendingUsers((prev) =>
-          (prev || []).filter(
-            (item) =>
-              String(item?.usuarioId || "") !==
-              String(selectedPendingUser.usuarioId || ""),
-          ),
-        );
-        handleCloseUserDocuments();
-      }
-    } catch (error) {
-      console.error("Erro ao conferir documento:", error);
-      showToast(error?.message || "Não foi possível conferir.", "error");
-    } finally {
-      setConferindoItem(buildConferirKey(file), false);
-    }
   }
 
   function buildFileUrl(fileUrl) {
@@ -1062,8 +835,7 @@ export default function MelPetHostel({
       showToast("Carteira de vacinação aprovada com sucesso.", "success");
     } catch (error) {
       showToast(
-        error?.message ||
-          "Não foi possível aprovar a carteira de vacinação.",
+        error?.message || "Não foi possível aprovar a carteira de vacinação.",
         "error",
       );
     } finally {
@@ -1071,65 +843,6 @@ export default function MelPetHostel({
     }
   }
 
-  function openRejectDocumentModal(file) {
-    const isContrato = file?.tipoRegistro === "contrato";
-    const canReject = isContrato
-      ? Number(file?.contratoId) > 0
-      : file?.tipoRegistro === "documento" && Number(file?.documentoId) > 0;
-    if (!canReject) return;
-    setRejectDocumentTarget(file);
-    setRejectDocumentReason("");
-  }
-
-  function closeRejectDocumentModal() {
-    if (isRejectingDocumentItem(buildConferirKey(rejectDocumentTarget))) return;
-    setRejectDocumentTarget(null);
-    setRejectDocumentReason("");
-  }
-
-  async function submitRejectDocument() {
-    const file = rejectDocumentTarget;
-    const isContrato = file?.tipoRegistro === "contrato";
-    const targetId = isContrato
-      ? Number(file?.contratoId)
-      : Number(file?.documentoId);
-    if (!Number.isInteger(targetId) || targetId <= 0) return;
-
-    const motivoReprovacao = rejectDocumentReason.trim();
-    if (!motivoReprovacao) {
-      showToast("Informe o motivo da reprovacao.", "error");
-      return;
-    }
-
-    const rejectKey = buildConferirKey(file);
-    setRejectingDocument(rejectKey, true);
-    try {
-      await api.post(
-        isContrato
-          ? `/melpethostel/contratos/${targetId}/reprovar`
-          : `/melpethostel/documentos/${targetId}/reprovar`,
-        { motivoReprovacao },
-      );
-      setSelectedUserFiles((prev) =>
-        (prev || []).filter((item) => buildConferirKey(item) !== rejectKey),
-      );
-      showToast(
-        isContrato
-          ? "Contrato reprovado com sucesso."
-          : "Documento reprovado com sucesso.",
-        "success",
-      );
-      closeRejectDocumentModal();
-      await loadPendingValidationUsers();
-    } catch (error) {
-      showToast(
-        error?.message || "Nao foi possivel reprovar o documento.",
-        "error",
-      );
-    } finally {
-      setRejectingDocument(rejectKey, false);
-    }
-  }
   function openRejectVaccineCardModal(card) {
     if (!card?.id) return;
     setRejectVaccineCardTarget(card);
@@ -1172,8 +885,7 @@ export default function MelPetHostel({
       closeRejectVaccineCardModal();
     } catch (error) {
       showToast(
-        error?.message ||
-          "Não foi possível reprovar a carteira de vacinação.",
+        error?.message || "Não foi possível reprovar a carteira de vacinação.",
         "error",
       );
     } finally {
@@ -1358,9 +1070,7 @@ export default function MelPetHostel({
       setPlanos(Array.isArray(data?.planos) ? data.planos : []);
     } catch (error) {
       setPlanos([]);
-      setPlanosError(
-        error?.message || "Não foi possível carregar os planos.",
-      );
+      setPlanosError(error?.message || "Não foi possível carregar os planos.");
     } finally {
       setLoadingPlanos(false);
     }
@@ -1586,16 +1296,9 @@ export default function MelPetHostel({
         ? data.solicitacoes
         : [];
       setPendingCardPaymentRequests(solicitacoes);
-      setSelectedCardPaymentRequestId((current) =>
-        current &&
-        !solicitacoes.some((request) => String(request.id) === current)
-          ? ""
-          : current,
-      );
       return solicitacoes;
     } catch {
       setPendingCardPaymentRequests([]);
-      setSelectedCardPaymentRequestId("");
       return [];
     } finally {
       setLoadingCardPaymentRequests(false);
@@ -1692,16 +1395,9 @@ export default function MelPetHostel({
         ? data.solicitacoes
         : [];
       setPendingHostingPaymentRequests(solicitacoes);
-      setSelectedHostingPaymentRequestId((current) =>
-        current &&
-        !solicitacoes.some((request) => String(request.id) === current)
-          ? ""
-          : current,
-      );
       return solicitacoes;
     } catch {
       setPendingHostingPaymentRequests([]);
-      setSelectedHostingPaymentRequestId("");
       return [];
     } finally {
       setLoadingHostingPaymentReceipts(false);
@@ -2436,109 +2132,6 @@ export default function MelPetHostel({
     }
   }
 
-  async function handleAdminClientDocumentUpload() {
-    if (!selectedClient?.id || !adminUploadFile || adminUploadingDocument)
-      return;
-    const originalName = String(adminUploadFile.name || "").toLowerCase();
-    if (!originalName.endsWith(".pdf")) {
-      showToast("Selecione um arquivo PDF.", "error");
-      return;
-    }
-    if (adminUploadType === "carteira" && !adminUploadPetId) {
-      showToast("Selecione o pet da carteirinha.", "error");
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-    const savedUser = localStorage.getItem("usuario");
-    let userHeader = "";
-    try {
-      const parsed = savedUser ? JSON.parse(savedUser) : null;
-      userHeader =
-        parsed?.login ||
-        parsed?.id ||
-        parsed?.Usuario_Login ||
-        parsed?.Usuario_ID ||
-        "";
-    } catch {
-      userHeader = "";
-    }
-
-    const formData = new FormData();
-    formData.append("arquivo", adminUploadFile);
-    formData.append("clienteId", String(selectedClient.id));
-    formData.append("tipoUpload", adminUploadType);
-    if (adminUploadType === "documento") formData.append("tipoId", "1");
-    if (adminUploadType === "comprovante") formData.append("tipoId", "2");
-    if (adminUploadType === "outros") {
-      formData.append("tipoId", String(documentTypeIds.outros || 3));
-    }
-    if (adminUploadType === "carteira") {
-      formData.append("petId", String(adminUploadPetId));
-      formData.append("lado", adminUploadSide);
-    }
-
-    setAdminUploadingDocument(true);
-    try {
-      const response = await fetch(
-        `${String(API_URL).replace(/\/+$/, "")}/melpethostel/documentos/admin-upload`,
-        {
-          method: "POST",
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            ...(userHeader ? { "x-user": userHeader } : {}),
-          },
-          body: formData,
-        },
-      );
-      const data = await response.json().catch(() => null);
-      if (!response.ok || data?.status === "erro") {
-        throw new Error(data?.mensagem || "Falha no upload do documento.");
-      }
-      showToast(data?.mensagem || "Documento enviado com sucesso.", "success");
-      setAdminUploadFile(null);
-      await loadClientSearch();
-    } catch (error) {
-      showToast(
-        error?.message || "Nao foi possivel enviar o documento.",
-        "error",
-      );
-    } finally {
-      setAdminUploadingDocument(false);
-    }
-  }
-  async function loadClientSearch(event) {
-    event?.preventDefault();
-    setClientSearchSubmitted(true);
-    setLoadingClientSearch(true);
-    setClientSearchError("");
-
-    try {
-      const params = [`ordenar=${encodeURIComponent(clientSearchOrder)}`];
-      const trimmedSearch = clientSearchTerm.trim();
-      if (trimmedSearch) {
-        params.push(`busca=${encodeURIComponent(trimmedSearch)}`);
-      }
-
-      const data = await api.get(`/melpethostel/clientes?${params.join("&")}`);
-      const clientes = Array.isArray(data?.clientes) ? data.clientes : [];
-      setClientSearchResults(clientes);
-      setSelectedClient((current) => {
-        if (!current) return null;
-        const updated =
-          clientes.find((cliente) => cliente.id === current.id) || null;
-        if (updated) loadSelectedClientFiles(updated);
-        return updated;
-      });
-    } catch (error) {
-      setClientSearchResults([]);
-      setSelectedClient(null);
-      setClientSearchError(error?.message || "Erro ao pesquisar clientes.");
-    } finally {
-      setLoadingClientSearch(false);
-    }
-  }
-
   async function loadPetStatusSearch(event) {
     event?.preventDefault();
     setPetStatusSubmitted(true);
@@ -2654,7 +2247,7 @@ export default function MelPetHostel({
     await refreshAdminPetVaccineInfo(ficha);
   }
 
-  function handleBackToAdminPetSearch() {
+  function clearAdminPetFicha() {
     setSelectedAdminPet(null);
     setSelectedPet(null);
     setPetDocsPet(null);
@@ -2662,6 +2255,13 @@ export default function MelPetHostel({
     setPetVaccineFiles({ frente: null, verso: null });
     setUploadedPetVaccineSides({ frente: false, verso: false });
     setPetVaccineResponses({});
+  }
+
+  function handleBackToAdminPetSearch() {
+    clearAdminPetFicha();
+    if (initialAdminPet?.source === "tutorMaintenance") {
+      onBackToInitialAdminPetSource?.();
+    }
   }
 
   function updatePetStatusInResults(petId, ativo) {
@@ -2672,24 +2272,6 @@ export default function MelPetHostel({
           Number(pet.id) === Number(petId) ? { ...pet, ativo } : pet,
         ),
       })),
-    );
-    setClientSearchResults((current) =>
-      current.map((cliente) => ({
-        ...cliente,
-        pets: (cliente.pets || []).map((pet) =>
-          Number(pet.id) === Number(petId) ? { ...pet, ativo } : pet,
-        ),
-      })),
-    );
-    setSelectedClient((current) =>
-      current
-        ? {
-            ...current,
-            pets: (current.pets || []).map((pet) =>
-              Number(pet.id) === Number(petId) ? { ...pet, ativo } : pet,
-            ),
-          }
-        : current,
     );
   }
 
@@ -2745,13 +2327,7 @@ export default function MelPetHostel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, shouldEnforceContractGate]);
 
-  useEffect(() => {
-    if (!isAdmin) return;
-    if (activeMenu !== "conferirDocumentos") return;
-    loadPendingValidationUsers();
-  }, [isAdmin, activeMenu]);
-
-  useEffect(() => {
+useEffect(() => {
     if (!isAdmin) return;
     if (activeMenu !== "aprovarCarteiraVacinacao") return;
     loadPendingVaccineCards();
@@ -2779,14 +2355,7 @@ export default function MelPetHostel({
     loadHostingRequests();
   }, [isAdmin, userMenu]);
 
-  useEffect(() => {
-    if (!isAdmin || activeMenu !== "pesquisarClientes") return;
-    if (!clientSearchSubmitted) return;
-    loadClientSearch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientSearchOrder]);
-
-  useEffect(() => {
+useEffect(() => {
     if (isAdmin) return;
 
     let ignore = false;
@@ -2802,8 +2371,7 @@ export default function MelPetHostel({
         console.error("Erro ao carregar pets cadastrados:", error);
         if (!ignore) {
           showToast(
-            error?.message ||
-              "Não foi possível carregar os pets cadastrados.",
+            error?.message || "Não foi possível carregar os pets cadastrados.",
             "error",
           );
         }
@@ -3144,8 +2712,7 @@ export default function MelPetHostel({
       setVaccineCardItems(Array.isArray(data?.itens) ? data.itens : []);
     } catch (error) {
       setVaccineCardInfoError(
-        error?.message ||
-          "Não foi possível carregar a carteira de vacinação.",
+        error?.message || "Não foi possível carregar a carteira de vacinação.",
       );
     } finally {
       setLoadingVaccineCardInfo(false);
@@ -3187,11 +2754,21 @@ export default function MelPetHostel({
         "ativarInativarPet",
       ].includes(activeMenu)
     ) {
-      handleBackToPetAdminMenu();
+      handleMelPetBack("petAdminMenu");
       return;
     }
 
-    handleBackToMainMenu();
+    handleMelPetBack("main");
+  }
+
+  function handleMelPetBack(origin = "main") {
+    const backNavigationMatrix = {
+      main: handleBackToMainMenu,
+      petAdminMenu: handleBackToPetAdminMenu,
+      adminPetSearch: handleBackToAdminPetSearch,
+    };
+
+    (backNavigationMatrix[origin] || backNavigationMatrix.main)();
   }
 
   async function loadPetVaccineConfigs() {
@@ -3388,10 +2965,7 @@ export default function MelPetHostel({
         onPetRegistered?.();
       }
     } catch (error) {
-      showToast(
-        error?.message || "Não foi possível salvar vacinas.",
-        "error",
-      );
+      showToast(error?.message || "Não foi possível salvar vacinas.", "error");
     } finally {
       setSavingPetVaccines(false);
     }
@@ -4192,8 +3766,7 @@ export default function MelPetHostel({
       <section className="melpet-hosting-request">
         <div className="melpet-hosting-guidance">
           Hotel e Pet Day usam período por diária. Creche, Lar Temporário e
-          Residência usam pagamento recorrente, com quantidade e mês de
-          início.
+          Residência usam pagamento recorrente, com quantidade e mês de início.
         </div>
 
         <section className="melpet-hosting-pets">
@@ -4476,8 +4049,8 @@ export default function MelPetHostel({
           </span>
           <h3>Meus Pedidos de Hospedagem</h3>
           <p>
-            Consulte suas solicitações, acompanhe o status e revise os itens
-            de cada pedido em um só lugar.
+            Consulte suas solicitações, acompanhe o status e revise os itens de
+            cada pedido em um só lugar.
           </p>
         </div>
 
@@ -4498,9 +4071,7 @@ export default function MelPetHostel({
       </header>
 
       <div className="melpet-hosting-history-toolbar">
-        <p>
-          Veja aqui os pedidos enviados e o andamento de cada solicitação.
-        </p>
+        <p>Veja aqui os pedidos enviados e o andamento de cada solicitação.</p>
       </div>
 
       <div className="melpet-hosting-history-filters-card">
@@ -4547,7 +4118,8 @@ export default function MelPetHostel({
               request.status,
             );
             const showPaymentPendingStatus =
-              requestStatusTone === "approved" || hasPendingHostingPayment(request);
+              requestStatusTone === "approved" ||
+              hasPendingHostingPayment(request);
             const isUsedHosting =
               getHostingRequestStatusKey(request.status) === "concluido";
             return (
@@ -4589,10 +4161,8 @@ export default function MelPetHostel({
                           ? "melpet-hosting-payment-pending-label"
                           : undefined
                       }
-
                     >
-                      {requestStatusTone ===
-                      "confirmed"
+                      {requestStatusTone === "confirmed"
                         ? formatHostingCheckInOut(request)
                         : showPaymentPendingStatus
                           ? "Pagamento Pendente"
@@ -4634,7 +4204,9 @@ export default function MelPetHostel({
                       </div>
                     ) : null}
 
-                    <div className={`melpet-hosting-history-items ${isUsedHosting ? "is-used-hosting" : ""}`}>
+                    <div
+                      className={`melpet-hosting-history-items ${isUsedHosting ? "is-used-hosting" : ""}`}
+                    >
                       <h4>Itens</h4>
                       <ul>
                         {(request.itens || []).map((item) => {
@@ -4874,8 +4446,8 @@ export default function MelPetHostel({
                                       <div className="melpet-hosting-card-payment-info">
                                         <p>
                                           Iremos gerar um link de pagamento para
-                                          a opção de cartão de crédito.
-                                          Assim que o link for gerado, ficará
+                                          a opção de cartão de crédito. Assim
+                                          que o link for gerado, ficará
                                           disponivel abaixo e você também
                                           receberá por email. Depois do
                                           pagamento, envie o comprovante neste
@@ -5072,182 +4644,82 @@ export default function MelPetHostel({
         className="admin-user-create-section melpet-admin-pix-config-card"
         onSubmit={savePixConfig}
       >
-        <div className="melpet-admin-document-card-heading">
-          <span>Pagamentos</span>
-          <strong>Configuração PIX</strong>
-        </div>
+        <div className="melpet-admin-pix-config-band">
+          <div className="pet-form-grid melpet-admin-pix-config-grid">
+            <label className="pet-form-field">
+              Chave PIX
+              <input
+                type="text"
+                value={pixConfigForm.chavePix}
+                onChange={(event) =>
+                  setPixConfigForm((current) => ({
+                    ...current,
+                    chavePix: event.target.value,
+                  }))
+                }
+                placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatoria"
+              />
+            </label>
+            <label className="pet-form-field">
+              Nome do recebedor
+              <input
+                type="text"
+                value={pixConfigForm.nomeRecebedor}
+                onChange={(event) =>
+                  setPixConfigForm((current) => ({
+                    ...current,
+                    nomeRecebedor: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="pet-form-field">
+              Cidade
+              <input
+                type="text"
+                value={pixConfigForm.cidadeRecebedor}
+                onChange={(event) =>
+                  setPixConfigForm((current) => ({
+                    ...current,
+                    cidadeRecebedor: event.target.value,
+                  }))
+                }
+              />
+            </label>
+          </div>
 
-        <div className="pet-form-grid melpet-admin-pix-config-grid">
-          <label className="pet-form-field">
-            Chave PIX
-            <input
-              type="text"
-              value={pixConfigForm.chavePix}
-              onChange={(event) =>
-                setPixConfigForm((current) => ({
-                  ...current,
-                  chavePix: event.target.value,
-                }))
-              }
-              placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
-            />
-          </label>
-          <label className="pet-form-field">
-            Nome do recebedor
-            <input
-              type="text"
-              value={pixConfigForm.nomeRecebedor}
-              onChange={(event) =>
-                setPixConfigForm((current) => ({
-                  ...current,
-                  nomeRecebedor: event.target.value,
-                }))
-              }
-            />
-          </label>
-          <label className="pet-form-field">
-            Cidade
-            <input
-              type="text"
-              value={pixConfigForm.cidadeRecebedor}
-              onChange={(event) =>
-                setPixConfigForm((current) => ({
-                  ...current,
-                  cidadeRecebedor: event.target.value,
-                }))
-              }
-            />
-          </label>
-        </div>
+          {pixConfigError ? <p className="melpet-error">{pixConfigError}</p> : null}
+          {loadingPixConfig ? (
+            <p className="melpet-validate-message">Carregando configuracao...</p>
+          ) : null}
 
-        {pixConfigError ? (
-          <p className="melpet-error">{pixConfigError}</p>
-        ) : null}
-        {loadingPixConfig ? (
-          <p className="melpet-validate-message">
-            Carregando configuração...
-          </p>
-        ) : null}
-
-        <div className="melpet-hosting-history-actions melpet-admin-pix-actions">
-          <Button type="submit" disabled={savingPixConfig}>
-            {savingPixConfig ? "Salvando..." : "Salvar PIX"}
-          </Button>
+          <div className="melpet-hosting-history-actions melpet-admin-pix-actions">
+            <Button type="submit" disabled={savingPixConfig}>
+              {savingPixConfig ? "Salvando..." : "Salvar PIX"}
+            </Button>
+          </div>
         </div>
       </form>
     </section>
   );
-  const cardPaymentSelectOptions = pendingCardPaymentRequests
-    .map((request) => {
-      const pendentes = (request.pagamentos || []).filter(
-        (payment) =>
-          payment.parcelaTipo === "cartao_credito" && !payment.linkPagamento,
-      ).length;
-      return {
-        id: String(request.id),
-        label:
-          (request.clienteNome || request.usuarioLogin || "Tutor") +
-          " - " +
-          ((request.itens || [])[0]?.petNome || "Pet") +
-          " - Pedido #" +
-          request.id +
-          " - " +
-          pendentes +
-          " link(s)",
-      };
-    })
-    .filter((option) => option.label);
-
-  const filteredCardPaymentRequests = selectedCardPaymentRequestId
-    ? pendingCardPaymentRequests.filter(
-        (request) => String(request.id) === selectedCardPaymentRequestId,
-      )
-    : [];
-
-  const hostingPaymentSelectOptions = pendingHostingPaymentRequests
-    .filter((request) =>
-      (request.pagamentos || []).some(
-        (payment) => payment.status === "comprovante_enviado",
-      ),
-    )
-    .map((request) => {
-      const pets = (request.itens || [])
-        .map((item) => item.petNome || (item.petId ? "Pet #" + item.petId : ""))
-        .filter(Boolean)
-        .join(", ");
-      const pendentes = (request.pagamentos || []).filter(
-        (payment) => payment.status === "comprovante_enviado",
-      ).length;
-      return {
-        id: String(request.id),
-        label: [
-          request.clienteNome || request.usuarioLogin || "Tutor",
-          pets || "Pet não informado",
-          pendentes + " comprovante(s)",
-        ]
-          .filter(Boolean)
-          .join(" - "),
-      };
-    });
-  const filteredHostingPaymentRequests = selectedHostingPaymentRequestId
-    ? pendingHostingPaymentRequests.filter(
-        (request) => String(request.id) === selectedHostingPaymentRequestId,
-      )
-    : [];
-
   const adminHostingPaymentReviewContent = (
-    <section className="melpet-hosting-history melpet-admin-hosting-payments">
-      <header className="melpet-hosting-history-hero">
-        <div>
-          <span className="melpet-hosting-history-kicker">Hospedagens</span>
-          <h3>Análise de Comprovantes</h3>
-          <p>
-            Confira os comprovantes enviados pelos tutores e libere a
-            hospedagem.
-          </p>
-        </div>
-        <div className="melpet-hosting-history-stats">
-          <div>
-            <strong>{hostingPaymentSelectOptions.length}</strong>
-            <span>Pendentes</span>
-          </div>
-        </div>
-      </header>
+    <section className="melpet-section-content melpet-admin-hosting-payments melpet-admin-hosting-payment-review">
+      <div className="admin-user-create-section melpet-admin-hosting-payment-review-card">
+        <div className="melpet-admin-hosting-payment-review-band">
+          {loadingHostingPaymentReceipts ? (
+            <p className="melpet-validate-message">Carregando comprovantes pendentes...</p>
+          ) : pendingHostingPaymentRequests.length ? (
+            <div className="melpet-hosting-history-list">
+              {pendingHostingPaymentRequests.map((request) => {
+                const pendingPayments = (request.pagamentos || []).filter(
+                  (payment) => payment.status === "comprovante_enviado",
+                );
+                const requestTotal = request.valorFinal ?? request.valorTotal;
+                const pets = request.itens?.length
+                  ? request.itens
+                  : [{ id: "sem-pet", petNome: "Pet nao informado" }];
 
-      <div className="melpet-hosting-payment-card">
-        <div>
-          <span className="melpet-hosting-history-kicker">Pagamentos</span>
-          <h3>Comprovantes Pendentes</h3>
-        </div>
-        <div className="melpet-hosting-payment-search">
-          <label className="pet-form-field">
-            Selecionar tutor - pet
-            <select
-              value={selectedHostingPaymentRequestId}
-              onFocus={loadPendingHostingPaymentReceipts}
-              onPointerDown={loadPendingHostingPaymentReceipts}
-              onChange={(event) =>
-                setSelectedHostingPaymentRequestId(event.target.value)
-              }
-            >
-              <option value="">
-                {loadingHostingPaymentReceipts
-                  ? "Atualizando comprovantes..."
-                  : "Selecione um tutor - pet"}
-              </option>
-              {hostingPaymentSelectOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        {pendingHostingPaymentRequests.length ? (
-          selectedHostingPaymentRequestId ? (
-            filteredHostingPaymentRequests.length ? (
-              <div className="melpet-hosting-history-list">
-                {filteredHostingPaymentRequests.map((request) => (
+                return (
                   <article
                     className="melpet-hosting-history-card is-open"
                     key={"payment-" + request.id}
@@ -5255,167 +4727,106 @@ export default function MelPetHostel({
                     <div className="melpet-hosting-history-card-header">
                       <div>
                         <strong>
-                          {request.clienteNome ||
-                            request.usuarioLogin ||
-                            "Tutor"}
+                          {request.clienteNome || request.usuarioLogin || "Tutor"}
                         </strong>
                         <small>
-                          Pedido #{request.id} ·{" "}
-                          {formatCurrency(
-                            request.valorFinal ?? request.valorTotal,
-                          )}
+                          Pedido #{request.id} - {formatCurrency(requestTotal)}
                         </small>
                       </div>
                       <span className="melpet-hosting-history-card-badge">
-                        {
-                          (request.pagamentos || []).filter(
-                            (payment) =>
-                              payment.status === "comprovante_enviado",
-                          ).length
-                        }{" "}
-                        pendente(s)
+                        {pendingPayments.length} pendente(s)
                       </span>
                     </div>
+
                     <div className="melpet-hosting-history-items">
                       <ul>
-                        {(request.pagamentos || [])
-                          .filter(
-                            (payment) =>
-                              payment.status === "comprovante_enviado",
-                          )
-                          .map((payment) => (
-                            <li key={payment.id}>
-                              <strong>{getHostingPaymentLabel(payment)}</strong>
-                              <small>{formatCurrency(payment.valor)}</small>
-                              <small>
-                                {payment.enviadoEm
-                                  ? formatDateTime(payment.enviadoEm)
-                                  : "Aguardando conferência"}
-                              </small>
-                              <div className="melpet-hosting-history-actions">
-                                {payment.comprovanteUrl ? (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                      openHostingPaymentPreview(payment)
-                                    }
-                                  >
-                                    Visualizar
-                                  </Button>
-                                ) : null}
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  disabled={
-                                    approvingHostingPaymentId === payment.id
-                                  }
-                                  onClick={() =>
-                                    approveHostingPaymentReceipt(payment)
-                                  }
+                        {pets.map((item) => (
+                          <li key={item.id || item.petId || item.petNome}>
+                            <strong>{item.petNome || `Pet ${item.petId}`}</strong>
+                            <small>Comprovantes pendentes</small>
+                            <div className="melpet-hosting-payment-subgroup">
+                              {pendingPayments.map((payment) => (
+                                <div
+                                  className="melpet-hosting-payment-subitem"
+                                  key={payment.id}
                                 >
-                                  {approvingHostingPaymentId === payment.id
-                                    ? "Aprovando..."
-                                    : "Aprovar comprovante"}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="danger"
-                                  size="sm"
-                                  disabled={
-                                    approvingHostingPaymentId === payment.id
-                                  }
-                                  onClick={() =>
-                                    openRejectHostingPaymentModal(
-                                      payment,
-                                      request,
-                                    )
-                                  }
-                                >
-                                  Recusar
-                                </Button>
-                              </div>
-                            </li>
-                          ))}
+                                  <strong>{getHostingPaymentLabel(payment)}</strong>
+                                  <small>{formatCurrency(payment.valor)}</small>
+                                  <small>
+                                    {payment.enviadoEm
+                                      ? formatDateTime(payment.enviadoEm)
+                                      : "Aguardando conferencia"}
+                                  </small>
+                                  <div className="melpet-hosting-history-actions">
+                                    {payment.comprovanteUrl ? (
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => openHostingPaymentPreview(payment)}
+                                      >
+                                        Visualizar
+                                      </Button>
+                                    ) : null}
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      disabled={approvingHostingPaymentId === payment.id}
+                                      onClick={() => approveHostingPaymentReceipt(payment)}
+                                    >
+                                      {approvingHostingPaymentId === payment.id
+                                        ? "Aprovando..."
+                                        : "Aprovar comprovante"}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="danger"
+                                      size="sm"
+                                      disabled={approvingHostingPaymentId === payment.id}
+                                      onClick={() =>
+                                        openRejectHostingPaymentModal(payment, request)
+                                      }
+                                    >
+                                      Recusar
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </li>
+                        ))}
                       </ul>
                     </div>
                   </article>
-                ))}
-              </div>
-            ) : (
-              <p>
-                Nenhum comprovante encontrado para o tutor - pet selecionado.
-              </p>
-            )
+                );
+              })}
+            </div>
           ) : (
-            <p>
-              Selecione um tutor - pet para visualizar os comprovantes
-              pendentes.
-            </p>
-          )
-        ) : (
-          <p>Nenhum comprovante pendente no momento.</p>
-        )}
+            <p className="melpet-validate-message">Nenhum comprovante pendente no momento.</p>
+          )}
+        </div>
       </div>
     </section>
   );
-
   const adminCardPaymentLinkContent = (
-    <section className="melpet-hosting-history melpet-admin-hosting-payments">
-      <header className="melpet-hosting-history-hero">
-        <div>
-          <span className="melpet-hosting-history-kicker">Hospedagens</span>
-          <h3>Enviar Link de Pagamento</h3>
-          <p>
-            Cole o link de cartão de crédito para o tutor finalizar o
-            pagamento.
-          </p>
-        </div>
-        <div className="melpet-hosting-history-stats">
-          <div>
-            <strong>{cardPaymentSelectOptions.length}</strong>
-            <span>Pendentes</span>
-          </div>
-        </div>
-      </header>
+    <section className="melpet-section-content melpet-admin-hosting-payments melpet-admin-card-payment-link-review">
+      <div className="admin-user-create-section melpet-admin-card-payment-link-card">
+        <div className="melpet-admin-card-payment-link-band">
+          {loadingCardPaymentRequests ? (
+            <p className="melpet-validate-message">Carregando links pendentes...</p>
+          ) : pendingCardPaymentRequests.length ? (
+            <div className="melpet-hosting-history-list">
+              {pendingCardPaymentRequests.map((request) => {
+                const pendingLinks = (request.pagamentos || []).filter(
+                  (payment) =>
+                    payment.parcelaTipo === "cartao_credito" && !payment.linkPagamento,
+                );
+                const requestTotal = request.valorFinal ?? request.valorTotal;
+                const pets = request.itens?.length
+                  ? request.itens
+                  : [{ id: "sem-pet", petNome: "Pet nao informado" }];
 
-      <div className="melpet-hosting-payment-card">
-        <div>
-          <span className="melpet-hosting-history-kicker">
-            Cartão de Crédito
-          </span>
-          <h3>Links Pendentes</h3>
-        </div>
-        <div className="melpet-hosting-payment-search">
-          <label className="pet-form-field">
-            Selecionar tutor - pet
-            <select
-              value={selectedCardPaymentRequestId}
-              onFocus={loadPendingCardPaymentRequests}
-              onPointerDown={loadPendingCardPaymentRequests}
-              onChange={(event) =>
-                setSelectedCardPaymentRequestId(event.target.value)
-              }
-            >
-              <option value="">
-                {loadingCardPaymentRequests
-                  ? "Atualizando links pendentes..."
-                  : "Selecione um tutor - pet"}
-              </option>
-              {cardPaymentSelectOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        {pendingCardPaymentRequests.length ? (
-          selectedCardPaymentRequestId ? (
-            filteredCardPaymentRequests.length ? (
-              <div className="melpet-hosting-history-list">
-                {filteredCardPaymentRequests.map((request) => (
+                return (
                   <article
                     className="melpet-hosting-history-card is-open"
                     key={"card-link-" + request.id}
@@ -5423,216 +4834,184 @@ export default function MelPetHostel({
                     <div className="melpet-hosting-history-card-header">
                       <div>
                         <strong>
-                          {request.clienteNome ||
-                            request.usuarioLogin ||
-                            "Tutor"}
+                          {request.clienteNome || request.usuarioLogin || "Tutor"}
                         </strong>
                         <small>
-                          Pedido #{request.id} ·{" "}
-                          {formatCurrency(
-                            request.valorFinal ?? request.valorTotal,
-                          )}
+                          Pedido #{request.id} - {formatCurrency(requestTotal)}
                         </small>
                       </div>
                       <span className="melpet-hosting-history-card-badge">
-                        Cartão de Crédito
+                        Cartao de credito
+                      </span>
+                    </div>
+
+                    <div className="melpet-hosting-history-items">
+                      <ul>
+                        {pets.map((item) => (
+                          <li key={item.id || item.petId || item.petNome}>
+                            <strong>{item.petNome || `Pet ${item.petId}`}</strong>
+                            <small>Link de pagamento pendente</small>
+                            <div className="melpet-hosting-payment-subgroup">
+                              {pendingLinks.map((payment) => (
+                                <div
+                                  className="melpet-hosting-payment-subitem"
+                                  key={payment.id}
+                                >
+                                  <strong>{getHostingPaymentLabel(payment)}</strong>
+                                  <small>{formatCurrency(payment.valor)}</small>
+                                  <label className="pet-form-field melpet-card-link-field">
+                                    <span>Link de pagamento</span>
+                                    <input
+                                      type="url"
+                                      placeholder="https://..."
+                                      value={cardPaymentLinks[payment.id] || ""}
+                                      onChange={(event) =>
+                                        setCardPaymentLinks((current) => ({
+                                          ...current,
+                                          [payment.id]: event.target.value,
+                                        }))
+                                      }
+                                    />
+                                  </label>
+                                  <div className="melpet-hosting-history-actions">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={async () => {
+                                        const text =
+                                          await navigator.clipboard?.readText?.();
+                                        if (text) {
+                                          setCardPaymentLinks((current) => ({
+                                            ...current,
+                                            [payment.id]: text,
+                                          }));
+                                        }
+                                      }}
+                                    >
+                                      Colar link de pagamento
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      disabled={sendingCardPaymentLinkId === payment.id}
+                                      onClick={() => sendCardPaymentLink(payment, request)}
+                                    >
+                                      {sendingCardPaymentLinkId === payment.id
+                                        ? "Enviando..."
+                                        : "Enviar link"}
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="melpet-validate-message">Nenhum pagamento por cartao pendente no momento.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+  const adminHostingCheckinContent = (
+    <section className="melpet-section-content melpet-admin-hosting-checkin">
+      <div className="admin-user-create-section melpet-admin-hosting-checkin-card">
+        <div className="melpet-admin-hosting-checkin-band">
+          {loadingHostingCheckinRequests ? (
+            <p className="melpet-validate-message">Carregando hospedagens confirmadas...</p>
+          ) : pendingHostingCheckinRequests.length ? (
+            <div className="melpet-hosting-history-list">
+              {pendingHostingCheckinRequests.map((request) => {
+                const requestTotal = request.valorFinal ?? request.valorTotal;
+                const pets = request.itens?.length
+                  ? request.itens
+                  : [{ id: "sem-pet", petNome: "Pet nao informado" }];
+                return (
+                  <article
+                    className="melpet-hosting-history-card is-open"
+                    key={"checkin-" + request.id}
+                  >
+                    <div className="melpet-hosting-history-card-header">
+                      <div>
+                        <strong>
+                          {request.clienteNome || request.usuarioLogin || "Tutor"}
+                        </strong>
+                        <small>
+                          Pedido #{request.id} - {formatCurrency(requestTotal)}
+                        </small>
+                      </div>
+                      <span className="melpet-hosting-history-status is-confirmed">
+                        <strong>Confirmado</strong>
+                        <span>{formatHostingCheckInOut(request)}</span>
                       </span>
                     </div>
                     <div className="melpet-hosting-history-items">
                       <ul>
-                        {(request.pagamentos || [])
-                          .filter(
-                            (payment) =>
-                              payment.parcelaTipo === "cartao_credito" &&
-                              !payment.linkPagamento,
-                          )
-                          .map((payment) => (
-                            <li key={payment.id}>
-                              <strong>{getHostingPaymentLabel(payment)}</strong>
-                              <small>{formatCurrency(payment.valor)}</small>
-                              <label className="pet-form-field melpet-card-link-field">
-                                <span>Link de pagamento</span>
-                                <input
-                                  type="url"
-                                  placeholder="https://..."
-                                  value={cardPaymentLinks[payment.id] || ""}
-                                  onChange={(event) =>
-                                    setCardPaymentLinks((current) => ({
-                                      ...current,
-                                      [payment.id]: event.target.value,
-                                    }))
-                                  }
-                                />
-                              </label>
-                              <div className="melpet-hosting-history-actions">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={async () => {
-                                    const text =
-                                      await navigator.clipboard?.readText?.();
-                                    if (text) {
-                                      setCardPaymentLinks((current) => ({
-                                        ...current,
-                                        [payment.id]: text,
-                                      }));
-                                    }
-                                  }}
-                                >
-                                  Colar link de pagamento
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  disabled={
-                                    sendingCardPaymentLinkId === payment.id
-                                  }
-                                  onClick={() =>
-                                    sendCardPaymentLink(payment, request)
-                                  }
-                                >
-                                  {sendingCardPaymentLinkId === payment.id
-                                    ? "Enviando..."
-                                    : "Enviar link"}
-                                </Button>
-                              </div>
-                            </li>
-                          ))}
+                        {pets.map((item) => (
+                          <li key={item.id || item.petId || item.petNome}>
+                            <strong>{item.petNome || `Pet ${item.petId}`}</strong>
+                            <small>{request.tipo || "Hospedagem"}</small>
+                            <small>{formatHostingItemPeriod(item)}</small>
+                            <strong>{formatCurrency(item.valorTotal || requestTotal)}</strong>
+                          </li>
+                        ))}
                       </ul>
                     </div>
+                    <dl className="melpet-hosting-history-meta">
+                      <div>
+                        <dt>Servico</dt>
+                        <dd>{request.tipo || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt>Periodo</dt>
+                        <dd>{formatHostingRequestPeriod(request)}</dd>
+                      </div>
+                      <div>
+                        <dt>Total</dt>
+                        <dd>{formatCurrency(requestTotal)}</dd>
+                      </div>
+                    </dl>
+                    <div className="melpet-hosting-history-actions">
+                      <Button
+                        type="button"
+                        disabled={confirmingHostingCheckinId === request.id}
+                        onClick={() => confirmHostingCheckin(request)}
+                      >
+                        {confirmingHostingCheckinId === request.id
+                          ? "Confirmando..."
+                          : "Fazer Check-in"}
+                      </Button>
+                    </div>
                   </article>
-                ))}
-              </div>
-            ) : (
-              <p>Nenhum link pendente para o tutor - pet selecionado.</p>
-            )
+                );
+              })}
+            </div>
           ) : (
-            <p>Selecione um tutor - pet para enviar o link de pagamento.</p>
-          )
-        ) : (
-          <p>Nenhum pagamento por cartão pendente no momento.</p>
-        )}
-      </div>
-    </section>
-  );
-
-  const adminHostingCheckinContent = (
-    <section className="melpet-hosting-history melpet-admin-hosting-checkin">
-      <header className="melpet-hosting-history-hero">
-        <div>
-          <span className="melpet-hosting-history-kicker">Hospedagens</span>
-          <h3>Fazer Check-in</h3>
-          <p>Confirme o check-in das hospedagens com pagamentos aprovados.</p>
+            <p className="melpet-validate-message">Nenhuma hospedagem confirmada aguardando check-in.</p>
+          )}
         </div>
-        <div className="melpet-hosting-history-stats">
-          <div>
-            <strong>{pendingHostingCheckinRequests.length}</strong>
-            <span>Confirmadas</span>
-          </div>
-        </div>
-      </header>
-
-      <div className="melpet-hosting-payment-card">
-        <div>
-          <span className="melpet-hosting-history-kicker">Check-in</span>
-          <h3>Hospedagens Confirmadas</h3>
-        </div>
-        {loadingHostingCheckinRequests ? (
-          <p>Carregando hospedagens confirmadas...</p>
-        ) : pendingHostingCheckinRequests.length ? (
-          <div className="melpet-hosting-history-list">
-            {pendingHostingCheckinRequests.map((request) => {
-              const requestTotal = request.valorFinal ?? request.valorTotal;
-              return (
-                <article
-                  className="melpet-hosting-history-card is-open"
-                  key={"checkin-" + request.id}
-                >
-                  <div className="melpet-hosting-history-card-header">
-                    <div>
-                      <strong>
-                        {request.clienteNome || request.usuarioLogin || "Tutor"}
-                      </strong>
-                      <small>
-                        Pedido #{request.id} - {formatCurrency(requestTotal)}
-                      </small>
-                    </div>
-                    <span className="melpet-hosting-history-status is-confirmed">
-                      <strong>Confirmado</strong>
-                      <span>{formatHostingCheckInOut(request)}</span>
-                    </span>
-                  </div>
-                  <dl className="melpet-hosting-history-meta">
-                    <div>
-                      <dt>Serviço</dt>
-                      <dd>{request.tipo || "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>Período</dt>
-                      <dd>{formatHostingRequestPeriod(request)}</dd>
-                    </div>
-                    <div>
-                      <dt>Pet</dt>
-                      <dd>
-                        {(request.itens || [])
-                          .map((item) => item.petNome || `Pet ${item.petId}`)
-                          .join(", ") || "-"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Total</dt>
-                      <dd>{formatCurrency(requestTotal)}</dd>
-                    </div>
-                  </dl>
-                  <div className="melpet-hosting-history-actions">
-                    <Button
-                      type="button"
-                      disabled={confirmingHostingCheckinId === request.id}
-                      onClick={() => confirmHostingCheckin(request)}
-                    >
-                      {confirmingHostingCheckinId === request.id
-                        ? "Confirmando..."
-                        : "Fazer Check-in"}
-                    </Button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        ) : (
-          <p>Nenhuma hospedagem confirmada aguardando check-in.</p>
-        )}
       </div>
     </section>
   );
   const adminHostingApprovalContent = (
-    <section className="melpet-hosting-history melpet-admin-hosting-approval">
-      <header className="melpet-hosting-history-hero">
-        <div>
-          <span className="melpet-hosting-history-kicker">Hospedagens</span>
-          <h3>Aprovar Hospedagens Pendentes</h3>
-          <p>
-            Consulte as solicitações enviadas pelos tutores e aprove ou
-            reprove cada pedido.
-          </p>
-        </div>
-        <div className="melpet-hosting-history-stats">
-          <div>
-            <strong>{pendingHostingRequests.length}</strong>
-            <span>Pendentes</span>
-          </div>
-        </div>
-      </header>
+    <section className="melpet-section-content melpet-admin-hosting-approval">
+      <div className="admin-user-create-section melpet-admin-hosting-approval-card">
+        <div className="melpet-admin-hosting-approval-band">
+          {pendingHostingRequestsError ? (
+            <p className="melpet-error">{pendingHostingRequestsError}</p>
+          ) : null}
 
-      {pendingHostingRequestsError ? (
-        <p className="melpet-error">{pendingHostingRequestsError}</p>
-      ) : null}
-
-      {loadingPendingHostingRequests ? (
-        <p>Carregando hospedagens pendentes...</p>
-      ) : pendingHostingRequests.length ? (
-        <div className="melpet-hosting-history-list">
+          {loadingPendingHostingRequests ? (
+            <p className="melpet-validate-message">Carregando hospedagens pendentes...</p>
+          ) : pendingHostingRequests.length ? (
+            <div className="melpet-hosting-history-list">
           {pendingHostingRequests.map((request) => {
             const isOpen = selectedPendingHostingId === request.id;
             const requestTotal = request.valorFinal ?? request.valorTotal;
@@ -5749,10 +5128,12 @@ export default function MelPetHostel({
               </article>
             );
           })}
+                    </div>
+          ) : (
+            <p className="melpet-validate-message">Nenhuma hospedagem pendente no momento.</p>
+          )}
         </div>
-      ) : (
-        <p>Nenhuma hospedagem pendente no momento.</p>
-      )}
+      </div>
     </section>
   );
 
@@ -5792,7 +5173,7 @@ export default function MelPetHostel({
           <Button
             type="button"
             variant="outline"
-            onClick={handleBackToMainMenu}
+            onClick={() => handleMelPetBack("main")}
             className="melpet-back-button"
           >
             Voltar
@@ -5802,329 +5183,13 @@ export default function MelPetHostel({
     },
   ];
 
-  const clientSearchContent = (
-    <section className="melpet-client-search melpet-admin-client-search melpet-admin-document-approval-content">
-      <div className="admin-user-create-section melpet-admin-document-pending-card melpet-admin-client-search-card">
-        <div className="melpet-admin-document-card-heading">
-          <span>Cadastro de clientes</span>
-          <strong>Pesquisar Cliente</strong>
-        </div>
-
-        <div className="melpet-admin-document-pending-band melpet-admin-client-search-band">
-          <form
-            className="melpet-client-search-form melpet-admin-pet-search-form melpet-admin-client-search-form"
-            onSubmit={loadClientSearch}
-          >
-        <label>
-          <span>Cliente ou codigo</span>
-          <input
-            type="search"
-            value={clientSearchTerm}
-            onChange={(event) => setClientSearchTerm(event.target.value)}
-            placeholder="Digite para pesquisar"
-          />
-        </label>
-
-        <label>
-          <span>Ordenar por</span>
-          <select
-            value={clientSearchOrder}
-            onChange={(event) => setClientSearchOrder(event.target.value)}
-          >
-            <option value="codigo_asc">Codigo crescente</option>
-            <option value="codigo_desc">Codigo decrescente</option>
-            <option value="nome_asc">Nome A-Z</option>
-            <option value="nome_desc">Nome Z-A</option>
-          </select>
-        </label>
-
-        <Button type="submit" disabled={loadingClientSearch}>
-          {loadingClientSearch ? "Pesquisando..." : "Pesquisar"}
-        </Button>
-      </form>
-
-      {clientSearchError ? (
-        <p className="melpet-error">{clientSearchError}</p>
-      ) : null}
-
-      <div className="melpet-pet-status-results melpet-admin-client-results">
-        {loadingClientSearch ? (
-          <p>Carregando clientes...</p>
-        ) : clientSearchResults.length ? (
-          clientSearchResults.map((cliente) => (
-            <article
-              className="melpet-pet-status-client melpet-admin-pet-result-card melpet-admin-client-result-card"
-              key={cliente.id}
-            >
-              <header>
-                <div>
-                  <strong>{cliente.nome || "Cliente sem nome"}</strong>
-                  <span>Codigo {cliente.id}</span>
-                </div>
-                {cliente.admin ? (
-                  <em className="melpet-client-admin-badge">admin</em>
-                ) : null}
-              </header>
-
-              <button
-                type="button"
-                className="melpet-pet-name-button melpet-admin-pet-open-button melpet-admin-client-open-button"
-                onClick={() => handleSelectClient(cliente)}
-              >
-                <span>
-                  <strong>{cliente.nome || "Cliente sem nome"}</strong>
-                  <small>
-                    {cliente.telefone ||
-                      cliente.email ||
-                      "Abrir ficha do cliente"}
-                  </small>
-                </span>
-                <em>Abrir</em>
-              </button>
-            </article>
-          ))
-        ) : clientSearchSubmitted ? (
-          <p>Nenhum cliente encontrado.</p>
-        ) : (
-          <p>Pesquise por codigo ou nome do cliente.</p>
-        )}
-        </div>
-      </div>
-      </div>
-    </section>
-  );
-
-  const adminClientDetailsContent = selectedClient ? (
-    <article className="melpet-admin-pet-card melpet-admin-client-card">
-      <header className="melpet-admin-pet-card-header">
-        <div className="melpet-admin-pet-heading">
-          <span>Ficha do cliente</span>
-          <h3>
-            {selectedClient.nome || "Cliente sem nome"}
-            {selectedClient.admin ? (
-              <em className="melpet-client-admin-badge">admin</em>
-            ) : null}
-          </h3>
-        </div>
-      </header>
-
-      <section className="melpet-admin-pet-info-section">
-        <header>
-          <span>Dados cadastrais</span>
-        </header>
-        <dl className="melpet-admin-pet-info-grid">
-          <div>
-            <dt>Codigo</dt>
-            <dd>{selectedClient.id}</dd>
-          </div>
-          <div>
-            <dt>CPF</dt>
-            <dd>{selectedClient.cpf ? maskCpf(selectedClient.cpf) : "-"}</dd>
-          </div>
-          <div>
-            <dt>RG</dt>
-            <dd>{selectedClient.rg || "-"}</dd>
-          </div>
-          <div>
-            <dt>Data de nascimento</dt>
-            <dd>{formatBrazilDate(selectedClient.data_nascimento)}</dd>
-          </div>
-          <div>
-            <dt>Telefone</dt>
-            <dd>{selectedClient.telefone || "-"}</dd>
-          </div>
-          <div>
-            <dt>WhatsApp</dt>
-            <dd>{selectedClient.whatsapp || "-"}</dd>
-          </div>
-          <div>
-            <dt>Email</dt>
-            <dd>{selectedClient.email || "-"}</dd>
-          </div>
-          <div>
-            <dt>Observacoes</dt>
-            <dd>{selectedClient.observacoes || "-"}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section className="melpet-admin-pet-info-section melpet-admin-client-address-section">
-        <header>
-          <span>Enderecos</span>
-        </header>
-        {selectedClient.enderecos?.length ? (
-          <ul className="melpet-admin-client-simple-list">
-            {selectedClient.enderecos.map((endereco) => (
-              <li key={endereco.id || formatAddress(endereco)}>
-                {formatAddress(endereco)}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>Nenhum endereco cadastrado.</p>
-        )}
-      </section>
-
-      <section className="melpet-admin-pet-info-section melpet-admin-client-pets-section">
-        <header>
-          <span>Pets</span>
-        </header>
-        {selectedClient.pets?.length ? (
-          <ul className="melpet-admin-client-simple-list">
-            {selectedClient.pets.map((pet) => (
-              <li className="melpet-client-pet-row" key={pet.id}>
-                <span>{pet.nome || "Pet sem nome"}</span>
-                <em
-                  className={
-                    pet.ativo
-                      ? "melpet-client-pet-status melpet-client-pet-status--active"
-                      : "melpet-client-pet-status melpet-client-pet-status--inactive"
-                  }
-                >
-                  {pet.ativo ? "Ativo" : "Inativo"}
-                </em>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>Nenhum pet cadastrado.</p>
-        )}
-      </section>
-
-      <section className="melpet-admin-pet-docs-section melpet-client-documents-card">
-        <header>
-          <span>Contrato e documentos</span>
-        </header>
-        {loadingSelectedClientFiles ? (
-          <p>Carregando documentos...</p>
-        ) : selectedClientFilesError ? (
-          <p className="melpet-error">{selectedClientFilesError}</p>
-        ) : selectedClientFiles.length ? (
-          <ul className="melpet-client-documents-list">
-            {selectedClientFiles.map((file, index) => {
-              const key =
-                String(file.tipoRegistro || "documento") +
-                "-" +
-                String(file.contratoId || file.documentoId || index);
-              return (
-                <li key={key}>
-                  <div>
-                    <strong>{file.tipoDocumento || "Documento"}</strong>
-                    <span>{file.nomeDocumento || "Arquivo PDF"}</span>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={!file.existsDisk}
-                    onClick={() => handleOpenDocumentPreview(file)}
-                  >
-                    Visualizar
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p>Nenhum contrato ou documento encontrado.</p>
-        )}
-      </section>
-
-      <section className="melpet-admin-pet-docs-section melpet-admin-upload-card">
-        <header>
-          <span>Upload de documentos pelo administrador</span>
-        </header>
-        <div className="melpet-admin-upload-grid">
-          <label>
-            <span>Tipo</span>
-            <select
-              value={adminUploadType}
-              onChange={(event) => setAdminUploadType(event.target.value)}
-            >
-              <option value="contrato">Contrato assinado</option>
-              <option value="documento">Documento de identificacao</option>
-              <option value="comprovante">Comprovante de endereco</option>
-              <option value="outros">Outros documentos</option>
-            </select>
-          </label>
-
-          {adminUploadType === "carteira" ? (
-            <>
-              <label>
-                <span>Pet</span>
-                <select
-                  value={adminUploadPetId}
-                  onChange={(event) => setAdminUploadPetId(event.target.value)}
-                >
-                  <option value="">Selecione</option>
-                  {(selectedClient.pets || []).map((pet) => (
-                    <option key={pet.id} value={pet.id}>
-                      {pet.nome || "Pet " + pet.id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Lado</span>
-                <select
-                  value={adminUploadSide}
-                  onChange={(event) => setAdminUploadSide(event.target.value)}
-                >
-                  <option value="frente">Frente</option>
-                  <option value="verso">Verso</option>
-                </select>
-              </label>
-            </>
-          ) : null}
-
-          <label className="melpet-admin-upload-file">
-            <span>Arquivo PDF</span>
-            <input
-              type="file"
-              accept="application/pdf,.pdf"
-              onChange={(event) =>
-                setAdminUploadFile(event.target.files?.[0] || null)
-              }
-            />
-          </label>
-        </div>
-        <Button
-          type="button"
-          onClick={handleAdminClientDocumentUpload}
-          disabled={adminUploadingDocument || !adminUploadFile}
-        >
-          {adminUploadingDocument ? "Enviando..." : "Enviar documento"}
-        </Button>
-      </section>
-
-      <footer className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions melpet-back-actions melpet-admin-pet-footer">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleBackToClientSearch}
-          className="melpet-back-button"
-        >
-          Voltar
-        </Button>
-      </footer>
-    </article>
-  ) : null;
-
   const vaccineManagementContent = (
     <section className="melpet-vaccine-admin-stack melpet-admin-vaccine-config-content">
       <form
         className="admin-user-create-section melpet-admin-vaccine-config-card"
         onSubmit={saveVaccineConfig}
       >
-        <div className="melpet-admin-document-card-heading">
-          <span>{editingVaccineConfigId ? "Editando" : "Novo item"}</span>
-          <h3>
-            {editingVaccineConfigId
-              ? vaccineConfigForm.descricao || "Editar item"
-              : "Criar vacina / outro"}
-          </h3>
-        </div>
-
-        <label>
+<label>
           Descrição
           <input
             type="text"
@@ -6230,12 +5295,7 @@ export default function MelPetHostel({
       </form>
 
       <section className="admin-user-create-section melpet-admin-vaccine-config-list-card">
-        <div className="melpet-admin-document-card-heading">
-          <span>Vacinas / Outros</span>
-          <h3>Itens cadastrados</h3>
-        </div>
-
-        {loadingVaccineConfig ? (
+{loadingVaccineConfig ? (
           <p>Carregando itens...</p>
         ) : vaccineConfigItems.length ? (
           <div className="admin-page-list">
@@ -6823,196 +5883,6 @@ export default function MelPetHostel({
       ) : null}
     </section>
   );
-  const adminDocumentApprovalContent = (
-    <section className="melpet-section-content melpet-admin-document-approval-content">
-      <div className="admin-user-create-section melpet-admin-document-pending-card">
-        <div className="melpet-admin-document-card-heading">
-          <span>Documentos pendentes</span>
-          <strong>Aprovar Documentos</strong>
-        </div>
-
-        <div className="melpet-admin-document-pending-band">
-          <p className="melpet-validate-subtitle">
-            Usuários com documentos pendentes de conferência:
-          </p>
-          {loadingPendingUsers ? (
-            <p className="melpet-validate-message">Carregando usuários...</p>
-          ) : pendingUsersError ? (
-            <p className="melpet-error">{pendingUsersError}</p>
-          ) : pendingUsers.length ? (
-            <ul className="melpet-pending-users-list melpet-admin-document-user-list">
-              {pendingUsers.map((u) => (
-                <li key={u.usuarioId || u.nome}>
-                  <button
-                    type="button"
-                    className="melpet-pending-user-btn melpet-admin-document-user-btn"
-                    onClick={() => handleOpenUserDocuments(u)}
-                  >
-                    <span>{u.nome}</span>
-                    <em>Abrir</em>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="melpet-validate-message">
-              Nenhum usuário com documentos pendentes no momento.
-            </p>
-          )}
-        </div>
-      </div>
-
-      {selectedPendingUser ? (
-        <div className="admin-user-create-section melpet-admin-document-details-card">
-          <div className="melpet-admin-document-card-heading">
-            <span>Conferência</span>
-            <strong>
-              Documentos de {selectedPendingUser?.nome || "usuário"}
-            </strong>
-          </div>
-
-          <div className="melpet-user-registration-card melpet-admin-document-registration-card">
-            <h4>Dados do cadastro</h4>
-            <dl>
-              <div>
-                <dt>Nome</dt>
-                <dd>
-                  {selectedPendingUser?.cadastro?.nome ||
-                    selectedPendingUser?.nome ||
-                    "-"}
-                </dd>
-              </div>
-              <div>
-                <dt>RG</dt>
-                <dd>{selectedPendingUser?.cadastro?.rg || "-"}</dd>
-              </div>
-              <div>
-                <dt>CPF</dt>
-                <dd>
-                  {selectedPendingUser?.cadastro?.cpf
-                    ? maskCpf(selectedPendingUser.cadastro.cpf)
-                    : "-"}
-                </dd>
-              </div>
-              <div className="melpet-user-registration-address">
-                <dt>Endereço</dt>
-                <dd>{selectedPendingUser?.cadastro?.endereco || "-"}</dd>
-              </div>
-            </dl>
-          </div>
-
-          {loadingSelectedUserFiles ? (
-            <p className="melpet-validate-message">Carregando documentos...</p>
-          ) : selectedUserFilesError ? (
-            <p className="melpet-error">{selectedUserFilesError}</p>
-          ) : (
-            <div className="melpet-docs-table-wrap melpet-admin-document-table-wrap">
-              <table className="melpet-docs-table">
-                <thead>
-                  <tr>
-                    <th>Nome do documento</th>
-                    <th>Tipo de documento</th>
-                    <th>Visualizar</th>
-                    <th>Aprovar</th>
-                    <th>Reprovar</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedUserFiles.length ? (
-                    (() => {
-                      return selectedUserFiles.map((file, index) => {
-                        const url = buildFileUrl(file.fileUrl);
-                        const isConferido = Boolean(file?.conferido);
-                        const itemKey = buildConferirKey(file);
-                        const isConferindo = isConferindoItem(itemKey);
-                        const isRejectingDocument =
-                          isRejectingDocumentItem(itemKey);
-                        const canRejectDocument =
-                          file?.tipoRegistro === "contrato"
-                            ? Number(file?.contratoId) > 0
-                            : file?.tipoRegistro === "documento" &&
-                              Number(file?.documentoId) > 0;
-                        const hasConferirTarget =
-                          file?.tipoRegistro === "contrato"
-                            ? Number(file?.contratoId) > 0
-                            : Number(file?.documentoId) > 0;
-                        return (
-                          <tr
-                            key={`${file.filePath || file.nomeDocumento}-${index}`}
-                          >
-                            <td>{file.nomeDocumento}</td>
-                            <td>{file.tipoDocumento}</td>
-                            <td>
-                              <button
-                                type="button"
-                                className="melpet-view-doc-btn"
-                                disabled={!url}
-                                onClick={() => handleOpenDocumentPreview(file)}
-                              >
-                                Visualizar documento
-                              </button>
-                            </td>
-                            <td>
-                              <button
-                                type="button"
-                                className="melpet-review-btn melpet-review-btn--approve"
-                                disabled={
-                                  isConferido ||
-                                  isConferindo ||
-                                  !hasConferirTarget
-                                }
-                                onClick={() => handleConferirDocumento(file)}
-                              >
-                                {isConferindo
-                                  ? "Aprovando..."
-                                  : isConferido
-                                    ? "Aprovado"
-                                    : "Aprovar"}
-                              </button>
-                            </td>
-                            <td>
-                              <button
-                                type="button"
-                                className="melpet-review-btn melpet-review-btn--reject"
-                                disabled={
-                                  isConferido ||
-                                  isRejectingDocument ||
-                                  !canRejectDocument
-                                }
-                                onClick={() => openRejectDocumentModal(file)}
-                              >
-                                {isRejectingDocument
-                                  ? "Reprovando..."
-                                  : "Reprovar"}
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      });
-                    })()
-                  ) : (
-                    <tr>
-                      <td colSpan={5}>Nenhum documento encontrado.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div className="melpet-user-docs-actions melpet-admin-document-actions">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCloseUserDocuments}
-            >
-              Fechar
-            </Button>
-          </div>
-        </div>
-      ) : null}
-    </section>
-  );
   const petAdminMenus = new Set([
     "cadastroPets",
     "aprovarCarteiraVacinacao",
@@ -7058,12 +5928,7 @@ export default function MelPetHostel({
   const adminVaccineApprovalContent = (
     <section className="melpet-section-content melpet-admin-vaccine-approval-content">
       <div className="admin-user-create-section melpet-admin-vaccine-pending-card">
-        <div className="melpet-admin-document-card-heading">
-          <span>Carteiras pendentes</span>
-          <strong>Aprovar Carteira de Vacinação</strong>
-        </div>
-
-        <div className="melpet-admin-vaccine-pending-band">
+<div className="melpet-admin-vaccine-pending-band">
           <p className="melpet-validate-subtitle">
             Usuários com carteira de vacinação pendente de conferência:
           </p>
@@ -7291,35 +6156,6 @@ export default function MelPetHostel({
             ? []
             : [
                 {
-                  id: "pesquisar-clientes",
-                  title: "Pesquisar Cliente",
-                  isOpen: activeMenu === "pesquisarClientes",
-                  onAction: () => {
-                    setActiveMenu((prev) =>
-                      prev === "pesquisarClientes" ? "" : "pesquisarClientes",
-                    );
-                    setSelectedPendingUser(null);
-                    setSelectedUserFiles([]);
-                    setSelectedUserFilesError("");
-                  },
-                  content: clientSearchContent,
-                },
-                {
-                  id: "conferir-documentos",
-                  title: "Aprovar Documentos",
-                  summary: "Conferir e aprovar documentos enviados.",
-                  isOpen: activeMenu === "conferirDocumentos",
-                  onAction: () => {
-                    setActiveMenu((prev) =>
-                      prev === "conferirDocumentos" ? "" : "conferirDocumentos",
-                    );
-                    setSelectedPendingUser(null);
-                    setSelectedUserFiles([]);
-                    setSelectedUserFilesError("");
-                  },
-                  content: adminDocumentApprovalContent,
-                },
-                {
                   id: "aprovar-hospedagens",
                   title: "Aprovar Hospedagens",
                   summary: "Conferir e aprovar hospedagens pendentes.",
@@ -7384,7 +6220,7 @@ export default function MelPetHostel({
           <Button
             type="button"
             variant="outline"
-            onClick={handleBackToMainMenu}
+            onClick={() => handleMelPetBack("main")}
             className="melpet-back-button"
           >
             Voltar
@@ -7433,56 +6269,6 @@ export default function MelPetHostel({
             disabled={Boolean(deletingPetId)}
           >
             {deletingPetId ? "Excluindo..." : "SIM, EXCLUIR"}
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-
-  const rejectDocumentModalKey = buildConferirKey(rejectDocumentTarget);
-  const rejectDocumentModalBusy = isRejectingDocumentItem(
-    rejectDocumentModalKey,
-  );
-  const rejectDocumentModal = (
-    <Modal
-      isOpen={Boolean(rejectDocumentTarget)}
-      onClose={closeRejectDocumentModal}
-      title="Reprovar Documento"
-      closeOnBackdropClick={!rejectDocumentModalBusy}
-      showCloseButton={!rejectDocumentModalBusy}
-      containerStyle={{ width: "min(94%, 520px)" }}
-    >
-      <div className="melpet-reject-vaccine-modal melpet-reject-document-modal">
-        <p>
-          Informe o motivo da reprovacao. Esse texto sera exibido ao cliente
-          para orientar o novo envio.
-        </p>
-        <label className="pet-form-field">
-          Motivo da reprovacao
-          <textarea
-            value={rejectDocumentReason}
-            onChange={(event) => setRejectDocumentReason(event.target.value)}
-            rows={4}
-            disabled={rejectDocumentModalBusy}
-            placeholder="Ex.: documento ilegivel, dados divergentes, arquivo incompleto..."
-          />
-        </label>
-        <div className="modal-actions">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={closeRejectDocumentModal}
-            disabled={rejectDocumentModalBusy}
-          >
-            Cancelar
-          </Button>
-          <Button
-            type="button"
-            variant="danger"
-            onClick={submitRejectDocument}
-            disabled={rejectDocumentModalBusy}
-          >
-            {rejectDocumentModalBusy ? "Reprovando..." : "Reprovar"}
           </Button>
         </div>
       </div>
@@ -7677,7 +6463,7 @@ export default function MelPetHostel({
               <Button
                 type="button"
                 variant="outline"
-                onClick={handleBackToPetAdminMenu}
+                onClick={() => handleMelPetBack("petAdminMenu")}
                 className="melpet-back-button"
               >
                 Voltar
@@ -7700,8 +6486,8 @@ export default function MelPetHostel({
                 <h2>Criação e Edição de Vacinas / Outros</h2>
               </div>
               <p className="admin-user-create-subtitle">
-                Cadastre e organize os itens de vacinação usados nas fichas
-                dos pets.
+                Cadastre e organize os itens de vacinação usados nas fichas dos
+                pets.
               </p>
             </header>
 
@@ -7711,7 +6497,7 @@ export default function MelPetHostel({
               <Button
                 type="button"
                 variant="outline"
-                onClick={handleBackToPetAdminMenu}
+                onClick={() => handleMelPetBack("petAdminMenu")}
                 className="melpet-back-button"
               >
                 Voltar
@@ -7729,8 +6515,8 @@ export default function MelPetHostel({
         >
           <div className="admin-page-delete-modal">
             <p>
-              Atenção!! Ao clicar em CONFIRMAR, você irá excluir este item
-              de vacinas / outros:{" "}
+              Atenção!! Ao clicar em CONFIRMAR, você irá excluir este item de
+              vacinas / outros:{" "}
               <strong>{deleteWarningVaccineConfig?.descricao}</strong>. Ele não
               aparecerá mais para novos cadastros.
             </p>
@@ -7774,7 +6560,7 @@ export default function MelPetHostel({
               <Button
                 type="button"
                 variant="outline"
-                onClick={handleBackToPetAdminMenu}
+                onClick={() => handleMelPetBack("petAdminMenu")}
                 className="melpet-back-button"
               >
                 Voltar
@@ -7820,7 +6606,7 @@ export default function MelPetHostel({
               <Button
                 type="button"
                 variant="outline"
-                onClick={handleBackToPetAdminMenu}
+                onClick={() => handleMelPetBack("petAdminMenu")}
                 className="melpet-back-button"
               >
                 Voltar
@@ -7829,29 +6615,6 @@ export default function MelPetHostel({
           </div>
         </main>
         {deletePetModal}
-      </>
-    );
-  }
-
-  if (isAdmin && activeMenu === "pesquisarClientes" && selectedClient) {
-    return (
-      <>
-        <main className="melpet-admin-standalone-screen">
-          <section className="melpet-admin-pet-screen melpet-admin-client-screen">
-            {adminClientDetailsContent}
-          </section>
-        </main>
-        <Modal
-          isOpen={documentPreviewOpen}
-          onClose={handleCloseDocumentPreview}
-          title={documentPreviewTitle || "Visualizar documento"}
-          containerStyle={{ width: "min(96%, 1100px)", maxWidth: 1100 }}
-          contentStyle={{ padding: 0 }}
-        >
-          <div className="melpet-preview-modal-body">
-            <PdfViewer src={documentPreviewSrc} title={documentPreviewTitle} />
-          </div>
-        </Modal>
       </>
     );
   }
@@ -8003,7 +6766,7 @@ export default function MelPetHostel({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={handleBackToAdminPetSearch}
+                  onClick={() => handleMelPetBack("adminPetSearch")}
                   className="melpet-back-button"
                 >
                   Voltar
@@ -8330,7 +7093,6 @@ export default function MelPetHostel({
       />
 
       {deletePetModal}
-      {rejectDocumentModal}
       {rejectVaccineCardModal}
       {rejectHostingModal}
       {rejectHostingPaymentModal}

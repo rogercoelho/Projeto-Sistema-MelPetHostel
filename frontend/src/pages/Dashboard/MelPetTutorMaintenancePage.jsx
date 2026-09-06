@@ -30,7 +30,7 @@ function getTutorClienteId(tutor) {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-function MelPetTutorMaintenancePage({ onBack }) {
+function MelPetTutorMaintenancePage({ onBack, onOpenPetFicha }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchOrder, setSearchOrder] = useState("nome_asc");
   const [results, setResults] = useState([]);
@@ -340,8 +340,8 @@ function MelPetTutorMaintenancePage({ onBack }) {
   }
 
   return (
-    <main className="admin-page admin-user-create-page">
-      <div className="admin-page-panel admin-page-form admin-user-create-card">
+    <main className="admin-page admin-user-create-page melpet-tutor-maintenance-page">
+      <div className="admin-page-panel admin-page-form admin-user-create-card melpet-tutor-maintenance-panel">
         <header className="admin-user-create-header">
           <div className="admin-user-create-heading">
             <span>Mel Pet Hostel</span>
@@ -350,53 +350,98 @@ function MelPetTutorMaintenancePage({ onBack }) {
           <p className="admin-user-create-subtitle">Pesquise um tutor, visualize cadastro, pets e documentos, ou envie arquivos pelo administrador.</p>
         </header>
 
-        <form className="admin-user-create-section admin-user-search-section" onSubmit={searchTutors}>
-          <div className="admin-user-section-title"><span>Pesquisa</span><h3>Pesquisar tutor</h3></div>
-          <label className="admin-user-search-field">Buscar tutor
-            <input type="search" value={searchTerm} onFocus={clearApprovalSelection} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Nome, codigo ou pet" />
-          </label>
-          <label className="admin-user-search-field">Ordenar por
-            <select value={searchOrder} onChange={(event) => setSearchOrder(event.target.value)}>
-              <option value="nome_asc">Nome A-Z</option>
-              <option value="nome_desc">Nome Z-A</option>
-              <option value="codigo_asc">Codigo crescente</option>
-              <option value="codigo_desc">Codigo decrescente</option>
-            </select>
-          </label>
-          <div className="admin-page-actions admin-user-search-actions">
-            <Button type="submit" disabled={loading}>{loading ? "Pesquisando..." : "Pesquisar"}</Button>
-            <Button className="melpet-clear-button" type="button" variant="outline" onClick={clearSearch} disabled={loading}>Limpar</Button>
-          </div>
-        </form>
+        <section className="melpet-client-search melpet-admin-client-search melpet-tutor-client-search">
+          <div className="admin-user-create-section melpet-admin-document-pending-card melpet-admin-client-search-card melpet-tutor-client-search-card">
+            <div className="melpet-admin-document-pending-band melpet-admin-client-search-band melpet-tutor-client-search-band">
+              <form
+                className="melpet-client-search-form melpet-admin-pet-search-form melpet-admin-client-search-form melpet-tutor-client-search-form"
+                onSubmit={searchTutors}
+              >
+                <label>
+                  <span>Tutor, codigo ou pet</span>
+                  <input
+                    type="search"
+                    value={searchTerm}
+                    onFocus={clearApprovalSelection}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder="Digite para pesquisar"
+                  />
+                </label>
 
-        {submitted ? (
-          <section className="admin-user-create-section admin-user-search-results-section">
-            <div className="admin-user-section-title"><span>Resultado</span><h3>Tutores encontrados</h3></div>
-            <div className="admin-user-search-results">
-              {loading ? <p>Carregando tutores...</p> : results.length ? results.map((tutor) => {
-                const tutorClienteId = getTutorClienteId(tutor);
-                return (
-                <article className={getTutorClienteId(selectedTutor) === tutorClienteId ? "is-selected" : ""} key={tutorClienteId || tutor.usuarioId || tutor.nome}>
-                  <button type="button" className="admin-user-search-result-pick" onClick={() => selectTutor(tutor)}>
-                    <strong>{tutor.nome || "Tutor sem nome"}</strong>
-                    <span>{tutor.usuarioLogin ? "Login: " + tutor.usuarioLogin : "Sem login vinculado"}</span>
-                  </button>
-                </article>
-              );
-              }) : <p>Nenhum tutor encontrado.</p>}
+                <label>
+                  <span>Ordenar por</span>
+                  <select
+                    value={searchOrder}
+                    onChange={(event) => setSearchOrder(event.target.value)}
+                  >
+                    <option value="nome_asc">Nome A-Z</option>
+                    <option value="nome_desc">Nome Z-A</option>
+                    <option value="codigo_asc">Codigo crescente</option>
+                    <option value="codigo_desc">Codigo decrescente</option>
+                  </select>
+                </label>
+
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Pesquisando..." : "Pesquisar"}
+                </Button>
+                <Button
+                  className="melpet-clear-button"
+                  type="button"
+                  variant="outline"
+                  onClick={clearSearch}
+                  disabled={loading}
+                >
+                  Limpar
+                </Button>
+              </form>
+
+              {submitted ? (
+                <div className="melpet-pet-status-results melpet-admin-client-results melpet-tutor-client-results">
+                  {loading ? (
+                    <p>Carregando tutores...</p>
+                  ) : results.length ? (
+                    results.map((tutor) => {
+                      const tutorClienteId = getTutorClienteId(tutor);
+                      return (
+                        <article
+                          className={`melpet-pet-status-client melpet-admin-pet-result-card melpet-admin-client-result-card ${
+                            getTutorClienteId(selectedTutor) === tutorClienteId
+                              ? "is-selected"
+                              : ""
+                          }`}
+                          key={tutorClienteId || tutor.usuarioId || tutor.nome}
+                        >
+                          <button
+                            type="button"
+                            className="melpet-pet-name-button melpet-admin-pet-open-button melpet-admin-client-open-button"
+                            onClick={() => selectTutor(tutor)}
+                          >
+                            <span>
+                              <strong>{tutor.nome || "Tutor sem nome"}</strong>
+                              <small>Codigo {tutorClienteId || "-"}</small>
+                            </span>
+                            <em>Abrir</em>
+                          </button>
+                        </article>
+                      );
+                    })
+                  ) : (
+                    <p>Nenhum tutor encontrado.</p>
+                  )}
+                </div>
+              ) : null}
             </div>
-          </section>
-        ) : null}
-
-        <section className="admin-user-create-section melpet-tutor-approval-card">
+          </div>
+        </section>
+        <section className="admin-user-create-section melpet-tutor-approval-card melpet-tutor-standard-card">
           <div className="admin-user-section-title"><span>Aprovação</span><h3>Aprovar documentos pendentes</h3></div>
           {loadingPendingTutors ? <p>Carregando tutores com pendencias...</p> : pendingTutorsError ? <p className="melpet-error">{pendingTutorsError}</p> : pendingTutors.length ? (
-            <div className="admin-user-search-results">
+            <div className="melpet-pet-status-results melpet-admin-client-results melpet-tutor-client-results">
               {pendingTutors.map((tutor) => {
                 const pendingFiles = Array.isArray(tutor.documentosPendentes) ? tutor.documentosPendentes : [];
                 return (
-                <article className={selectedPendingTutor?.usuarioId === tutor.usuarioId ? "is-selected" : ""} key={tutor.usuarioId || tutor.nome}>
-                  <button type="button" className="admin-user-search-result-pick" onClick={() => selectPendingTutor(tutor)}>
+                <article className={`melpet-pet-status-client melpet-admin-pet-result-card melpet-admin-client-result-card ${selectedPendingTutor?.usuarioId === tutor.usuarioId ? "is-selected" : ""}`} key={tutor.usuarioId || tutor.nome}>
+                  <button type="button" className="melpet-pet-name-button melpet-admin-pet-open-button melpet-admin-client-open-button" onClick={() => selectPendingTutor(tutor)}>
                     <strong>{tutor.nome || "Tutor sem nome"}</strong>
                     <span>{pendingFiles.length ? pendingFiles.length + " documento(s) pendente(s)" : "Documentos pendentes"}</span>
                     {pendingFiles.length ? (
@@ -432,9 +477,9 @@ function MelPetTutorMaintenancePage({ onBack }) {
         </section>
 
         {selectedTutor ? (
-          <section className="admin-user-maintenance-selected">
+          <section className="admin-user-maintenance-selected melpet-tutor-selected-shell">
             <div className="admin-user-section-title admin-user-maintenance-selected-title"><span>Tutor selecionado</span><h3>{selectedTutor.nome}</h3></div>
-            <section className="admin-user-create-section melpet-tutor-profile-card">
+            <section className="admin-user-create-section melpet-tutor-profile-card melpet-tutor-standard-card">
               <div className="admin-user-section-title"><span>Cadastro</span><h3>Login e dados cadastrais</h3></div>
               <p className="melpet-tutor-maintenance-note">Para alterar os dados cadastrais utilize Manutenção do Usuário.</p>
               <dl className="client-profile-readonly-grid">
@@ -452,17 +497,17 @@ function MelPetTutorMaintenancePage({ onBack }) {
               {selectedTutor.enderecos?.length ? <ul className="client-profile-address-list">{selectedTutor.enderecos.map((address, index) => <li key={address.id || index}>{formatAddress(address)}</li>)}</ul> : null}
             </section>
 
-            <section className="admin-user-create-section">
+            <section className="admin-user-create-section melpet-tutor-standard-card">
               <div className="admin-user-section-title"><span>Pets</span><h3>Pets cadastrados</h3></div>
-              {selectedPets.length ? <div className="melpet-tutor-pet-grid">{selectedPets.map((pet) => <article className="melpet-tutor-pet-card" key={pet.id}><div><strong>{pet.nome || "Pet sem nome"}</strong><span>{pet.raca || "Raca nao informada"}</span></div><em className={pet.ativo ? "is-active" : "is-inactive"}>{pet.ativo ? "Ativo" : "Inativo"}</em></article>)}</div> : <p>Nenhum pet cadastrado.</p>}
+              {selectedPets.length ? <div className="melpet-tutor-pet-grid">{selectedPets.map((pet) => <button type="button" className="melpet-tutor-pet-card melpet-tutor-pet-card-button" key={pet.id} onClick={() => onOpenPetFicha?.(selectedTutor, pet)}><div><strong>{pet.nome || "Pet sem nome"}</strong><span>{pet.raca || "Raca nao informada"}</span></div><em className={pet.ativo ? "is-active" : "is-inactive"}>{pet.ativo ? "Ativo" : "Inativo"}</em></button>)}</div> : <p>Nenhum pet cadastrado.</p>}
             </section>
 
-            <section className="admin-user-create-section">
+            <section className="admin-user-create-section melpet-tutor-standard-card">
               <div className="admin-user-section-title"><span>Documentos</span><h3>Documentos do tutor</h3></div>
               {loadingDocuments ? <p>Carregando documentos...</p> : documents.length ? <div className="melpet-tutor-document-list">{documents.map((file, index) => { const key = getDocumentKey(file) || String(index); return <article className="melpet-tutor-document-card" key={key}><div><strong>{file.tipoDocumento || "Documento"}</strong><span>{file.nomeDocumento || "Arquivo PDF"}</span><em className={file.conferido ? "is-approved" : file.status === "reprovado" ? "is-rejected" : "is-pending"}>{file.conferido ? "Aprovado" : file.status === "reprovado" ? "Reprovado" : "Pendente"}</em></div><div className="melpet-tutor-document-actions"><Button type="button" variant="outline" size="sm" disabled={!file.existsDisk} onClick={() => openDocumentPreview(file)}>Visualizar</Button></div></article>; })}</div> : <p>Nenhum documento encontrado.</p>}
             </section>
 
-            <section className="admin-user-create-section melpet-tutor-upload-card">
+            <section className="admin-user-create-section melpet-tutor-upload-card melpet-tutor-standard-card">
               <div className="admin-user-section-title"><span>Upload</span><h3>Upload pelo administrador</h3></div>
               <div className="admin-user-create-grid melpet-tutor-upload-grid">
                 <label>Tipo

@@ -2672,3 +2672,313 @@
     max-width: 1520px !important;
   }
 }
+
+/* Mel Pet tutor maintenance standard shell */
+.melpet-tutor-maintenance-page {
+  width: 100%;
+  max-width: 100%;
+}
+
+.melpet-tutor-maintenance-panel {
+  width: 100%;
+  max-width: 100% !important;
+  overflow: hidden;
+  border-radius: 22px !important;
+  background: linear-gradient(
+    180deg,
+    rgba(185, 226, 240, 0.98) 0%,
+    rgba(213, 240, 246, 0.96) 42%,
+    rgba(205, 190, 151, 0.78) 100%
+  ) !important;
+}
+
+.melpet-tutor-maintenance-panel .admin-user-create-header {
+  margin: clamp(14px, 3vw, 24px) clamp(14px, 3vw, 24px) 0;
+  border: 1.5px solid rgba(73, 150, 190, 0.24);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 8px 18px rgba(47, 36, 31, 0.05);
+  padding: clamp(14px, 3vw, 20px);
+}
+
+.melpet-tutor-search-card,
+.melpet-tutor-results-card,
+.melpet-tutor-standard-card,
+.melpet-tutor-selected-shell {
+  width: auto;
+  max-width: none !important;
+  margin: clamp(14px, 3vw, 24px) !important;
+  border: 1.5px solid rgba(73, 150, 190, 0.24) !important;
+  border-radius: 18px !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+  background-image: none !important;
+  box-shadow: 0 8px 18px rgba(47, 36, 31, 0.05) !important;
+  padding: clamp(14px, 3vw, 20px) !important;
+}
+
+.melpet-tutor-search-card {
+  display: grid;
+  gap: 14px;
+}
+
+.melpet-tutor-search-card .admin-user-section-title,
+.melpet-tutor-results-card .admin-user-section-title,
+.melpet-tutor-standard-card .admin-user-section-title,
+.melpet-tutor-selected-shell > .admin-user-section-title {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.melpet-tutor-search-card .admin-user-search-actions,
+.melpet-tutor-upload-actions {
+  margin: 0;
+  padding: 0;
+}
+
+.melpet-tutor-results-card .admin-user-search-results,
+.melpet-tutor-approval-card .admin-user-search-results,
+.melpet-tutor-document-list,
+.melpet-tutor-pet-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.melpet-tutor-results-card .admin-user-search-results > article,
+.melpet-tutor-approval-card .admin-user-search-results > article {
+  overflow: hidden;
+  border: 1.5px solid rgba(73, 150, 190, 0.22);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(230, 247, 252, 0.84));
+  box-shadow: 0 10px 22px rgba(47, 36, 31, 0.06);
+}
+
+.melpet-tutor-results-card .admin-user-search-result-pick,
+.melpet-tutor-approval-card .admin-user-search-result-pick {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 14px;
+}
+
+.melpet-tutor-selected-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.melpet-tutor-selected-shell > .melpet-tutor-standard-card {
+  width: 100%;
+  margin: 0 !important;
+}
+
+.melpet-tutor-profile-card .client-profile-readonly-grid,
+.melpet-tutor-pending-docs .client-profile-readonly-grid {
+  margin-top: 12px;
+}
+
+.melpet-tutor-pending-docs {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  border: 1.5px solid rgba(73, 150, 190, 0.22);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(230, 247, 252, 0.78));
+  padding: 14px;
+}
+
+@media (min-width: 760px) {
+  .melpet-tutor-search-card {
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 240px);
+    align-items: end;
+  }
+
+  .melpet-tutor-search-card .admin-user-section-title,
+  .melpet-tutor-search-card .admin-user-search-actions {
+    grid-column: 1 / -1;
+  }
+}
+.melpet-tutor-results-card .admin-user-search-results > article {
+  width: 100%;
+}
+.melpet-tutor-pet-card-button {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.melpet-tutor-pet-card-button:hover,
+.melpet-tutor-pet-card-button:focus-visible {
+  border-color: rgba(73, 150, 190, 0.48);
+  box-shadow: 0 14px 28px rgba(47, 36, 31, 0.1);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+/* Tutor maintenance uses the same visual pattern as Pesquisar Cliente */
+.melpet-tutor-client-search {
+  display: grid;
+  gap: clamp(14px, 3vw, 20px);
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.melpet-tutor-client-search-card {
+  width: auto;
+  max-width: none !important;
+  margin: clamp(14px, 3vw, 24px) !important;
+  overflow: hidden;
+  border-radius: 22px !important;
+  background: linear-gradient(
+    180deg,
+    rgba(185, 226, 240, 0.98) 0%,
+    rgba(213, 240, 246, 0.96) 42%,
+    rgba(205, 190, 151, 0.78) 100%
+  ) !important;
+}
+
+.melpet-tutor-client-search-band {
+  display: grid;
+  gap: 12px;
+  margin: clamp(14px, 3vw, 24px);
+  border: 1.5px solid rgba(73, 150, 190, 0.24);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88) !important;
+  background-image: none !important;
+  box-shadow: 0 8px 18px rgba(47, 36, 31, 0.05);
+  padding: clamp(14px, 3vw, 20px);
+}
+
+.melpet-tutor-client-search-form {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.melpet-tutor-client-search-form label {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  border: 1.5px solid rgba(73, 150, 190, 0.18);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 12px;
+}
+
+.melpet-tutor-client-search-form label > span {
+  color: #3a6383;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.melpet-tutor-client-search-form input,
+.melpet-tutor-client-search-form select {
+  min-height: 44px;
+  border: 1px solid rgba(73, 150, 190, 0.24);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.melpet-tutor-client-search-form .btn {
+  min-height: 46px;
+  border-radius: 999px;
+}
+
+.melpet-tutor-client-results {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin: 0;
+}
+
+.melpet-tutor-client-results > p {
+  margin: 0;
+  color: var(--cor-marrom);
+  font-weight: 850;
+  text-align: center;
+}
+
+.melpet-tutor-client-results .melpet-admin-client-result-card {
+  overflow: hidden;
+  border: 1.5px solid rgba(73, 150, 190, 0.22);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 10px 22px rgba(47, 36, 31, 0.06);
+}
+
+.melpet-tutor-client-results .melpet-admin-client-result-card.is-selected {
+  border-color: rgba(73, 150, 190, 0.56);
+  box-shadow: 0 14px 28px rgba(47, 36, 31, 0.1);
+}
+
+.melpet-tutor-client-results .melpet-admin-client-open-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 58px;
+  border: 0;
+  background: transparent;
+  color: var(--cor-marrom);
+  cursor: pointer;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.melpet-tutor-client-results .melpet-admin-client-open-button span,
+.melpet-tutor-client-results .melpet-admin-client-open-button strong,
+.melpet-tutor-client-results .melpet-admin-client-open-button small {
+  display: block;
+  min-width: 0;
+}
+
+.melpet-tutor-client-results .melpet-admin-client-open-button strong {
+  color: var(--cor-marrom);
+  font-size: 0.98rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.melpet-tutor-client-results .melpet-admin-client-open-button small {
+  color: rgba(67, 42, 31, 0.68);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.melpet-tutor-client-results .melpet-admin-client-open-button em {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(73, 150, 190, 0.14);
+  color: #2d6f8f;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+  padding: 8px 13px;
+}
+
+.melpet-tutor-document-card,
+.melpet-tutor-pet-card-button {
+  background: rgba(255, 255, 255, 0.86);
+}
+
+@media (min-width: 760px) {
+  .melpet-tutor-client-search-form {
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 240px) auto auto;
+    align-items: end;
+  }
+
+  .melpet-tutor-client-search-form .btn {
+    min-width: 128px;
+  }
+}
