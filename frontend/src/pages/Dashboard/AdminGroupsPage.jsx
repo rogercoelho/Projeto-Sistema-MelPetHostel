@@ -137,9 +137,9 @@ function AdminGroupsPage({ onBack }) {
   }
 
   return (
-    <main className="admin-page admin-user-create-page">
+    <main className="admin-page admin-user-create-page admin-management-page">
       <form
-        className="admin-page-panel admin-page-form admin-user-create-card"
+        className="admin-page-panel admin-page-form admin-user-create-card admin-management-panel"
         onSubmit={createGroup}
       >
         <header className="admin-user-create-header">
@@ -222,7 +222,7 @@ function AdminGroupsPage({ onBack }) {
         </section>
 
         {hasSearchedGroups ? (
-          <section className="admin-user-create-section admin-user-search-results-section">
+          <section className="admin-user-create-section admin-user-search-results-section admin-management-results-section">
             <div className="admin-user-section-title">
             <span>Resultado</span>
             <h3>Grupos encontrados</h3>

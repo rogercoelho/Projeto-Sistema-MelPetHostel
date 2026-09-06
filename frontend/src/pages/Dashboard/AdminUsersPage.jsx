@@ -202,9 +202,9 @@ function AdminUsersPage({ onBack }) {
   }
 
   return (
-    <main className="admin-page admin-user-create-page">
+    <main className="admin-page admin-user-create-page admin-management-page">
       <form
-        className="admin-page-panel admin-page-form admin-user-create-card"
+        className="admin-page-panel admin-page-form admin-user-create-card admin-management-panel"
         onSubmit={saveUser}
       >
         <header className="admin-user-create-header">
@@ -442,7 +442,7 @@ function AdminUsersPage({ onBack }) {
         </section>
 
         {hasSearchedUsers ? (
-          <section className="admin-user-create-section admin-user-search-results-section">
+          <section className="admin-user-create-section admin-user-search-results-section admin-management-results-section">
             <div className="admin-user-section-title">
               <span>Resultado</span>
               <h3>Usuários encontrados</h3>

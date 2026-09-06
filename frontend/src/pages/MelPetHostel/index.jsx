@@ -2327,7 +2327,7 @@ export default function MelPetHostel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, shouldEnforceContractGate]);
 
-useEffect(() => {
+  useEffect(() => {
     if (!isAdmin) return;
     if (activeMenu !== "aprovarCarteiraVacinacao") return;
     loadPendingVaccineCards();
@@ -2355,7 +2355,7 @@ useEffect(() => {
     loadHostingRequests();
   }, [isAdmin, userMenu]);
 
-useEffect(() => {
+  useEffect(() => {
     if (isAdmin) return;
 
     let ignore = false;
@@ -3830,7 +3830,7 @@ useEffect(() => {
                           >
                             {plano
                               ? `${formatCurrency(plano.valor)} / ${formatPlanTempo(plano)}`
-                              : "selecione um plano"}
+                              : "Selecione um plano"}
                           </span>
                         ) : null}
                       </em>
@@ -4688,9 +4688,13 @@ useEffect(() => {
             </label>
           </div>
 
-          {pixConfigError ? <p className="melpet-error">{pixConfigError}</p> : null}
+          {pixConfigError ? (
+            <p className="melpet-error">{pixConfigError}</p>
+          ) : null}
           {loadingPixConfig ? (
-            <p className="melpet-validate-message">Carregando configuracao...</p>
+            <p className="melpet-validate-message">
+              Carregando configuracao...
+            </p>
           ) : null}
 
           <div className="melpet-hosting-history-actions melpet-admin-pix-actions">
@@ -4707,7 +4711,9 @@ useEffect(() => {
       <div className="admin-user-create-section melpet-admin-hosting-payment-review-card">
         <div className="melpet-admin-hosting-payment-review-band">
           {loadingHostingPaymentReceipts ? (
-            <p className="melpet-validate-message">Carregando comprovantes pendentes...</p>
+            <p className="melpet-validate-message">
+              Carregando comprovantes pendentes...
+            </p>
           ) : pendingHostingPaymentRequests.length ? (
             <div className="melpet-hosting-history-list">
               {pendingHostingPaymentRequests.map((request) => {
@@ -4727,7 +4733,9 @@ useEffect(() => {
                     <div className="melpet-hosting-history-card-header">
                       <div>
                         <strong>
-                          {request.clienteNome || request.usuarioLogin || "Tutor"}
+                          {request.clienteNome ||
+                            request.usuarioLogin ||
+                            "Tutor"}
                         </strong>
                         <small>
                           Pedido #{request.id} - {formatCurrency(requestTotal)}
@@ -4742,7 +4750,9 @@ useEffect(() => {
                       <ul>
                         {pets.map((item) => (
                           <li key={item.id || item.petId || item.petNome}>
-                            <strong>{item.petNome || `Pet ${item.petId}`}</strong>
+                            <strong>
+                              {item.petNome || `Pet ${item.petId}`}
+                            </strong>
                             <small>Comprovantes pendentes</small>
                             <div className="melpet-hosting-payment-subgroup">
                               {pendingPayments.map((payment) => (
@@ -4750,7 +4760,9 @@ useEffect(() => {
                                   className="melpet-hosting-payment-subitem"
                                   key={payment.id}
                                 >
-                                  <strong>{getHostingPaymentLabel(payment)}</strong>
+                                  <strong>
+                                    {getHostingPaymentLabel(payment)}
+                                  </strong>
                                   <small>{formatCurrency(payment.valor)}</small>
                                   <small>
                                     {payment.enviadoEm
@@ -4763,7 +4775,9 @@ useEffect(() => {
                                         type="button"
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => openHostingPaymentPreview(payment)}
+                                        onClick={() =>
+                                          openHostingPaymentPreview(payment)
+                                        }
                                       >
                                         Visualizar
                                       </Button>
@@ -4771,8 +4785,12 @@ useEffect(() => {
                                     <Button
                                       type="button"
                                       size="sm"
-                                      disabled={approvingHostingPaymentId === payment.id}
-                                      onClick={() => approveHostingPaymentReceipt(payment)}
+                                      disabled={
+                                        approvingHostingPaymentId === payment.id
+                                      }
+                                      onClick={() =>
+                                        approveHostingPaymentReceipt(payment)
+                                      }
                                     >
                                       {approvingHostingPaymentId === payment.id
                                         ? "Aprovando..."
@@ -4782,9 +4800,14 @@ useEffect(() => {
                                       type="button"
                                       variant="danger"
                                       size="sm"
-                                      disabled={approvingHostingPaymentId === payment.id}
+                                      disabled={
+                                        approvingHostingPaymentId === payment.id
+                                      }
                                       onClick={() =>
-                                        openRejectHostingPaymentModal(payment, request)
+                                        openRejectHostingPaymentModal(
+                                          payment,
+                                          request,
+                                        )
                                       }
                                     >
                                       Recusar
@@ -4802,7 +4825,9 @@ useEffect(() => {
               })}
             </div>
           ) : (
-            <p className="melpet-validate-message">Nenhum comprovante pendente no momento.</p>
+            <p className="melpet-validate-message">
+              Nenhum comprovante pendente no momento.
+            </p>
           )}
         </div>
       </div>
@@ -4813,13 +4838,16 @@ useEffect(() => {
       <div className="admin-user-create-section melpet-admin-card-payment-link-card">
         <div className="melpet-admin-card-payment-link-band">
           {loadingCardPaymentRequests ? (
-            <p className="melpet-validate-message">Carregando links pendentes...</p>
+            <p className="melpet-validate-message">
+              Carregando links pendentes...
+            </p>
           ) : pendingCardPaymentRequests.length ? (
             <div className="melpet-hosting-history-list">
               {pendingCardPaymentRequests.map((request) => {
                 const pendingLinks = (request.pagamentos || []).filter(
                   (payment) =>
-                    payment.parcelaTipo === "cartao_credito" && !payment.linkPagamento,
+                    payment.parcelaTipo === "cartao_credito" &&
+                    !payment.linkPagamento,
                 );
                 const requestTotal = request.valorFinal ?? request.valorTotal;
                 const pets = request.itens?.length
@@ -4834,7 +4862,9 @@ useEffect(() => {
                     <div className="melpet-hosting-history-card-header">
                       <div>
                         <strong>
-                          {request.clienteNome || request.usuarioLogin || "Tutor"}
+                          {request.clienteNome ||
+                            request.usuarioLogin ||
+                            "Tutor"}
                         </strong>
                         <small>
                           Pedido #{request.id} - {formatCurrency(requestTotal)}
@@ -4849,7 +4879,9 @@ useEffect(() => {
                       <ul>
                         {pets.map((item) => (
                           <li key={item.id || item.petId || item.petNome}>
-                            <strong>{item.petNome || `Pet ${item.petId}`}</strong>
+                            <strong>
+                              {item.petNome || `Pet ${item.petId}`}
+                            </strong>
                             <small>Link de pagamento pendente</small>
                             <div className="melpet-hosting-payment-subgroup">
                               {pendingLinks.map((payment) => (
@@ -4857,7 +4889,9 @@ useEffect(() => {
                                   className="melpet-hosting-payment-subitem"
                                   key={payment.id}
                                 >
-                                  <strong>{getHostingPaymentLabel(payment)}</strong>
+                                  <strong>
+                                    {getHostingPaymentLabel(payment)}
+                                  </strong>
                                   <small>{formatCurrency(payment.valor)}</small>
                                   <label className="pet-form-field melpet-card-link-field">
                                     <span>Link de pagamento</span>
@@ -4894,8 +4928,12 @@ useEffect(() => {
                                     <Button
                                       type="button"
                                       size="sm"
-                                      disabled={sendingCardPaymentLinkId === payment.id}
-                                      onClick={() => sendCardPaymentLink(payment, request)}
+                                      disabled={
+                                        sendingCardPaymentLinkId === payment.id
+                                      }
+                                      onClick={() =>
+                                        sendCardPaymentLink(payment, request)
+                                      }
                                     >
                                       {sendingCardPaymentLinkId === payment.id
                                         ? "Enviando..."
@@ -4914,7 +4952,9 @@ useEffect(() => {
               })}
             </div>
           ) : (
-            <p className="melpet-validate-message">Nenhum pagamento por cartao pendente no momento.</p>
+            <p className="melpet-validate-message">
+              Nenhum pagamento por cartao pendente no momento.
+            </p>
           )}
         </div>
       </div>
@@ -4925,7 +4965,9 @@ useEffect(() => {
       <div className="admin-user-create-section melpet-admin-hosting-checkin-card">
         <div className="melpet-admin-hosting-checkin-band">
           {loadingHostingCheckinRequests ? (
-            <p className="melpet-validate-message">Carregando hospedagens confirmadas...</p>
+            <p className="melpet-validate-message">
+              Carregando hospedagens confirmadas...
+            </p>
           ) : pendingHostingCheckinRequests.length ? (
             <div className="melpet-hosting-history-list">
               {pendingHostingCheckinRequests.map((request) => {
@@ -4941,7 +4983,9 @@ useEffect(() => {
                     <div className="melpet-hosting-history-card-header">
                       <div>
                         <strong>
-                          {request.clienteNome || request.usuarioLogin || "Tutor"}
+                          {request.clienteNome ||
+                            request.usuarioLogin ||
+                            "Tutor"}
                         </strong>
                         <small>
                           Pedido #{request.id} - {formatCurrency(requestTotal)}
@@ -4956,10 +5000,14 @@ useEffect(() => {
                       <ul>
                         {pets.map((item) => (
                           <li key={item.id || item.petId || item.petNome}>
-                            <strong>{item.petNome || `Pet ${item.petId}`}</strong>
+                            <strong>
+                              {item.petNome || `Pet ${item.petId}`}
+                            </strong>
                             <small>{request.tipo || "Hospedagem"}</small>
                             <small>{formatHostingItemPeriod(item)}</small>
-                            <strong>{formatCurrency(item.valorTotal || requestTotal)}</strong>
+                            <strong>
+                              {formatCurrency(item.valorTotal || requestTotal)}
+                            </strong>
                           </li>
                         ))}
                       </ul>
@@ -4994,7 +5042,9 @@ useEffect(() => {
               })}
             </div>
           ) : (
-            <p className="melpet-validate-message">Nenhuma hospedagem confirmada aguardando check-in.</p>
+            <p className="melpet-validate-message">
+              Nenhuma hospedagem confirmada aguardando check-in.
+            </p>
           )}
         </div>
       </div>
@@ -5009,128 +5059,138 @@ useEffect(() => {
           ) : null}
 
           {loadingPendingHostingRequests ? (
-            <p className="melpet-validate-message">Carregando hospedagens pendentes...</p>
+            <p className="melpet-validate-message">
+              Carregando hospedagens pendentes...
+            </p>
           ) : pendingHostingRequests.length ? (
             <div className="melpet-hosting-history-list">
-          {pendingHostingRequests.map((request) => {
-            const isOpen = selectedPendingHostingId === request.id;
-            const requestTotal = request.valorFinal ?? request.valorTotal;
-            const busy = reviewingHostingRequestId === request.id;
-            return (
-              <article
-                className={`melpet-hosting-history-card ${isOpen ? "is-open" : ""}`}
-                key={request.id}
-              >
-                <button
-                  type="button"
-                  className="melpet-hosting-history-card-toggle"
-                  aria-expanded={isOpen}
-                  onClick={() =>
-                    setSelectedPendingHostingId((current) =>
-                      current === request.id ? null : request.id,
-                    )
-                  }
-                >
-                  <div className="melpet-hosting-history-card-main">
-                    <div className="melpet-hosting-history-card-topline">
-                      <strong>
-                        {request.clienteNome || request.usuarioLogin || "Tutor"}
-                      </strong>
-                      <span className="melpet-hosting-history-card-badge">
-                        Pedido #{request.id}
-                      </span>
-                    </div>
-                    <div className="melpet-hosting-history-card-date">
-                      <span>Data do pedido</span>
-                      <strong>{formatDateTime(request.criadoEm)}</strong>
-                    </div>
-                  </div>
-                  <span className="melpet-hosting-history-status is-pending">
-                    <strong>Pendente</strong>
-                    <span>{request.itens?.length || 0} item(s)</span>
-                  </span>
-                  <span
-                    className="melpet-hosting-history-toggle-icon"
-                    aria-hidden="true"
+              {pendingHostingRequests.map((request) => {
+                const isOpen = selectedPendingHostingId === request.id;
+                const requestTotal = request.valorFinal ?? request.valorTotal;
+                const busy = reviewingHostingRequestId === request.id;
+                return (
+                  <article
+                    className={`melpet-hosting-history-card ${isOpen ? "is-open" : ""}`}
+                    key={request.id}
                   >
-                    {isOpen ? "−" : "+"}
-                  </span>
-                </button>
+                    <button
+                      type="button"
+                      className="melpet-hosting-history-card-toggle"
+                      aria-expanded={isOpen}
+                      onClick={() =>
+                        setSelectedPendingHostingId((current) =>
+                          current === request.id ? null : request.id,
+                        )
+                      }
+                    >
+                      <div className="melpet-hosting-history-card-main">
+                        <div className="melpet-hosting-history-card-topline">
+                          <strong>
+                            {request.clienteNome ||
+                              request.usuarioLogin ||
+                              "Tutor"}
+                          </strong>
+                          <span className="melpet-hosting-history-card-badge">
+                            Pedido #{request.id}
+                          </span>
+                        </div>
+                        <div className="melpet-hosting-history-card-date">
+                          <span>Data do pedido</span>
+                          <strong>{formatDateTime(request.criadoEm)}</strong>
+                        </div>
+                      </div>
+                      <span className="melpet-hosting-history-status is-pending">
+                        <strong>Pendente</strong>
+                        <span>{request.itens?.length || 0} item(s)</span>
+                      </span>
+                      <span
+                        className="melpet-hosting-history-toggle-icon"
+                        aria-hidden="true"
+                      >
+                        {isOpen ? "−" : "+"}
+                      </span>
+                    </button>
 
-                {isOpen ? (
-                  <>
-                    <dl className="melpet-hosting-history-meta">
-                      <div>
-                        <dt>Tutor</dt>
-                        <dd>
-                          {request.clienteNome || request.usuarioLogin || "-"}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Serviço</dt>
-                        <dd>{request.tipo || "-"}</dd>
-                      </div>
-                      <div>
-                        <dt>Período</dt>
-                        <dd>{formatHostingRequestPeriod(request)}</dd>
-                      </div>
-                      <div>
-                        <dt>Total solicitado</dt>
-                        <dd>{formatCurrency(requestTotal)}</dd>
-                      </div>
-                    </dl>
-                    <div className="melpet-hosting-history-items">
-                      <h4>Itens</h4>
-                      <ul>
-                        {(request.itens || []).map((item) => (
-                          <li key={item.id}>
-                            <strong>
-                              {item.petNome || `Pet ${item.petId}`}
-                            </strong>
-                            <small>
-                              {item.tipo} / {item.tempoQuantidade}{" "}
-                              {item.tempoUnidade} {"->"}{" "}
-                              {formatCurrency(item.valorDiaria)}
-                            </small>
-                            <small>{formatHostingItemPeriod(item)}</small>
-                            <strong>{formatCurrency(item.valorTotal)}</strong>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="melpet-hosting-history-actions">
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() => approveHostingRequest(request)}
-                      >
-                        {busy ? "Processando..." : "Aprovar"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="danger"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() => openRejectHostingModal(request)}
-                      >
-                        Reprovar
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <p className="melpet-hosting-history-card-summary">
-                    {request.tipo || "Hospedagem"} ·{" "}
-                    {formatHostingRequestPeriod(request)} ·{" "}
-                    {formatCurrency(requestTotal)}
-                  </p>
-                )}
-              </article>
-            );
-          })}
-                    </div>
+                    {isOpen ? (
+                      <>
+                        <dl className="melpet-hosting-history-meta">
+                          <div>
+                            <dt>Tutor</dt>
+                            <dd>
+                              {request.clienteNome ||
+                                request.usuarioLogin ||
+                                "-"}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Serviço</dt>
+                            <dd>{request.tipo || "-"}</dd>
+                          </div>
+                          <div>
+                            <dt>Período</dt>
+                            <dd>{formatHostingRequestPeriod(request)}</dd>
+                          </div>
+                          <div>
+                            <dt>Total solicitado</dt>
+                            <dd>{formatCurrency(requestTotal)}</dd>
+                          </div>
+                        </dl>
+                        <div className="melpet-hosting-history-items">
+                          <h4>Itens</h4>
+                          <ul>
+                            {(request.itens || []).map((item) => (
+                              <li key={item.id}>
+                                <strong>
+                                  {item.petNome || `Pet ${item.petId}`}
+                                </strong>
+                                <small>
+                                  {item.tipo} / {item.tempoQuantidade}{" "}
+                                  {item.tempoUnidade} {"->"}{" "}
+                                  {formatCurrency(item.valorDiaria)}
+                                </small>
+                                <small>{formatHostingItemPeriod(item)}</small>
+                                <strong>
+                                  {formatCurrency(item.valorTotal)}
+                                </strong>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="melpet-hosting-history-actions">
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => approveHostingRequest(request)}
+                          >
+                            {busy ? "Processando..." : "Aprovar"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => openRejectHostingModal(request)}
+                          >
+                            Reprovar
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="melpet-hosting-history-card-summary">
+                        {request.tipo || "Hospedagem"} ·{" "}
+                        {formatHostingRequestPeriod(request)} ·{" "}
+                        {formatCurrency(requestTotal)}
+                      </p>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
           ) : (
-            <p className="melpet-validate-message">Nenhuma hospedagem pendente no momento.</p>
+            <p className="melpet-validate-message">
+              Nenhuma hospedagem pendente no momento.
+            </p>
           )}
         </div>
       </div>
@@ -5189,7 +5249,7 @@ useEffect(() => {
         className="admin-user-create-section melpet-admin-vaccine-config-card"
         onSubmit={saveVaccineConfig}
       >
-<label>
+        <label>
           Descrição
           <input
             type="text"
@@ -5295,7 +5355,7 @@ useEffect(() => {
       </form>
 
       <section className="admin-user-create-section melpet-admin-vaccine-config-list-card">
-{loadingVaccineConfig ? (
+        {loadingVaccineConfig ? (
           <p>Carregando itens...</p>
         ) : vaccineConfigItems.length ? (
           <div className="admin-page-list">
@@ -5928,7 +5988,7 @@ useEffect(() => {
   const adminVaccineApprovalContent = (
     <section className="melpet-section-content melpet-admin-vaccine-approval-content">
       <div className="admin-user-create-section melpet-admin-vaccine-pending-card">
-<div className="melpet-admin-vaccine-pending-band">
+        <div className="melpet-admin-vaccine-pending-band">
           <p className="melpet-validate-subtitle">
             Usuários com carteira de vacinação pendente de conferência:
           </p>
@@ -6690,7 +6750,7 @@ useEffect(() => {
                   </div>
                   <div>
                     <dt>Peso</dt>
-                    <dd>{selectedAdminPet.pesoAproximado || "-"}</dd>
+                    <dd>{selectedAdminPet.pesoAproximado || "-"} Kg</dd>
                   </div>
                   <div>
                     <dt>Raça</dt>
@@ -6793,7 +6853,7 @@ useEffect(() => {
   if (!isAdmin && userMenu === "hospedagem") {
     return (
       <>
-        <MenuTemplate panels={hostingPanels} />
+        <MenuTemplate className="melpet-user-hosting-menu" panels={hostingPanels} />
         {deletePetModal}
       </>
     );
@@ -6805,7 +6865,7 @@ useEffect(() => {
   ) {
     return (
       <>
-        <MenuTemplate panels={userPetRegistrationPanels} />
+        <MenuTemplate className="melpet-pet-registration-menu" panels={userPetRegistrationPanels} />
         {deletePetModal}
       </>
     );
@@ -6814,6 +6874,7 @@ useEffect(() => {
   return (
     <>
       <MenuTemplate
+        className="melpet-user-documents-menu"
         panels={
           !loadingStatus &&
           !statusError &&

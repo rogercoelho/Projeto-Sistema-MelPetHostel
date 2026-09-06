@@ -28,6 +28,69 @@ function clean(value) {
   return value === undefined || value === null ? "" : String(value).trim();
 }
 
+function repairMojibake(value) {
+  const text = clean(value);
+  if (!/[\u00C3\u00C2\uFFFD]/u.test(text)) return text;
+
+  const chars = {
+    aAcute: String.fromCharCode(0x00e1),
+    aCirc: String.fromCharCode(0x00e2),
+    aTilde: String.fromCharCode(0x00e3),
+    cCedilla: String.fromCharCode(0x00e7),
+    eAcute: String.fromCharCode(0x00e9),
+    eCirc: String.fromCharCode(0x00ea),
+    iAcute: String.fromCharCode(0x00ed),
+    oAcute: String.fromCharCode(0x00f3),
+    oCirc: String.fromCharCode(0x00f4),
+    oTilde: String.fromCharCode(0x00f5),
+    uAcute: String.fromCharCode(0x00fa),
+    capAGrave: String.fromCharCode(0x00c0),
+    capAAcute: String.fromCharCode(0x00c1),
+    capACirc: String.fromCharCode(0x00c2),
+    capATilde: String.fromCharCode(0x00c3),
+    capCCedilla: String.fromCharCode(0x00c7),
+    capEAcute: String.fromCharCode(0x00c9),
+    capECirc: String.fromCharCode(0x00ca),
+    capIAcute: String.fromCharCode(0x00cd),
+    capOAcute: String.fromCharCode(0x00d3),
+    capOCirc: String.fromCharCode(0x00d4),
+    capOTilde: String.fromCharCode(0x00d5),
+    capUAcute: String.fromCharCode(0x00da),
+    middleDot: String.fromCharCode(0x00b7),
+    ordinalMasc: String.fromCharCode(0x00ba),
+    ordinalFem: String.fromCharCode(0x00aa),
+  };
+
+  return text
+    .replace(/\u00C3\u00A1/gu, chars.aAcute)
+    .replace(/\u00C3\u00A2/gu, chars.aCirc)
+    .replace(/\u00C3\u00A3/gu, chars.aTilde)
+    .replace(/\u00C3\u00A7/gu, chars.cCedilla)
+    .replace(/\u00C3\u00A9/gu, chars.eAcute)
+    .replace(/\u00C3\u00AA/gu, chars.eCirc)
+    .replace(/\u00C3\u00AD/gu, chars.iAcute)
+    .replace(/\u00C3\u00B3/gu, chars.oAcute)
+    .replace(/\u00C3\u00B4/gu, chars.oCirc)
+    .replace(/\u00C3\u00B5/gu, chars.oTilde)
+    .replace(/\u00C3\u00BA/gu, chars.uAcute)
+    .replace(/\u00C3\u0080/gu, chars.capAGrave)
+    .replace(/\u00C3\u0081/gu, chars.capAAcute)
+    .replace(/\u00C3\u0082/gu, chars.capACirc)
+    .replace(/\u00C3\u0083/gu, chars.capATilde)
+    .replace(/\u00C3\u0087/gu, chars.capCCedilla)
+    .replace(/\u00C3\u0089/gu, chars.capEAcute)
+    .replace(/\u00C3\u008A/gu, chars.capECirc)
+    .replace(/\u00C3\u008D/gu, chars.capIAcute)
+    .replace(/\u00C3\u0093/gu, chars.capOAcute)
+    .replace(/\u00C3\u0094/gu, chars.capOCirc)
+    .replace(/\u00C3\u0095/gu, chars.capOTilde)
+    .replace(/\u00C3\u009A/gu, chars.capUAcute)
+    .replace(/\u00C2\u00B7/gu, chars.middleDot)
+    .replace(/\u00C2\u00BA/gu, chars.ordinalMasc)
+    .replace(/\u00C2\u00AA/gu, chars.ordinalFem)
+    .replace(/\u00C2/gu, "")
+    .replace(/\uFFFD/gu, "");
+}
 function uniqueCleanList(values) {
   const seen = new Set();
   const result = [];
@@ -1003,7 +1066,7 @@ async function sendTelegram(chatId, text, options = {}) {
   const activeBot = await getBotForSend(module, options.db || dbPool);
   if (!activeBot) throw new Error("Telegram bot not configured");
   if (!chatId) throw new Error("Missing chatId");
-  return activeBot.sendMessage(chatId, String(text), { parse_mode: "HTML" });
+  return activeBot.sendMessage(chatId, repairMojibake(text), { parse_mode: "HTML" });
 }
 
 module.exports = {

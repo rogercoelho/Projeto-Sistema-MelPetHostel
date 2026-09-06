@@ -324,8 +324,8 @@ function AdminUserMaintenancePage({ onBack }) {
   }
 
   return (
-    <main className="admin-page admin-user-create-page">
-      <div className="admin-page-panel admin-page-form admin-user-create-card">
+    <main className="admin-page admin-user-create-page admin-management-page">
+      <div className="admin-page-panel admin-page-form admin-user-create-card admin-management-panel">
         <header className="admin-user-create-header">
           <div className="admin-user-create-heading">
             <span>Administração de Usuários</span>
@@ -370,7 +370,7 @@ function AdminUserMaintenancePage({ onBack }) {
         </section>
 
         {hasSearchedUsers ? (
-          <section className="admin-user-create-section admin-user-search-results-section">
+          <section className="admin-user-create-section admin-user-search-results-section admin-user-maintenance-results-section admin-management-results-section">
             <div className="admin-user-section-title">
               <span>Resultado</span>
               <h3>Usuários encontrados</h3>

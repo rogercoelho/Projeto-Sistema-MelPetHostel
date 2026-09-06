@@ -63,8 +63,8 @@ function ClientProfilePage({ cliente, loading, error, onBack, onReload }) {
       description="Consulte seus dados pessoais e endereços cadastrados."
       onBack={onBack}
     >
-      <section className="admin-page-layout client-profile-readonly">
-        <section className="admin-page-panel">
+      <section className="admin-page-layout client-profile-readonly melpet-client-profile-page">
+        <section className="admin-page-panel melpet-client-profile-card">
           <div className="admin-page-panel-title">
             <span>Dados pessoais</span>
             <h3>{formatValue(cliente?.nome)}</h3>
@@ -126,7 +126,7 @@ function ClientProfilePage({ cliente, loading, error, onBack, onReload }) {
         </section>
 
         {!loading && !error ? (
-          <section className="admin-page-panel">
+          <section className="admin-page-panel melpet-client-profile-card">
             <div className="admin-page-panel-title">
               <span>Endereços</span>
               <h3>Endereços cadastrados</h3>
