@@ -23,7 +23,8 @@ function getDbConfig({ multipleStatements = false } = {}) {
     user: clean(process.env.DB_USER),
     password: clean(process.env.DB_PASSWORD),
     database: clean(process.env.DB_NAME),
-    timezone: clean(process.env.DB_TIMEZONE) || "Z",
+    timezone: "Z",
+    dateStrings: true,
     connectTimeout: numberFromEnv("DB_CONNECT_TIMEOUT", 10000),
     multipleStatements,
   };

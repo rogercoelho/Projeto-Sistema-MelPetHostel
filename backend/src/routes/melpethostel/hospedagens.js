@@ -146,6 +146,154 @@ async function getActivePixConfig(req) {
   return rows && rows[0] ? rows[0] : null;
 }
 
+async function ensureHostingMonthlyPaymentsTable(req) {
+  await ensureHostingPaymentsTable(req);
+  const db = dbFor(req);
+  await db.query(
+    "CREATE TABLE IF NOT EXISTS " +
+      qtable(TABLE_NAMES.hospedagemMensalidades) +
+      " (" +
+      "id INT NOT NULL AUTO_INCREMENT," +
+      "solicitacao_id INT NOT NULL," +
+      "cliente_id INT NOT NULL," +
+      "competencia CHAR(7) NOT NULL," +
+      "pagamento_id INT NULL DEFAULT NULL," +
+      "valor DECIMAL(10,2) NOT NULL DEFAULT 0.00," +
+      "status VARCHAR(30) NOT NULL DEFAULT 'aguardando_pagamento'," +
+      "solicitado_cancelamento_em DATETIME NULL DEFAULT NULL," +
+      "criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP," +
+      "atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+      "PRIMARY KEY (id)," +
+      "UNIQUE KEY uk_hosp_mensal_competencia (solicitacao_id, competencia)," +
+      "INDEX idx_hosp_mensal_cliente (cliente_id)," +
+      "INDEX idx_hosp_mensal_status (status)," +
+      "INDEX idx_hosp_mensal_pagamento (pagamento_id)," +
+      "CONSTRAINT fk_hosp_mensal_solic FOREIGN KEY (solicitacao_id) REFERENCES Hospedagem_Solicitacoes (id) ON DELETE CASCADE," +
+      "CONSTRAINT fk_hosp_mensal_pag FOREIGN KEY (pagamento_id) REFERENCES Hospedagem_Pagamentos (id) ON DELETE SET NULL" +
+      ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+  );
+}
+
+function getMonthlyCompetence(request) {
+  const raw = clean(request?.inicioMes || request?.itens?.[0]?.inicioMes);
+  const match = raw.match(/^(\d{4})-(\d{2})/);
+  if (match) return `${match[1]}-${match[2]}`;
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+function getCurrentMonthlyCompetence() {
+  const now = new Date();
+  const saoPauloDate = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }),
+  );
+  return `${saoPauloDate.getFullYear()}-${String(
+    saoPauloDate.getMonth() + 1,
+  ).padStart(2, "0")}`;
+}
+
+function getCurrentMonthEndDate() {
+  const now = new Date();
+  const saoPauloDate = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }),
+  );
+  return new Date(
+    saoPauloDate.getFullYear(),
+    saoPauloDate.getMonth() + 1,
+    0,
+    23,
+    59,
+    59,
+  );
+}
+
+function isCurrentMonthEnd() {
+  const now = new Date();
+  const saoPauloDate = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }),
+  );
+  return saoPauloDate.getDate() === getCurrentMonthEndDate().getDate();
+}
+
+function formatShortDate(value) {
+  return value.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  });
+}
+function getHostingPaymentsFromRequest(request) {
+  if (Array.isArray(request?.pagamentos)) return request.pagamentos;
+  return request?.pagamento ? [request.pagamento] : [];
+}
+
+function getMonthlyPaymentType(competencia) {
+  return "mensal_" + clean(competencia).replace("-", "_");
+}
+async function ensureCurrentMonthlyPayment(req, request) {
+  if (!request || !isMonthlyHostingRequest(request)) return false;
+  if (normalizeHostingStatus(request.status) !== "confirmado") return false;
+  await ensureHostingMonthlyPaymentsTable(req);
+  const competencia = getCurrentMonthlyCompetence();
+  const parcelaTipo = getMonthlyPaymentType(competencia);
+  const existing = (request.pagamentos || []).some(
+    (payment) => clean(payment.parcelaTipo) === parcelaTipo,
+  );
+  if (existing) return false;
+  const pixConfig = await getActivePixConfig(req);
+  if (!pixConfig?.chavePix) return false;
+  const valor = Number(request.valorFinal ?? request.valorTotal ?? 0);
+  const pixCopiaCola = buildPixPayload({
+    key: pixConfig.chavePix,
+    name: pixConfig.nomeRecebedor,
+    city: pixConfig.cidadeRecebedor,
+    amount: valor,
+    description: "HOSPMENSAL" + request.id + competencia.replace("-", ""),
+  });
+  await dbFor(req).query(
+    "INSERT INTO " +
+      qtable(TABLE_NAMES.hospedagemPagamentos) +
+      " (solicitacao_id, cliente_id, parcela_tipo, valor, pix_copia_cola, qr_code_url, status) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE valor = VALUES(valor), pix_copia_cola = VALUES(pix_copia_cola), qr_code_url = VALUES(qr_code_url), atualizado_em = CURRENT_TIMESTAMP",
+    [
+      request.id,
+      request.clienteId,
+      parcelaTipo,
+      valor,
+      pixCopiaCola,
+      buildPixQrCodeUrl(pixCopiaCola),
+      "aguardando_comprovante",
+    ],
+  );
+  const [paymentRows] = await dbFor(req).query(
+    "SELECT id FROM " +
+      qtable(TABLE_NAMES.hospedagemPagamentos) +
+      " WHERE solicitacao_id = ? AND parcela_tipo = ? LIMIT 1",
+    [request.id, parcelaTipo],
+  );
+  await dbFor(req).query(
+    "INSERT INTO " +
+      qtable(TABLE_NAMES.hospedagemMensalidades) +
+      " (solicitacao_id, cliente_id, competencia, pagamento_id, valor, status) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE pagamento_id = VALUES(pagamento_id), valor = VALUES(valor), status = VALUES(status), atualizado_em = CURRENT_TIMESTAMP",
+    [
+      request.id,
+      request.clienteId,
+      competencia,
+      paymentRows?.[0]?.id || null,
+      valor,
+      "aguardando_comprovante",
+    ],
+  );
+  return true;
+}
+
+async function ensureCurrentMonthlyPaymentsForRequests(req, requests) {
+  const items = Array.isArray(requests) ? requests : [];
+  let changed = false;
+  for (const request of items) {
+    changed = (await ensureCurrentMonthlyPayment(req, request)) || changed;
+  }
+  return changed;
+}
 async function ensureHostingPaymentsTable(req) {
   const db = dbFor(req);
   await db.query(
@@ -371,7 +519,7 @@ async function loadHostingRequestById(req, solicitacaoId) {
   );
 
   if (!solicitacoesTable || !itensTable) return null;
-  await ensureHostingPaymentsTable(req);
+  await ensureHostingMonthlyPaymentsTable(req);
 
   const [rows] = await db.query(
     `
@@ -410,6 +558,9 @@ async function loadHostingRequestById(req, solicitacaoId) {
         p.enviado_em AS pagamento_enviado_em,
         p.conferido_por AS pagamento_conferido_por,
         p.conferido_em AS pagamento_conferido_em,
+        m.competencia AS mensalidade_competencia,
+        m.status AS mensalidade_status,
+        m.solicitado_cancelamento_em AS mensalidade_cancelamento_solicitado_em,
         i.id AS item_id,
         i.pet_id AS item_pet_id,
         COALESCE(i.pet_nome, pet.nome) AS item_pet_nome,
@@ -430,6 +581,7 @@ async function loadHostingRequestById(req, solicitacaoId) {
       LEFT JOIN Pets pet ON pet.id = i.pet_id
       LEFT JOIN Pet_Fichas ficha ON ficha.pet_id = i.pet_id
       LEFT JOIN ${qtable(TABLE_NAMES.hospedagemPagamentos)} p ON p.solicitacao_id = s.id
+      LEFT JOIN ${qtable(TABLE_NAMES.hospedagemMensalidades)} m ON m.pagamento_id = p.id
       LEFT JOIN Clientes c ON c.id = s.cliente_id
       LEFT JOIN Usuarios u ON u.cliente_id = s.cliente_id
       WHERE s.id = ?
@@ -687,6 +839,13 @@ Muito obrigado por escolher a Mel pet Hostel.`,
   }
   return result;
 }
+function isMonthlyHostingRequest(request) {
+  if (normalizeBillingMode(request?.modoCobranca) === "mensal") return true;
+  return (request?.itens || []).some(
+    (item) => normalizeBillingMode(item?.modoCobranca) === "mensal",
+  );
+}
+
 function getAllowedHostingStatusTransition(status) {
   const normalized = normalizeHostingStatus(status);
   if (
@@ -766,6 +925,10 @@ function mapHostingRows(rows) {
           enviadoEm: row.pagamento_enviado_em || null,
           conferidoPor: row.pagamento_conferido_por || "",
           conferidoEm: row.pagamento_conferido_em || null,
+          mensalidadeCompetencia: row.mensalidade_competencia || "",
+          mensalidadeStatus: row.mensalidade_status || "",
+          mensalidadeCancelamentoSolicitadoEm:
+            row.mensalidade_cancelamento_solicitado_em || null,
         };
         solicitacao.pagamentos.push(pagamento);
         if (!solicitacao.pagamento) solicitacao.pagamento = pagamento;
@@ -800,7 +963,7 @@ function mapHostingRows(rows) {
 }
 async function listHostingRequests(
   req,
-  { clienteId = null, status = "" } = {},
+  { clienteId = null, status = "", ensureMonthly = true } = {},
 ) {
   const db = dbFor(req);
   const solicitacoesTable = await resolveTableName(
@@ -812,7 +975,7 @@ async function listHostingRequests(
     TABLE_NAMES.hospedagemSolicitacaoItens,
   );
   if (!solicitacoesTable || !itensTable) return null;
-  await ensureHostingPaymentsTable(req);
+  await ensureHostingMonthlyPaymentsTable(req);
   const where = [];
   const params = [];
   if (clienteId) {
@@ -859,6 +1022,9 @@ async function listHostingRequests(
         p.enviado_em AS pagamento_enviado_em,
         p.conferido_por AS pagamento_conferido_por,
         p.conferido_em AS pagamento_conferido_em,
+        m.competencia AS mensalidade_competencia,
+        m.status AS mensalidade_status,
+        m.solicitado_cancelamento_em AS mensalidade_cancelamento_solicitado_em,
         i.id AS item_id,
         i.pet_id AS item_pet_id,
         COALESCE(i.pet_nome, pet.nome) AS item_pet_nome,
@@ -879,13 +1045,42 @@ async function listHostingRequests(
       LEFT JOIN Pets pet ON pet.id = i.pet_id
       LEFT JOIN Pet_Fichas ficha ON ficha.pet_id = i.pet_id
       LEFT JOIN ${qtable(TABLE_NAMES.hospedagemPagamentos)} p ON p.solicitacao_id = s.id
+      LEFT JOIN ${qtable(TABLE_NAMES.hospedagemMensalidades)} m ON m.pagamento_id = p.id
       LEFT JOIN Clientes c ON c.id = s.cliente_id
       LEFT JOIN Usuarios u ON u.cliente_id = s.cliente_id
       ${where.length ? "WHERE " + where.join(" AND ") : ""}
       ORDER BY s.criado_em DESC, i.id ASC
     `;
   const [rows] = await db.query(sql, params);
-  return mapHostingRows(rows);
+  const requests = mapHostingRows(rows);
+  if (ensureMonthly && isCurrentMonthEnd()) {
+    const shouldCancelMonthly = requests.filter(
+      (request) =>
+        normalizeHostingStatus(request.status) === "confirmado" &&
+        isMonthlyHostingRequest(request) &&
+        getHostingPaymentsFromRequest(request).some(
+          (payment) => payment.mensalidadeStatus === "cancelamento_solicitado",
+        ),
+    );
+    for (const request of shouldCancelMonthly) {
+      await db.query(
+        "UPDATE " +
+          qtable(solicitacoesTable) +
+          " SET status = 'cancelado', atualizado_em = CURRENT_TIMESTAMP WHERE id = ?",
+        [request.id],
+      );
+    }
+    if (shouldCancelMonthly.length) {
+      return listHostingRequests(req, { clienteId, status, ensureMonthly: false });
+    }
+  }
+  if (ensureMonthly) {
+    const changed = await ensureCurrentMonthlyPaymentsForRequests(req, requests);
+    if (changed) {
+      return listHostingRequests(req, { clienteId, status, ensureMonthly: false });
+    }
+  }
+  return requests;
 }
 
 router.get("/hospedagens/pix-config", async (req, res) => {
@@ -1172,6 +1367,13 @@ router.post(
           status: "erro",
           mensagem: "O pagamento só pode ser gerado para hospedagem aprovada.",
         });
+      const requestForPaymentRule = await loadHostingRequestById(req, solicitacaoId);
+      if (["dividido", "reserva_checkin"].includes(opcao) && isMonthlyHostingRequest(requestForPaymentRule)) {
+        return res.status(400).json({
+          status: "erro",
+          mensagem: "Planos mensais permitem apenas pagamento total ou cartao de credito.",
+        });
+      }
       const isCardPayment = opcao === "cartao_credito";
       const pixConfig = isCardPayment ? null : await getActivePixConfig(req);
       if (!isCardPayment && !pixConfig?.chavePix)
@@ -1179,12 +1381,30 @@ router.post(
           status: "erro",
           mensagem: "PIX ainda não configurado pelo administrador.",
         });
-      await ensureHostingPaymentsTable(req);
+      const isMonthlyPayment = isMonthlyHostingRequest(requestForPaymentRule);
+      if (isMonthlyPayment) {
+        await ensureHostingMonthlyPaymentsTable(req);
+      } else {
+        await ensureHostingPaymentsTable(req);
+      }
       const valorFinal = Number(
         solicitacao.valor_final ?? solicitacao.valor_total ?? 0,
       );
-      const parcelas =
-        opcao === "cartao_credito"
+      const monthlyCompetence = isMonthlyPayment
+        ? getMonthlyCompetence(requestForPaymentRule)
+        : "";
+      const monthlyType = monthlyCompetence
+        ? "mensal_" + monthlyCompetence.replace("-", "_")
+        : "mensal";
+      const parcelas = isMonthlyPayment
+        ? [
+            {
+              tipo: opcao === "cartao_credito" ? "cartao_credito" : monthlyType,
+              competencia: monthlyCompetence,
+              valor: valorFinal,
+            },
+          ]
+        : opcao === "cartao_credito"
           ? [{ tipo: "cartao_credito", valor: valorFinal }]
           : opcao === "total"
             ? [{ tipo: "total", valor: valorFinal }]
@@ -1209,7 +1429,8 @@ router.post(
         [solicitacaoId, clienteId],
       );
       for (const parcela of parcelas) {
-        const pixCopiaCola = isCardPayment
+        const parcelaIsCard = parcela.tipo === "cartao_credito";
+        const pixCopiaCola = parcelaIsCard
           ? ""
           : buildPixPayload({
               key: pixConfig.chavePix,
@@ -1229,10 +1450,31 @@ router.post(
             parcela.tipo,
             parcela.valor,
             pixCopiaCola,
-            isCardPayment ? "" : buildPixQrCodeUrl(pixCopiaCola),
-            isCardPayment ? "aguardando_link" : "aguardando_comprovante",
+            parcelaIsCard ? "" : buildPixQrCodeUrl(pixCopiaCola),
+            parcelaIsCard ? "aguardando_link" : "aguardando_comprovante",
           ],
         );
+        if (parcela.competencia) {
+          const [paymentRows] = await dbFor(req).query(
+            "SELECT id FROM " +
+              qtable(TABLE_NAMES.hospedagemPagamentos) +
+              " WHERE solicitacao_id = ? AND parcela_tipo = ? LIMIT 1",
+            [solicitacaoId, parcela.tipo],
+          );
+          await dbFor(req).query(
+            "INSERT INTO " +
+              qtable(TABLE_NAMES.hospedagemMensalidades) +
+              " (solicitacao_id, cliente_id, competencia, pagamento_id, valor, status) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE pagamento_id = VALUES(pagamento_id), valor = VALUES(valor), status = VALUES(status), atualizado_em = CURRENT_TIMESTAMP",
+            [
+              solicitacaoId,
+              clienteId,
+              parcela.competencia,
+              paymentRows?.[0]?.id || null,
+              parcela.valor,
+              parcelaIsCard ? "aguardando_link" : "aguardando_comprovante",
+            ],
+          );
+        }
       }
       const requestForNotice = await loadHostingRequestById(req, solicitacaoId);
       if (isCardPayment && requestForNotice) {
@@ -1523,6 +1765,13 @@ router.patch("/hospedagens/pagamentos/:id/aprovar", async (req, res) => {
         " SET status = 'confirmado', conferido_por = ?, conferido_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?",
       [getReqLogin(req), pagamentoId],
     );
+    await ensureHostingMonthlyPaymentsTable(req);
+    await dbFor(req).query(
+      "UPDATE " +
+        qtable(TABLE_NAMES.hospedagemMensalidades) +
+        " SET status = 'confirmado', atualizado_em = CURRENT_TIMESTAMP WHERE pagamento_id = ?",
+      [pagamentoId],
+    );
     const [pendingRows] = await dbFor(req).query(
       "SELECT COUNT(*) AS total FROM " +
         qtable(TABLE_NAMES.hospedagemPagamentos) +
@@ -1600,6 +1849,13 @@ router.patch("/hospedagens/pagamentos/:id/reprovar", async (req, res) => {
         qtable(TABLE_NAMES.hospedagemPagamentos) +
         " SET status = 'reprovado', motivo_recusa = ?, comprovante_path = NULL, comprovante_nome = NULL, conferido_por = ?, conferido_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?",
       [motivoRecusa, getReqLogin(req), pagamentoId],
+    );
+    await ensureHostingMonthlyPaymentsTable(req);
+    await dbFor(req).query(
+      "UPDATE " +
+        qtable(TABLE_NAMES.hospedagemMensalidades) +
+        " SET status = 'reprovado', atualizado_em = CURRENT_TIMESTAMP WHERE pagamento_id = ?",
+      [pagamentoId],
     );
     return res.json({
       status: "sucesso",
@@ -1720,11 +1976,31 @@ router.post(
         ],
       );
       const [pagamentoRows] = await dbFor(req).query(
-        "SELECT valor FROM " +
+        "SELECT id, valor, parcela_tipo FROM " +
           qtable(TABLE_NAMES.hospedagemPagamentos) +
           " WHERE solicitacao_id = ? AND cliente_id = ? AND parcela_tipo = ? LIMIT 1",
         [solicitacaoId, clienteId, parcelaTipo],
       );
+      const pagamentoAtual = pagamentoRows?.[0] || null;
+      const mensalMatch = clean(pagamentoAtual?.parcela_tipo).match(
+        /^mensal_(\d{4})_(\d{2})$/,
+      );
+      if (mensalMatch) {
+        await ensureHostingMonthlyPaymentsTable(req);
+        await dbFor(req).query(
+          "INSERT INTO " +
+            qtable(TABLE_NAMES.hospedagemMensalidades) +
+            " (solicitacao_id, cliente_id, competencia, pagamento_id, valor, status) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE pagamento_id = VALUES(pagamento_id), valor = VALUES(valor), status = VALUES(status), atualizado_em = CURRENT_TIMESTAMP",
+          [
+            solicitacaoId,
+            clienteId,
+            `${mensalMatch[1]}-${mensalMatch[2]}`,
+            pagamentoAtual.id,
+            pagamentoAtual.valor,
+            "comprovante_enviado",
+          ],
+        );
+      }
       const pedidoCompleto = await loadHostingRequestById(req, solicitacaoId);
       await notifyHostingReceiptAdmins(req, {
         login,
@@ -1791,7 +2067,7 @@ router.patch("/hospedagens/solicitacoes/:id/cancelar", async (req, res) => {
 
     const [rows] = await db.query(
       `
-        SELECT id, status
+        SELECT id, status, modo_cobranca
         FROM ${qtable(solicitacoesTable)}
         WHERE id = ? AND cliente_id = ?
         LIMIT 1
@@ -1807,7 +2083,38 @@ router.patch("/hospedagens/solicitacoes/:id/cancelar", async (req, res) => {
       });
     }
 
-    const nextStatus = getAllowedHostingStatusTransition(solicitacao.status);
+    const monthlyConfirmed =
+      normalizeHostingStatus(solicitacao.status) === "confirmado" &&
+      normalizeBillingMode(solicitacao.modo_cobranca) === "mensal";
+    if (monthlyConfirmed && !isCurrentMonthEnd()) {
+      const fullRequest = await loadHostingRequestById(req, solicitacaoId);
+      if (fullRequest) await ensureCurrentMonthlyPayment(req, fullRequest);
+      await ensureHostingMonthlyPaymentsTable(req);
+      const competencia = getCurrentMonthlyCompetence();
+      const validUntil = formatShortDate(getCurrentMonthEndDate());
+      await db.query(
+        "UPDATE " +
+          qtable(TABLE_NAMES.hospedagemMensalidades) +
+          " SET status = 'cancelamento_solicitado', solicitado_cancelamento_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE solicitacao_id = ? AND cliente_id = ? AND competencia = ?",
+        [solicitacaoId, clienteId, competencia],
+      );
+      return res.json({
+        status: "sucesso",
+        mensagem:
+          "Pedido de cancelamento efetuado. Hospedagem valida ate " +
+          validUntil,
+        solicitacao: {
+          id: solicitacaoId,
+          status: solicitacao.status,
+          mensalidadeStatus: "cancelamento_solicitado",
+          validadeAte: validUntil,
+        },
+      });
+    }
+
+    const nextStatus = monthlyConfirmed
+      ? "cancelado"
+      : getAllowedHostingStatusTransition(solicitacao.status);
     if (!nextStatus) {
       return res.status(409).json({
         status: "erro",

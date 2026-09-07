@@ -26,6 +26,7 @@ const TABLE_NAMES = Object.freeze({
   hospedagemSolicitacoes: "Hospedagem_Solicitacoes",
   hospedagemSolicitacaoItens: "Hospedagem_Solicitacao_Itens",
   hospedagemPagamentos: "Hospedagem_Pagamentos",
+  hospedagemMensalidades: "Hospedagem_Mensalidades",
   pixConfig: "MelPet_Pix_Config",
 });
 

@@ -5660,3 +5660,12 @@
     max-width: 1520px !important;
   }
 }
+.melpet-hosting-history-note.is-cancel-request {
+  border-color: rgba(220, 38, 38, 0.3);
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  color: #991b1b;
+}
+
+.melpet-hosting-history-note.is-cancel-request strong {
+  color: #991b1b;
+}

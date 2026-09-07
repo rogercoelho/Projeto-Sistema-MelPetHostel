@@ -14,6 +14,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import api, { API_URL } from "../../services/api";
 import { maskCpf } from "../../utils/brFields";
 import { buildContractorDataFromCliente } from "../../utils/clientProfile";
+import { formatDateTimeSaoPaulo } from "../../utils/date";
 import PetRegistrationForm from "./PetRegistrationForm";
 import { PET_ANAMNESIS_SECTIONS } from "./petAnamnesisForm";
 import "./styles.css";
@@ -936,12 +937,7 @@ export default function MelPetHostel({
   }
 
   function formatDateTime(value) {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return String(value || "-");
-    return date.toLocaleString("pt-BR", {
-      dateStyle: "short",
-      timeStyle: "short",
-    });
+    return formatDateTimeSaoPaulo(value);
   }
 
   function formatBillingMode(value) {
@@ -1021,10 +1017,13 @@ export default function MelPetHostel({
     return "Pendente";
   }
 
-  function canCancelHostingRequest(status) {
+  function canCancelHostingRequest(status, request = null) {
     const key = getHostingRequestStatusKey(status);
     return (
-      key === "pendente" || key === "aprovado" || key === "aguardando_pagamento"
+      key === "pendente" ||
+      key === "aprovado" ||
+      key === "aguardando_pagamento" ||
+      (key === "confirmado" && isMonthlyHostingRequest(request))
     );
   }
 
@@ -1187,6 +1186,16 @@ export default function MelPetHostel({
     }
   }
 
+  function getPaymentCompetence(payment) {
+    const explicitCompetence = String(
+      payment?.mensalidadeCompetencia || "",
+    ).trim();
+    if (/^\d{4}-\d{2}$/.test(explicitCompetence)) return explicitCompetence;
+    const type = String(payment?.parcelaTipo || "").toLowerCase();
+    const match = type.match(/^mensal_(\d{4})_(\d{2})$/);
+    return match ? `${match[1]}-${match[2]}` : "";
+  }
+
   function getHostingPayments(request) {
     const payments =
       Array.isArray(request?.pagamentos) && request.pagamentos.length
@@ -1194,8 +1203,16 @@ export default function MelPetHostel({
         : request?.pagamento
           ? [request.pagamento]
           : [];
-    const order = { reserva: 1, checkin: 2, total: 3 };
+    const order = { reserva: 1, checkin: 2, total: 3, cartao_credito: 4 };
     return [...payments].sort((a, b) => {
+      const aCompetence = getPaymentCompetence(a);
+      const bCompetence = getPaymentCompetence(b);
+      if (aCompetence || bCompetence) {
+        const aConfirmed = String(a?.status || "").toLowerCase() === "confirmado";
+        const bConfirmed = String(b?.status || "").toLowerCase() === "confirmado";
+        if (aConfirmed !== bConfirmed) return aConfirmed ? 1 : -1;
+        return aCompetence.localeCompare(bCompetence);
+      }
       const aType = String(a?.parcelaTipo || "total").toLowerCase();
       const bType = String(b?.parcelaTipo || "total").toLowerCase();
       return (order[aType] || 99) - (order[bType] || 99);
@@ -1206,9 +1223,23 @@ export default function MelPetHostel({
     const type = String(payment?.parcelaTipo || "total").toLowerCase();
     if (type === "reserva") return "Pagamento da Reserva";
     if (type === "checkin") return "Pagamento de Check-in";
+    const competence = getPaymentCompetence(payment);
+    if (competence) {
+      return `Mensalidade ${formatMonthlyCompetence(competence)}`;
+    }
+    if (type.startsWith("mensal_")) {
+      const [, year, month] = type.match(/^mensal_(\d{4})_(\d{2})$/) || [];
+      return year && month ? `Mensalidade ${month}/${year}` : "Mensalidade";
+    }
     return "Pagamento Total";
   }
 
+  function isMonthlyHostingRequest(request) {
+    if (normalizeText(request?.modoCobranca) === "mensal") return true;
+    return (request?.itens || []).some(
+      (item) => normalizeText(item?.modoCobranca) === "mensal",
+    );
+  }
   function hasPendingHostingPayment(request) {
     if (getHostingRequestStatusTone(request?.status) !== "approved")
       return false;
@@ -1233,12 +1264,48 @@ export default function MelPetHostel({
     });
   }
 
+  function formatMonthlyCompetence(value) {
+    const match = String(value || "").match(/^(\d{4})-(\d{2})$/);
+    return match ? `${match[2]}/${match[1]}` : "mês vigente";
+  }
+
+  function getMonthlyPayment(request) {
+    return getHostingPayments(request).find(
+      (payment) =>
+        String(payment?.parcelaTipo || "").startsWith("mensal_") ||
+        payment?.mensalidadeCompetencia,
+    );
+  }
+
+  function getMonthlyValidityText(request) {
+    const competence = getMonthlyPayment(request)?.mensalidadeCompetencia;
+    const match = String(competence || "").match(/^(\d{4})-(\d{2})$/);
+    if (!match) return "";
+    const lastDay = new Date(Number(match[1]), Number(match[2]), 0);
+    return lastDay.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+    });
+  }
+
+  function getMonthlyCancellationNotice(request) {
+    const payment = getMonthlyPayment(request);
+    if (payment?.mensalidadeStatus !== "cancelamento_solicitado") return "";
+    const validUntil = getMonthlyValidityText(request);
+    return `Pedido de cancelamento efetuado. Hospedagem válida até ${validUntil || "o fim do mês vigente"}`;
+  }
   function formatHostingCheckInOut(request) {
+    if (isMonthlyHostingRequest(request)) {
+      const payment = getMonthlyPayment(request);
+      return `Mês vigente: ${formatMonthlyCompetence(getPaymentCompetence(payment) || request?.inicioMes)}`;
+    }
     if (request?.dataEntrada || request?.dataSaida) {
       return `Check-in: ${formatBrazilDate(request.dataEntrada)} · Check-out: ${formatBrazilDate(request.dataSaida)}`;
     }
     return formatHostingRequestPeriod(request);
   }
+
   function getHostingPaymentMessage(request) {
     const payments = getHostingPayments(request);
     if (getHostingRequestStatusTone(request?.status) === "confirmed")
@@ -4229,6 +4296,12 @@ export default function MelPetHostel({
                       </ul>
                     </div>
 
+                    {getMonthlyCancellationNotice(request) ? (
+                      <div className="melpet-hosting-history-note is-cancel-request">
+                        <strong>{getMonthlyCancellationNotice(request)}</strong>
+                      </div>
+                    ) : null}
+
                     {request.motivoRecusa ? (
                       <div className="melpet-hosting-history-note">
                         <strong>Motivo da recusa</strong>
@@ -4271,23 +4344,43 @@ export default function MelPetHostel({
                                     <strong>Pagamento total</strong>
                                     <span>Gerar um PIX único</span>
                                   </Button>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="melpet-hosting-payment-option is-reserve"
-                                    disabled={
-                                      generatingHostingPaymentId === request.id
-                                    }
-                                    onClick={() =>
-                                      generateHostingPaymentOption(
-                                        request,
-                                        "dividido",
-                                      )
-                                    }
-                                  >
-                                    <strong>Reserva + Check-in</strong>
-                                    <span>Dividir em duas etapas com PIX</span>
-                                  </Button>
+                                  {!isMonthlyHostingRequest(request) ? (
+
+                                    <Button
+
+                                      type="button"
+
+                                      variant="outline"
+
+                                      className="melpet-hosting-payment-option is-reserve"
+
+                                      disabled={
+
+                                        generatingHostingPaymentId === request.id
+
+                                      }
+
+                                      onClick={() =>
+
+                                        generateHostingPaymentOption(
+
+                                          request,
+
+                                          "dividido",
+
+                                        )
+
+                                      }
+
+                                    >
+
+                                      <strong>Reserva + Check-in</strong>
+
+                                      <span>Dividir em duas etapas com PIX</span>
+
+                                    </Button>
+
+                                  ) : null}
                                   <Button
                                     type="button"
                                     variant="outline"
@@ -4339,26 +4432,49 @@ export default function MelPetHostel({
                                       <strong>Pagamento total</strong>
                                       <span>Gerar um PIX único</span>
                                     </Button>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      className="melpet-hosting-payment-option is-reserve"
-                                      disabled={
-                                        generatingHostingPaymentId ===
-                                        request.id
-                                      }
-                                      onClick={() =>
-                                        generateHostingPaymentOption(
-                                          request,
-                                          "dividido",
-                                        )
-                                      }
-                                    >
-                                      <strong>Reserva + Check-in</strong>
-                                      <span>
-                                        Dividir em duas etapas com PIX
-                                      </span>
-                                    </Button>
+                                    {!isMonthlyHostingRequest(request) ? (
+
+                                      <Button
+
+                                        type="button"
+
+                                        variant="outline"
+
+                                        className="melpet-hosting-payment-option is-reserve"
+
+                                        disabled={
+
+                                          generatingHostingPaymentId ===
+
+                                          request.id
+
+                                        }
+
+                                        onClick={() =>
+
+                                          generateHostingPaymentOption(
+
+                                            request,
+
+                                            "dividido",
+
+                                          )
+
+                                        }
+
+                                      >
+
+                                        <strong>Reserva + Check-in</strong>
+
+                                        <span>
+
+                                          Dividir em duas etapas com PIX
+
+                                        </span>
+
+                                      </Button>
+
+                                    ) : null}
                                     <Button
                                       type="button"
                                       variant="outline"
@@ -4605,7 +4721,7 @@ export default function MelPetHostel({
                           );
                         })()
                       : null}
-                    {canCancelHostingRequest(request.status) ? (
+                    {canCancelHostingRequest(request.status, request) ? (
                       <div className="melpet-hosting-history-actions">
                         <Button
                           type="button"
@@ -4616,7 +4732,9 @@ export default function MelPetHostel({
                         >
                           {cancelingHostingRequestId === request.id
                             ? "Cancelando..."
-                            : "Cancelar pedido"}
+                            : isMonthlyHostingRequest(request)
+                              ? "Solicitar cancelamento"
+                              : "Cancelar pedido"}
                         </Button>
                       </div>
                     ) : null}
