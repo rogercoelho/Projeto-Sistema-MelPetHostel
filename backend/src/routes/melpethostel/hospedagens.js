@@ -191,6 +191,14 @@ function getCurrentMonthlyCompetence() {
   ).padStart(2, "0")}`;
 }
 
+function getActiveMonthlyCompetence(request) {
+  const currentCompetence = getCurrentMonthlyCompetence();
+  const startCompetence = getMonthlyCompetence(request);
+  return startCompetence && startCompetence > currentCompetence
+    ? startCompetence
+    : currentCompetence;
+}
+
 function getCurrentMonthEndDate() {
   const now = new Date();
   const saoPauloDate = new Date(
@@ -230,11 +238,28 @@ function getHostingPaymentsFromRequest(request) {
 function getMonthlyPaymentType(competencia) {
   return "mensal_" + clean(competencia).replace("-", "_");
 }
+
+function getPaymentCompetence(payment) {
+  const explicitCompetence = clean(payment?.mensalidadeCompetencia);
+  if (/^\d{4}-\d{2}$/.test(explicitCompetence)) return explicitCompetence;
+  const match = clean(payment?.parcelaTipo).match(/^mensal_(\d{4})_(\d{2})$/);
+  return match ? `${match[1]}-${match[2]}` : "";
+}
+
+function hasConfirmedMonthlyPaymentAtOrAfter(request, competencia) {
+  return (request?.pagamentos || []).some((payment) => {
+    if (clean(payment?.status).toLowerCase() !== "confirmado") return false;
+    const paymentCompetence = getPaymentCompetence(payment);
+    return paymentCompetence && paymentCompetence >= competencia;
+  });
+}
+
 async function ensureCurrentMonthlyPayment(req, request) {
   if (!request || !isMonthlyHostingRequest(request)) return false;
   if (normalizeHostingStatus(request.status) !== "confirmado") return false;
   await ensureHostingMonthlyPaymentsTable(req);
   const competencia = getCurrentMonthlyCompetence();
+  if (hasConfirmedMonthlyPaymentAtOrAfter(request, competencia)) return false;
   const parcelaTipo = getMonthlyPaymentType(competencia);
   const existing = (request.pagamentos || []).some(
     (payment) => clean(payment.parcelaTipo) === parcelaTipo,
@@ -2090,7 +2115,7 @@ router.patch("/hospedagens/solicitacoes/:id/cancelar", async (req, res) => {
       const fullRequest = await loadHostingRequestById(req, solicitacaoId);
       if (fullRequest) await ensureCurrentMonthlyPayment(req, fullRequest);
       await ensureHostingMonthlyPaymentsTable(req);
-      const competencia = getCurrentMonthlyCompetence();
+      const competencia = getActiveMonthlyCompetence(fullRequest || solicitacao);
       const validUntil = formatShortDate(getCurrentMonthEndDate());
       await db.query(
         "UPDATE " +
@@ -2107,6 +2132,7 @@ router.patch("/hospedagens/solicitacoes/:id/cancelar", async (req, res) => {
           id: solicitacaoId,
           status: solicitacao.status,
           mensalidadeStatus: "cancelamento_solicitado",
+          competencia,
           validadeAte: validUntil,
         },
       });

@@ -135,6 +135,14 @@ function Dashboard() {
     setView("mel");
   }
 
+  function openMelPetPresence() {
+    setMelPetRegistrationOnly(false);
+    setMelComplianceGate(false);
+    setMelInitialAdminMenu("");
+    setMelUserMenu("controlePresenca");
+    setOpenDashboardSection("");
+    setView("mel");
+  }
   function openMelPetHosting() {
     setMelPetRegistrationOnly(false);
     setMelComplianceGate(false);
@@ -144,6 +152,14 @@ function Dashboard() {
     setView("mel");
   }
 
+  function openMelPetPresenceAdmin() {
+    setMelPetRegistrationOnly(false);
+    setMelComplianceGate(false);
+    setMelInitialAdminMenu("registrarPresenca");
+    setMelUserMenu("");
+    setOpenDashboardSection("");
+    setView("mel");
+  }
   function openMelPetHostingAdmin() {
     setMelPetRegistrationOnly(false);
     setMelComplianceGate(false);
@@ -214,6 +230,10 @@ function Dashboard() {
           label: "Hospedagem",
           onAction: openMelPetHostingAdmin,
         },
+        {
+          label: "Registrar Presença",
+          onAction: openMelPetPresenceAdmin,
+        },
       ]
     : [
         ...(melPetRegistrationOnly
@@ -234,6 +254,10 @@ function Dashboard() {
               {
                 label: "Hospedagem",
                 onAction: openMelPetHosting,
+              },
+              {
+                label: "Controle de Presença",
+                onAction: openMelPetPresence,
               },
             ]),
       ];

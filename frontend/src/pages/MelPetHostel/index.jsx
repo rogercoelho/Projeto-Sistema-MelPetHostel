@@ -423,6 +423,13 @@ export default function MelPetHostel({
     useState(false);
   const [confirmingHostingCheckinId, setConfirmingHostingCheckinId] =
     useState(null);
+  const [presencePets, setPresencePets] = useState([]);
+  const [activePresencePetId, setActivePresencePetId] = useState(null);
+  const [presenceCompetence, setPresenceCompetence] = useState("");
+  const [presenceSummary, setPresenceSummary] = useState(null);
+  const [presenceViewMode, setPresenceViewMode] = useState("calendar");
+  const [loadingPresence, setLoadingPresence] = useState(false);
+  const [togglingPresenceDate, setTogglingPresenceDate] = useState("");
   const [approvingHostingPaymentId, setApprovingHostingPaymentId] =
     useState(null);
   const [rejectHostingPaymentTarget, setRejectHostingPaymentTarget] =
@@ -525,6 +532,14 @@ export default function MelPetHostel({
   useEffect(() => {
     if (!isAdmin || activeMenu !== "configurarPix") return;
     loadPixConfig();
+  }, [activeMenu, isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin || activeMenu !== "registrarPresenca") return;
+    setActivePresencePetId(null);
+    setPresenceSummary(null);
+    loadPresencePets(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMenu, isAdmin]);
 
   const shouldEnforceContractGate = Boolean(!isAdmin && enforceContractGate);
@@ -1019,6 +1034,12 @@ export default function MelPetHostel({
 
   function canCancelHostingRequest(status, request = null) {
     const key = getHostingRequestStatusKey(status);
+    if (isMonthlyHostingRequest(request)) {
+      const payment = getMonthlyPayment(request);
+      if (payment?.mensalidadeStatus === "cancelamento_solicitado") {
+        return false;
+      }
+    }
     return (
       key === "pendente" ||
       key === "aprovado" ||
@@ -1234,6 +1255,28 @@ export default function MelPetHostel({
     return "Pagamento Total";
   }
 
+  function getVisibleHostingPayments(request) {
+    const payments = getHostingPayments(request);
+    if (!isMonthlyHostingRequest(request)) return payments;
+
+    const confirmedCompetences = payments
+      .filter(
+        (payment) =>
+          String(payment?.status || "").toLowerCase() === "confirmado" &&
+          getPaymentCompetence(payment),
+      )
+      .map(getPaymentCompetence)
+      .sort();
+    const latestConfirmedCompetence = confirmedCompetences.at(-1) || "";
+
+    return payments.filter((payment) => {
+      const competence = getPaymentCompetence(payment);
+      if (!competence || !latestConfirmedCompetence) return true;
+      const status = String(payment?.status || "").toLowerCase();
+      return status === "confirmado" || competence > latestConfirmedCompetence;
+    });
+  }
+
   function isMonthlyHostingRequest(request) {
     if (normalizeText(request?.modoCobranca) === "mensal") return true;
     return (request?.itens || []).some(
@@ -1243,7 +1286,7 @@ export default function MelPetHostel({
   function hasPendingHostingPayment(request) {
     if (getHostingRequestStatusTone(request?.status) !== "approved")
       return false;
-    return getHostingPayments(request).some(
+    return getVisibleHostingPayments(request).some(
       (payment) => String(payment?.status || "").toLowerCase() !== "confirmado",
     );
   }
@@ -1251,7 +1294,7 @@ export default function MelPetHostel({
   function canChangeHostingPaymentOption(request) {
     if (getHostingRequestStatusTone(request?.status) !== "approved")
       return false;
-    const payments = getHostingPayments(request);
+    const payments = getVisibleHostingPayments(request);
     if (!payments.length) return false;
     return payments.every((payment) => {
       const status = String(payment?.status || "").toLowerCase();
@@ -1264,13 +1307,24 @@ export default function MelPetHostel({
     });
   }
 
+  function shouldShowHostingPaymentPanel(request, payments) {
+    const requestTone = getHostingRequestStatusTone(request?.status);
+    if (!["approved", "confirmed"].includes(requestTone)) return false;
+    if (!isMonthlyHostingRequest(request)) return true;
+    if (!payments.length) return true;
+
+    return payments.some(
+      (payment) => String(payment?.status || "").toLowerCase() !== "confirmado",
+    );
+  }
+
   function formatMonthlyCompetence(value) {
     const match = String(value || "").match(/^(\d{4})-(\d{2})$/);
     return match ? `${match[2]}/${match[1]}` : "mês vigente";
   }
 
   function getMonthlyPayment(request) {
-    return getHostingPayments(request).find(
+    return getVisibleHostingPayments(request).find(
       (payment) =>
         String(payment?.parcelaTipo || "").startsWith("mensal_") ||
         payment?.mensalidadeCompetencia,
@@ -1307,7 +1361,7 @@ export default function MelPetHostel({
   }
 
   function getHostingPaymentMessage(request) {
-    const payments = getHostingPayments(request);
+    const payments = getVisibleHostingPayments(request);
     if (getHostingRequestStatusTone(request?.status) === "confirmed")
       return `Hospedagem Confirmada · ${formatHostingCheckInOut(request)}`;
     const reserve = payments.find(
@@ -1430,6 +1484,126 @@ export default function MelPetHostel({
     }
   }
 
+  function getCurrentCompetenceValue() {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      year: "numeric",
+      month: "2-digit",
+      timeZone: "America/Sao_Paulo",
+    }).formatToParts(now);
+    const year = parts.find((part) => part.type === "year")?.value;
+    const month = parts.find((part) => part.type === "month")?.value;
+    return year && month ? `${year}-${month}` : "";
+  }
+
+  function formatPresenceCompetence(value) {
+    const match = String(value || "").match(/^(\d{4})-(\d{2})$/);
+    return match ? `${match[2]}/${match[1]}` : "Mês";
+  }
+
+  function buildPresenceMonthOptions(pet) {
+    const values = new Set([getCurrentCompetenceValue(), pet?.ultimaCompetencia]);
+    return Array.from(values)
+      .filter((value) => /^\d{4}-\d{2}$/.test(String(value || "")))
+      .sort();
+  }
+
+  function shiftPresenceCompetence(direction) {
+    const match = String(presenceCompetence || "").match(/^(\d{4})-(\d{2})$/);
+    if (!match || !activePresencePetId) return;
+    const date = new Date(Number(match[1]), Number(match[2]) - 1 + direction, 1);
+    const next = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    setPresenceCompetence(next);
+    loadPresenceSummary(activePresencePetId, next);
+  }
+
+  function buildPresenceCalendarDays(competence) {
+    const match = String(competence || "").match(/^(\d{4})-(\d{2})$/);
+    if (!match) return [];
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const firstDate = new Date(year, month - 1, 1);
+    const totalDays = new Date(year, month, 0).getDate();
+    const firstWeekdayFromMonday = (firstDate.getDay() + 6) % 7;
+    const blanks = Array.from({ length: firstWeekdayFromMonday }, (_, index) => ({
+      key: `blank-${index}`,
+      blank: true,
+    }));
+    const days = Array.from({ length: totalDays }, (_, index) => {
+      const day = index + 1;
+      return {
+        key: `${competence}-${String(day).padStart(2, "0")}`,
+        day,
+        date: `${competence}-${String(day).padStart(2, "0")}`,
+      };
+    });
+    return [...blanks, ...days];
+  }
+
+
+  async function loadPresencePets(admin = false) {
+    setLoadingPresence(true);
+    try {
+      const data = await api.get(
+        admin
+          ? "/melpethostel/presencas/admin/pets"
+          : "/melpethostel/presencas/pets",
+      );
+      const pets = Array.isArray(data?.pets) ? data.pets : [];
+      setPresencePets(pets);
+      return pets;
+    } catch (error) {
+      showToast(error?.message || "Não foi possível carregar presenças.", "error");
+      return [];
+    } finally {
+      setLoadingPresence(false);
+    }
+  }
+
+  async function loadPresenceSummary(petId, competence) {
+    if (!petId || !competence) return;
+    setLoadingPresence(true);
+    try {
+      const data = await api.get(
+        `/melpethostel/presencas/pets/${petId}?competencia=${competence}`,
+      );
+      setPresenceSummary(data?.resumo || null);
+    } catch (error) {
+      setPresenceSummary(null);
+      showToast(error?.message || "Não foi possível carregar o mês selecionado.", "error");
+    } finally {
+      setLoadingPresence(false);
+    }
+  }
+
+  function openPresencePet(pet) {
+    const petId = Number(pet?.petId || pet?.id);
+    const competence = pet?.ultimaCompetencia || getCurrentCompetenceValue();
+    setActivePresencePetId(petId);
+    setPresenceCompetence(competence);
+    setPresenceViewMode("calendar");
+    loadPresenceSummary(petId, competence);
+  }
+
+  async function togglePresenceDate(date) {
+    if (!isAdmin || !activePresencePetId || !presenceCompetence || !date) return;
+    setTogglingPresenceDate(date);
+    try {
+      const data = await api.post(
+        `/melpethostel/presencas/pets/${activePresencePetId}/toggle`,
+        { competencia: presenceCompetence, dataPresenca: date },
+      );
+      setPresenceSummary(data?.resumo || null);
+    } catch (error) {
+      showToast(error?.message || "Não foi possível alterar a presença.", "error");
+    } finally {
+      setTogglingPresenceDate("");
+    }
+  }
+
+  function savePresencePdf() {
+    window.print();
+  }
   async function confirmHostingCheckin(request) {
     if (!request?.id) return;
     setConfirmingHostingCheckinId(request.id);
@@ -3809,7 +3983,24 @@ export default function MelPetHostel({
         setHostingRequests((current) =>
           current.map((request) =>
             Number(request.id) === Number(requestId)
-              ? { ...request, status: data.solicitacao.status }
+              ? {
+                  ...request,
+                  status: data.solicitacao.status,
+                  pagamentos: (request.pagamentos || []).map((payment) => {
+                    const targetCompetence = data.solicitacao.competencia;
+                    const shouldUpdateMonthly =
+                      data.solicitacao.mensalidadeStatus &&
+                      (!targetCompetence ||
+                        getPaymentCompetence(payment) === targetCompetence);
+                    return shouldUpdateMonthly
+                      ? {
+                          ...payment,
+                          mensalidadeStatus:
+                            data.solicitacao.mensalidadeStatus,
+                        }
+                      : payment;
+                  }),
+                }
               : request,
           ),
         );
@@ -3817,7 +4008,7 @@ export default function MelPetHostel({
       } else {
         await loadHostingRequests();
       }
-      showToast("Solicitação cancelada.", "success");
+      showToast(data?.mensagem || "Solicitacao cancelada.", "success");
     } catch (error) {
       showToast(
         error?.message || "Não foi possível cancelar o pedido.",
@@ -4309,12 +4500,12 @@ export default function MelPetHostel({
                       </div>
                     ) : null}
 
-                    {!isUsedHosting &&
-                    ["approved", "confirmed"].includes(
-                      getHostingRequestStatusTone(request.status),
-                    )
+                    {!isUsedHosting
                       ? (() => {
-                          const payments = getHostingPayments(request);
+                          const payments = getVisibleHostingPayments(request);
+                          if (!shouldShowHostingPaymentPanel(request, payments)) {
+                            return null;
+                          }
                           const paymentMessage =
                             getHostingPaymentMessage(request);
                           if (!payments.length) {
@@ -5315,6 +5506,211 @@ export default function MelPetHostel({
     </section>
   );
 
+  const presenceWeekdays = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+
+  function renderPresenceCalendar({ editable = false } = {}) {
+    const markedDates = new Set(
+      (presenceSummary?.presencas || []).map((item) => item.dataPresenca),
+    );
+    const days = buildPresenceCalendarDays(presenceCompetence);
+    return (
+      <div className="melpet-presence-calendar" aria-label="Calendário de presença">
+        <div className="melpet-presence-calendar-weekdays">
+          {presenceWeekdays.map((day) => (
+            <span key={day}>{day}</span>
+          ))}
+        </div>
+        <div className="melpet-presence-calendar-grid">
+          {days.map((item) => {
+            if (item.blank) return <span key={item.key} className="melpet-presence-day is-empty" />;
+            const isMarked = markedDates.has(item.date);
+            return (
+              <button
+                type="button"
+                key={item.key}
+                className={`melpet-presence-day ${isMarked ? "is-present" : ""}`}
+                disabled={!editable || togglingPresenceDate === item.date}
+                onClick={() => togglePresenceDate(item.date)}
+                title={isMarked ? "Clique para retirar a presença" : "Clique para registrar presença"}
+              >
+                <strong>{item.day}</strong>
+                {isMarked ? <span>Presente</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  function renderPresenceReport() {
+    const rows = presenceSummary?.presencas || [];
+    return (
+      <div className="melpet-presence-report">
+        <table>
+          <thead>
+            <tr>
+              <th>Dia</th>
+              <th>Pet</th>
+              <th>Data da presença</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length ? (
+              rows.map((item, index) => (
+                <tr key={item.id || item.dataPresenca}>
+                  <td>{index + 1}</td>
+                  <td>{presenceSummary?.petNome || "-"}</td>
+                  <td>{formatBrazilDate(item.dataPresenca)}</td>
+                  <td><span className="melpet-presence-status">Presente</span></td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="4">Nenhuma presença registrada neste mês.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  function renderPresenceDetail({ editable = false } = {}) {
+    return (
+      <section className="melpet-section-content melpet-presence-page melpet-presence-single-card">
+        <div className="melpet-presence-month-nav" aria-label="Navegar pelos meses">
+          <Button
+            type="button"
+            variant="outline"
+            className="melpet-presence-month-arrow"
+            onClick={() => shiftPresenceCompetence(-1)}
+          >
+            &lt;
+          </Button>
+          <div className="melpet-presence-month-current">
+            <span>Mês selecionado</span>
+            <strong>{formatPresenceCompetence(presenceCompetence)}</strong>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="melpet-presence-month-arrow"
+            onClick={() => shiftPresenceCompetence(1)}
+          >
+            &gt;
+          </Button>
+        </div>
+        {loadingPresence ? <p className="melpet-validate-message">Carregando presenças...</p> : null}
+        {presenceSummary ? (
+          <div className="melpet-presence-detail-body melpet-presence-print-area">
+            <div className="melpet-presence-summary-band">
+              <div>
+                <span>{presenceSummary.clienteNome}</span>
+                <strong>{presenceSummary.petNome}</strong>
+              </div>
+              <div>
+                <span>{formatPresenceCompetence(presenceSummary.competencia)}</span>
+                <strong>{presenceSummary.diasRestantes} dias restantes</strong>
+              </div>
+            </div>
+            {presenceViewMode === "calendar"
+              ? renderPresenceCalendar({ editable })
+              : renderPresenceReport()}
+            <div className="melpet-presence-balance">
+              Restam <strong>{presenceSummary.diasRestantes}</strong> de <strong>{presenceSummary.diasContratados}</strong> dias para usar neste mês.
+            </div>
+            {Number(presenceSummary.diasExcedentes || 0) > 0 ? (
+              <div className="melpet-presence-extra-billing">
+                <strong>{presenceSummary.diasExcedentes} dia(s) excedente(s)</strong>
+                <span>Valor excedente: {formatCurrency(presenceSummary.valorExcedente || 0)}</span>
+                <span>Total com excedente: {formatCurrency(presenceSummary.valorTotalComExcedente || 0)}</span>
+                {Array.isArray(presenceSummary.faixasExcedentes) && presenceSummary.faixasExcedentes.length ? (
+                  <ul>
+                    {presenceSummary.faixasExcedentes.map((faixa) => (
+                      <li key={`${faixa.planoQuantidade}-${faixa.diasUsados}-${faixa.valorFaixa}`}>
+                        {faixa.planoQuantidade}x na semana ({faixa.diasDoPlano} dias no mês): {faixa.diasUsados} dia(s) x {formatCurrency(faixa.valorDia)} = {formatCurrency(faixa.valorFaixa)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : !loadingPresence ? (
+          <p className="melpet-validate-message">Selecione um pet e um mês válido para visualizar o controle de presença.</p>
+        ) : null}
+        <div className="pet-main-actions melpet-back-actions melpet-presence-actions">
+          <Button type="button" variant="outline" onClick={() => setPresenceViewMode((mode) => mode === "calendar" ? "report" : "calendar")}>
+            {presenceViewMode === "calendar" ? "Modo Relatório" : "Modo Calendário"}
+          </Button>
+          <Button type="button" variant="outline" onClick={savePresencePdf}>Salvar em PDF</Button>
+          <Button type="button" variant="outline" onClick={() => { setActivePresencePetId(null); setPresenceSummary(null); }} className="melpet-back-button">Voltar</Button>
+        </div>
+      </section>
+    );
+  }
+
+  const userPresencePanels = [
+    {
+      id: "presence-control",
+      title: "Controle de Presença",
+      summary: "Acompanhe os dias utilizados no plano mensal.",
+      ariaLabel: "Controle de Presença",
+      items: presencePets.map((pet) => ({
+        id: `presence-pet-${pet.petId}`,
+        title: pet.petNome,
+        summary: `${pet.clienteNome || "Tutor"} · ${formatPresenceCompetence(
+          pet.ultimaCompetencia,
+        )}`,
+        onAction: () => openPresencePet(pet),
+      })),
+      children: loadingPresence ? (
+        <p className="melpet-validate-message">Carregando pets...</p>
+      ) : !presencePets.length ? (
+        <p className="melpet-validate-message">
+          Nenhum pet com mensalidade confirmada para controle de presença.
+        </p>
+      ) : null,
+      after: (
+        <div className="pet-main-actions melpet-back-actions">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => handleMelPetBack("main")}
+            className="melpet-back-button"
+          >
+            Voltar
+          </Button>
+        </div>
+      ),
+    },
+  ];
+  const adminPresenceContent = activePresencePetId ? (
+    renderPresenceDetail({ editable: true })
+  ) : (
+    <section className="melpet-section-content melpet-presence-page melpet-presence-single-card">
+      <label className="pet-form-field melpet-presence-month-field">
+        <span>Selecionar pet</span>
+        <select
+          value={activePresencePetId || ""}
+          onChange={(event) => {
+            const pet = presencePets.find((item) => Number(item.petId) === Number(event.target.value));
+            if (pet) openPresencePet(pet);
+          }}
+        >
+          <option value="">Selecione o pet</option>
+          {presencePets.map((pet) => (
+            <option key={pet.petId} value={pet.petId}>{pet.clienteNome} - {pet.petNome}</option>
+          ))}
+        </select>
+      </label>
+      {!loadingPresence && !presencePets.length ? (
+        <p className="melpet-validate-message">Nenhum pet com mensalidade confirmada para registrar presença.</p>
+      ) : null}
+    </section>
+  );
   const hostingPanels = [
     {
       id: "hosting",
@@ -5344,7 +5740,7 @@ export default function MelPetHostel({
                 : "meusPedidosHospedagem",
             ),
           content: hostingRequestsContent,
-        },
+        }
       ],
       after: (
         <div className="pet-main-actions melpet-back-actions">
@@ -6378,8 +6774,7 @@ export default function MelPetHostel({
                     if (shouldOpen) loadPendingCardPaymentRequests();
                   },
                   content: adminCardPaymentLinkContent,
-                },
-                {
+                },                {
                   id: "fazer-check-in",
                   title: "Fazer Check-in",
                   summary: "Confirmar check-in de hospedagens liberadas.",
@@ -6964,6 +7359,45 @@ export default function MelPetHostel({
             <PdfViewer src={documentPreviewSrc} title={documentPreviewTitle} />
           </div>
         </Modal>
+      </>
+    );
+  }
+
+  if (isAdmin && activeMenu === "registrarPresenca") {
+    return (
+      <main className="melpet-admin-pet-search-page melpet-admin-presence-page">
+        <section className="melpet-panel melpet-admin-pet-search-window melpet-admin-presence-window">
+          <div className="melpet-admin-pet-maintenance-layout">
+            {adminPresenceContent}
+            {!activePresencePetId ? (
+              <footer className="admin-page-actions admin-user-create-actions melpet-admin-pet-search-page-actions melpet-back-actions">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleMelPetBack("main")}
+                  className="melpet-back-button"
+                >
+                  Voltar
+                </Button>
+              </footer>
+            ) : null}
+          </div>
+        </section>
+      </main>
+    );
+  }
+  if (!isAdmin && userMenu === "controlePresenca") {
+    return (
+      <>
+        {activePresencePetId ? (
+          renderPresenceDetail()
+        ) : (
+          <MenuTemplate
+            className="melpet-user-hosting-menu melpet-user-presence-menu"
+            panels={userPresencePanels}
+          />
+        )}
+        {deletePetModal}
       </>
     );
   }
