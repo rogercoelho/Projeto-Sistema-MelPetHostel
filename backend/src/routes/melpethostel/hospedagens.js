@@ -246,6 +246,83 @@ function getPaymentCompetence(payment) {
   return match ? `${match[1]}-${match[2]}` : "";
 }
 
+function getMonthlyCycleCompetence(request) {
+  const requestDateMatch = clean(request?.criadoEm).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!requestDateMatch) return getActiveMonthlyCompetence(request);
+
+  const now = new Date();
+  const today = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  let year = today.getFullYear();
+  let month = today.getMonth() + 1;
+  const requestDay = Number(requestDateMatch[3]);
+  const currentMonthLastDay = new Date(year, month, 0).getDate();
+  const currentCycleStartDay = Math.min(requestDay, currentMonthLastDay);
+
+  if (today.getDate() < currentCycleStartDay) {
+    month -= 1;
+    if (month === 0) {
+      month = 12;
+      year -= 1;
+    }
+  }
+
+  const cycleCompetence = `${year}-${String(month).padStart(2, "0")}`;
+  const firstCompetence = getMonthlyCompetence(request);
+  return firstCompetence && firstCompetence > cycleCompetence
+    ? firstCompetence
+    : cycleCompetence;
+}
+
+function getMonthlyCycleEndDate(request, competencia = getMonthlyCycleCompetence(request)) {
+  const requestDateMatch = clean(request?.criadoEm).match(/^\d{4}-\d{2}-(\d{2})/);
+  const competenceMatch = clean(competencia).match(/^(\d{4})-(\d{2})$/);
+  if (!requestDateMatch || !competenceMatch) return null;
+
+  const year = Number(competenceMatch[1]);
+  const month = Number(competenceMatch[2]);
+  const requestDay = Number(requestDateMatch[1]);
+  const cycleStartDay = Math.min(
+    requestDay,
+    new Date(Date.UTC(year, month, 0)).getUTCDate(),
+  );
+  const nextCycleStart = new Date(Date.UTC(year, month, cycleStartDay));
+  nextCycleStart.setUTCDate(nextCycleStart.getUTCDate() - 1);
+  return nextCycleStart;
+}
+
+function isMonthlyCycleEnd(request, competencia) {
+  const cycleEnd = getMonthlyCycleEndDate(request, competencia);
+  if (!cycleEnd) return isCurrentMonthEnd();
+  const now = new Date();
+  const today = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }),
+  );
+  const todayAtStart = Date.UTC(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  const cycleEndAtStart = Date.UTC(
+    cycleEnd.getUTCFullYear(),
+    cycleEnd.getUTCMonth(),
+    cycleEnd.getUTCDate(),
+  );
+  return todayAtStart >= cycleEndAtStart;
+}
+function hasUnsettledPreviousMonthlyPayment(request, competencia) {
+  return (request?.pagamentos || []).some((payment) => {
+    const paymentCompetence = getPaymentCompetence(payment);
+    if (!paymentCompetence || paymentCompetence >= competencia) return false;
+    return clean(payment?.status).toLowerCase() !== "confirmado";
+  });
+}
+function hasMonthlyCancellationRequested(request) {
+  return (request?.pagamentos || []).some(
+    (payment) =>
+      clean(payment?.mensalidadeStatus).toLowerCase() ===
+      "cancelamento_solicitado",
+  );
+}
 function hasConfirmedMonthlyPaymentAtOrAfter(request, competencia) {
   return (request?.pagamentos || []).some((payment) => {
     if (clean(payment?.status).toLowerCase() !== "confirmado") return false;
@@ -257,8 +334,10 @@ function hasConfirmedMonthlyPaymentAtOrAfter(request, competencia) {
 async function ensureCurrentMonthlyPayment(req, request) {
   if (!request || !isMonthlyHostingRequest(request)) return false;
   if (normalizeHostingStatus(request.status) !== "confirmado") return false;
+  if (hasMonthlyCancellationRequested(request)) return false;
   await ensureHostingMonthlyPaymentsTable(req);
-  const competencia = getCurrentMonthlyCompetence();
+  const competencia = getMonthlyCycleCompetence(request);
+  if (hasUnsettledPreviousMonthlyPayment(request, competencia)) return false;
   if (hasConfirmedMonthlyPaymentAtOrAfter(request, competencia)) return false;
   const parcelaTipo = getMonthlyPaymentType(competencia);
   const existing = (request.pagamentos || []).some(
@@ -1078,7 +1157,7 @@ async function listHostingRequests(
     `;
   const [rows] = await db.query(sql, params);
   const requests = mapHostingRows(rows);
-  if (ensureMonthly && isCurrentMonthEnd()) {
+  if (ensureMonthly) {
     const shouldCancelMonthly = requests.filter(
       (request) =>
         normalizeHostingStatus(request.status) === "confirmado" &&
@@ -1651,7 +1730,10 @@ router.get("/hospedagens/checkin/pendentes", async (req, res) => {
         status: "erro",
         mensagem: "Tabelas de hospedagem nao encontradas.",
       });
-    return res.json({ status: "sucesso", solicitacoes });
+    return res.json({
+      status: "sucesso",
+      solicitacoes: solicitacoes.filter((solicitacao) => !isMonthlyHostingRequest(solicitacao)),
+    });
   } catch (error) {
     console.error(
       "Error in GET /melpethostel/hospedagens/checkin/pendentes:",
@@ -1689,6 +1771,13 @@ router.patch("/hospedagens/solicitacoes/:id/checkin", async (req, res) => {
       return res
         .status(404)
         .json({ status: "erro", mensagem: "Solicitacao nao encontrada." });
+    const solicitacaoCompleta = await loadHostingRequestById(req, solicitacaoId);
+    if (isMonthlyHostingRequest(solicitacaoCompleta))
+      return res.status(409).json({
+        status: "erro",
+        mensagem: "Planos mensais nao passam pelo processo de check-in.",
+      });
+
     if (normalizeHostingStatus(solicitacao.status) !== "confirmado")
       return res.status(409).json({
         status: "erro",
@@ -1716,7 +1805,7 @@ router.patch("/hospedagens/solicitacoes/:id/checkin", async (req, res) => {
 });
 router.get("/hospedagens/pagamentos/:id/preview", async (req, res) => {
   try {
-    if (!(await requireHostingAdmin(req, res))) return;
+    const isAdmin = await isAdminUser(req, getReqLogin(req));
     const pagamentoId = Number(req.params?.id);
     if (!Number.isInteger(pagamentoId) || pagamentoId <= 0)
       return res
@@ -1724,12 +1813,21 @@ router.get("/hospedagens/pagamentos/:id/preview", async (req, res) => {
         .json({ status: "erro", mensagem: "Pagamento inválido." });
     await ensureHostingPaymentsTable(req);
     const [rows] = await dbFor(req).query(
-      "SELECT comprovante_path, comprovante_nome FROM " +
+      "SELECT cliente_id, comprovante_path, comprovante_nome FROM " +
         qtable(TABLE_NAMES.hospedagemPagamentos) +
         " WHERE id = ? LIMIT 1",
       [pagamentoId],
     );
     const pagamento = rows && rows[0] ? rows[0] : null;
+    if (!isAdmin) {
+      const clienteId = await getCurrentClienteId(req);
+      if (!clienteId || Number(pagamento?.cliente_id) !== Number(clienteId))
+        return res.status(403).json({
+          status: "erro",
+          mensagem: "Você não tem permissão para visualizar este comprovante.",
+        });
+    }
+
     const storedPath = clean(pagamento?.comprovante_path);
     if (!storedPath)
       return res
@@ -2111,12 +2209,16 @@ router.patch("/hospedagens/solicitacoes/:id/cancelar", async (req, res) => {
     const monthlyConfirmed =
       normalizeHostingStatus(solicitacao.status) === "confirmado" &&
       normalizeBillingMode(solicitacao.modo_cobranca) === "mensal";
-    if (monthlyConfirmed && !isCurrentMonthEnd()) {
-      const fullRequest = await loadHostingRequestById(req, solicitacaoId);
+    const fullRequest = monthlyConfirmed
+      ? await loadHostingRequestById(req, solicitacaoId)
+      : null;
+    const competencia = getMonthlyCycleCompetence(fullRequest || solicitacao);
+    if (monthlyConfirmed && !isMonthlyCycleEnd(fullRequest || solicitacao, competencia)) {
       if (fullRequest) await ensureCurrentMonthlyPayment(req, fullRequest);
       await ensureHostingMonthlyPaymentsTable(req);
-      const competencia = getActiveMonthlyCompetence(fullRequest || solicitacao);
-      const validUntil = formatShortDate(getCurrentMonthEndDate());
+      const validUntil = formatShortDate(
+        getMonthlyCycleEndDate(fullRequest || solicitacao, competencia),
+      );
       await db.query(
         "UPDATE " +
           qtable(TABLE_NAMES.hospedagemMensalidades) +

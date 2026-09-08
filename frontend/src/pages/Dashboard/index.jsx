@@ -152,6 +152,14 @@ function Dashboard() {
     setView("mel");
   }
 
+  function openMelPetPaymentStatement() {
+    setMelPetRegistrationOnly(false);
+    setMelComplianceGate(false);
+    setMelInitialAdminMenu("");
+    setMelUserMenu("extratoPagamentos");
+    setOpenDashboardSection("");
+    setView("mel");
+  }
   function openMelPetPresenceAdmin() {
     setMelPetRegistrationOnly(false);
     setMelComplianceGate(false);
@@ -259,10 +267,23 @@ function Dashboard() {
                 label: "Controle de Presença",
                 onAction: openMelPetPresence,
               },
+              {
+                label: "Extrato de Pagamentos",
+                onAction: openMelPetPaymentStatement,
+              },
             ]),
       ];
 
   const dashboardSections = [
+
+    hasMelPetHostelAccess
+      ? {
+          id: "melpethostel",
+          title: "Mel Pet Hostel",
+          summary: "Acesse o sistema operacional do pet hotel.",
+          items: melPetHostelItems,
+        }
+      : null,
     isAdmin
       ? {
           id: "usuarios",
@@ -282,14 +303,6 @@ function Dashboard() {
               onAction: () => openView("admin-user-maintenance"),
             },
           ],
-        }
-      : null,
-    hasMelPetHostelAccess
-      ? {
-          id: "melpethostel",
-          title: "Mel Pet Hostel",
-          summary: "Acesse o sistema operacional do pet hotel.",
-          items: melPetHostelItems,
         }
       : null,
     isAdmin
@@ -327,12 +340,12 @@ function Dashboard() {
   useEffect(() => {
     userModuleGateCheckedRef.current = false;
     setView("home");
-    setOpenDashboardSection("");
+    setOpenDashboardSection(isAdmin ? "" : "melpethostel");
     setModuleGateLoading(false);
     setMelComplianceGate(false);
     setMelPetRegistrationOnly(false);
     setMelInitialAdminMenu("");
-  }, [usuario?.id, usuario?.login]);
+  }, [isAdmin, usuario?.id, usuario?.login]);
 
   useEffect(() => {
     if (!usuario || isAdmin) {
@@ -660,10 +673,16 @@ function Dashboard() {
                         id: section.id,
                         title: section.title,
                         summary: section.summary,
-                        isOpen: openDashboardSection === section.id,
+                        isOpen:
+                          section.id === "melpethostel" ||
+                          openDashboardSection === section.id,
                         onAction: () =>
                           setOpenDashboardSection((current) =>
-                            current === section.id ? "" : section.id,
+                            section.id === "melpethostel"
+                              ? "melpethostel"
+                              : current === section.id
+                                ? ""
+                                : section.id,
                           ),
                         content: (
                           <MenuList ariaLabel={section.title}>
@@ -704,6 +723,12 @@ function Dashboard() {
           userMenu={melUserMenu}
           initialAdminPet={melInitialAdminPet}
           onBackToInitialAdminPetSource={() => handleDashboardBack("melTutorMaintenance")}
+          onNavigateUserMenu={(menu) => {
+            setMelPetRegistrationOnly(false);
+            setMelComplianceGate(false);
+            setMelUserMenu(menu);
+            setView("mel");
+          }}
 
           petRegistrationOnly={!isAdmin && melPetRegistrationOnly}
           contractPromptRequest={contractPromptRequest}

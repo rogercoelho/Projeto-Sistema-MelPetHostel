@@ -36,6 +36,75 @@ function getDaysInCompetence(competence) {
   return new Date(year, month, 0).getDate();
 }
 
+function getCurrentPresenceDate() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return year && month && day ? `${year}-${month}-${day}` : "";
+}
+
+function getIsoDate(value) {
+  const match = clean(value).match(/^\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : "";
+}
+
+function getDateParts(value) {
+  const match = getIsoDate(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) } : null;
+}
+
+function formatUtcDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function getMonthDate(year, month, day) {
+  const maxDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month - 1, Math.min(day, maxDay)));
+}
+
+function getPresenceCycle(requestDate, competence) {
+  const anchor = getDateParts(requestDate);
+  const match = clean(competence).match(/^(\d{4})-(\d{2})$/);
+  if (!anchor || !match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const start = getMonthDate(year, month, anchor.day);
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  const nextStart = getMonthDate(nextYear, nextMonth, anchor.day);
+  const end = new Date(nextStart.getTime() - 86400000);
+  return {
+    inicio: formatUtcDate(start),
+    fim: formatUtcDate(end),
+  };
+}
+
+function isDateInPresenceCycle(date, cycle) {
+  const target = getIsoDate(date);
+  return Boolean(target && cycle?.inicio && cycle?.fim && target >= cycle.inicio && target <= cycle.fim);
+}
+
+function getPresenceCycleDays(row) {
+  const start = getDateParts(row?.cicloInicio);
+  const end = getDateParts(row?.cicloFim);
+  if (!start || !end) return getDaysInCompetence(row?.competencia);
+  const startDate = Date.UTC(start.year, start.month - 1, start.day);
+  const endDate = Date.UTC(end.year, end.month - 1, end.day);
+  return endDate >= startDate ? Math.floor((endDate - startDate) / 86400000) + 1 : 0;
+}
+
+function getPresenceCycleWeeks(row) {
+  const days = getPresenceCycleDays(row);
+  return days > 0 ? Math.ceil(days / 7) : 0;
+}
+
 function normalizeText(value) {
   return clean(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
@@ -44,18 +113,13 @@ function roundMoney(value) {
   return Math.round(Number(value || 0) * 100) / 100;
 }
 
-function getWeeksInCompetence(competence) {
-  const days = getDaysInCompetence(competence);
-  if (!days) return 0;
-  return Math.ceil(days / 7);
-}
 
 function getContractedDays(row) {
   const quantity = Number(row.tempo_quantidade);
   const unit = normalizeText(row.tempo_unidade);
   if (Number.isFinite(quantity) && quantity > 0) {
     const normalizedQuantity = Math.trunc(quantity);
-    if (unit.includes("semana")) return normalizedQuantity * getWeeksInCompetence(row.competencia);
+    if (unit.includes("semana")) return normalizedQuantity * getPresenceCycleWeeks(row);
     if (unit.includes("mes")) return normalizedQuantity * getDaysInCompetence(row.competencia);
     return normalizedQuantity;
   }
@@ -137,7 +201,7 @@ async function getCrechePresenceBilling(req, row, diasUsados) {
     )
     .sort((a, b) => a.quantity - b.quantity || a.value - b.value || a.id - b.id);
 
-  const weeks = getWeeksInCompetence(row.competencia);
+  const weeks = getPresenceCycleWeeks(row);
   const baseDays = selectedQuantity * weeks;
   const baseValue = roundMoney(row.item_valor_total || row.mensalidade_valor || 0);
   const higherPlans = plans.filter((plan) => plan.quantity > selectedQuantity);
@@ -230,6 +294,7 @@ async function listPresencePets(req, { clienteId = null } = {}) {
   const params = [];
   const where = [
     "LOWER(s.status) = 'confirmado'",
+    "LOWER(COALESCE(s.tipo, i.tipo, '')) LIKE '%creche%'",
     "LOWER(COALESCE(s.modo_cobranca, i.modo_cobranca, '')) = 'mensal'",
     "LOWER(m.status) IN ('confirmado', 'cancelamento_solicitado')",
     "LOWER(p.status) = 'confirmado'",
@@ -246,8 +311,8 @@ async function listPresencePets(req, { clienteId = null } = {}) {
         p2.nome AS pet_nome,
         p2.cliente_id,
         c.nome AS cliente_nome,
-        MAX(m.competencia) AS ultima_competencia,
-        COUNT(DISTINCT m.id) AS total_meses
+        m.competencia,
+        DATE(s.criado_em) AS solicitacao_data_pedido
       FROM ${qtable(TABLE_NAMES.hospedagemMensalidades)} m
       INNER JOIN ${qtable(TABLE_NAMES.hospedagemPagamentos)} p ON p.id = m.pagamento_id
       INNER JOIN ${qtable(solicitacoesTable)} s ON s.id = m.solicitacao_id
@@ -255,22 +320,31 @@ async function listPresencePets(req, { clienteId = null } = {}) {
       INNER JOIN ${qtable(petsTable)} p2 ON p2.id = i.pet_id
       INNER JOIN ${qtable(clientesTable)} c ON c.id = p2.cliente_id
       WHERE ${where.join(" AND ")}
-      GROUP BY p2.id, p2.nome, p2.cliente_id, c.nome
-      ORDER BY c.nome ASC, p2.nome ASC
+      ORDER BY c.nome ASC, p2.nome ASC, m.competencia DESC
     `,
     params,
   );
 
-  return (rows || []).map((row) => ({
-    petId: Number(row.pet_id),
-    petNome: row.pet_nome || "",
-    clienteId: Number(row.cliente_id),
-    clienteNome: row.cliente_nome || "",
-    ultimaCompetencia: row.ultima_competencia || "",
-    totalMeses: Number(row.total_meses || 0),
-  }));
-}
+  const today = getCurrentPresenceDate();
+  const activePets = new Map();
+  for (const row of rows || []) {
+    const cycle = getPresenceCycle(row.solicitacao_data_pedido, row.competencia);
+    const petId = Number(row.pet_id);
+    if (!petId || !isDateInPresenceCycle(today, cycle) || activePets.has(petId)) continue;
+    activePets.set(petId, {
+      petId,
+      petNome: row.pet_nome || "",
+      clienteId: Number(row.cliente_id),
+      clienteNome: row.cliente_nome || "",
+      ultimaCompetencia: row.competencia || "",
+      cicloInicio: cycle.inicio,
+      cicloFim: cycle.fim,
+      totalMeses: 1,
+    });
+  }
 
+  return Array.from(activePets.values());
+}
 async function getMonthlyPresence(req, { petId, clienteId = null, competencia }) {
   await ensurePresenceTable(req);
   const db = dbFor(req);
@@ -293,6 +367,7 @@ async function getMonthlyPresence(req, { petId, clienteId = null, competencia })
         s.id AS solicitacao_id,
         s.tipo AS solicitacao_tipo,
         s.dias AS solicitacao_dias,
+        DATE(s.criado_em) AS solicitacao_data_pedido,
         i.tipo AS item_tipo,
         i.plano_id,
         i.tempo_quantidade,
@@ -313,6 +388,7 @@ async function getMonthlyPresence(req, { petId, clienteId = null, competencia })
         AND m.competencia = ?
         ${ownership}
         AND LOWER(s.status) = 'confirmado'
+        AND LOWER(COALESCE(s.tipo, i.tipo, '')) LIKE '%creche%'
         AND LOWER(COALESCE(s.modo_cobranca, i.modo_cobranca, '')) = 'mensal'
         AND LOWER(m.status) IN ('confirmado', 'cancelamento_solicitado')
         AND LOWER(pg.status) = 'confirmado'
@@ -324,15 +400,19 @@ async function getMonthlyPresence(req, { petId, clienteId = null, competencia })
 
   const month = monthRows?.[0];
   if (!month) return null;
+  const cycle = getPresenceCycle(month.solicitacao_data_pedido, month.competencia);
+  if (!cycle) return null;
 
   const [presenceRows] = await db.query(
     `
       SELECT id, data_presenca, registrado_por, criado_em
       FROM ${qtable(TABLE_NAMES.petPresencas)}
-      WHERE pet_id = ? AND competencia = ?
+      WHERE pet_id = ?
+        AND competencia = ?
+        AND data_presenca BETWEEN ? AND ?
       ORDER BY data_presenca ASC
     `,
-    [petId, competencia],
+    [petId, competencia, cycle.inicio, cycle.fim],
   );
 
   const presencas = (presenceRows || []).map((row) => ({
@@ -342,7 +422,7 @@ async function getMonthlyPresence(req, { petId, clienteId = null, competencia })
     criadoEm: row.criado_em || null,
   }));
   const diasUsados = presencas.length;
-  const billing = await getCrechePresenceBilling(req, month, diasUsados);
+  const billing = await getCrechePresenceBilling(req, { ...month, cicloInicio: cycle.inicio, cicloFim: cycle.fim }, diasUsados);
 
   return {
     petId: Number(month.pet_id),
@@ -352,6 +432,8 @@ async function getMonthlyPresence(req, { petId, clienteId = null, competencia })
     solicitacaoId: Number(month.solicitacao_id),
     mensalidadeId: Number(month.mensalidade_id),
     competencia: month.competencia,
+    cicloInicio: cycle.inicio,
+    cicloFim: cycle.fim,
     status: month.mensalidade_status || "",
     tipo: month.solicitacao_tipo || "",
     diasContratados: billing.diasContratados,
@@ -420,12 +502,11 @@ router.post("/presencas/pets/:petId/toggle", async (req, res) => {
     if (!Number.isInteger(petId) || petId <= 0 || !isValidDate(dataPresenca) || !isValidCompetence(competencia)) {
       return res.status(400).json({ status: "erro", mensagem: "Pet, mes ou data invalida." });
     }
-    if (getCompetenceFromDate(dataPresenca) !== competencia) {
-      return res.status(400).json({ status: "erro", mensagem: "A data selecionada nao pertence ao mes informado." });
-    }
-
     const resumo = await getMonthlyPresence(req, { petId, competencia });
-    if (!resumo) return res.status(404).json({ status: "erro", mensagem: "Mensalidade valida nao encontrada para este pet e mes." });
+    if (!resumo) return res.status(404).json({ status: "erro", mensagem: "Mensalidade valida nao encontrada para este ciclo." });
+    if (!isDateInPresenceCycle(dataPresenca, { inicio: resumo.cicloInicio, fim: resumo.cicloFim })) {
+      return res.status(400).json({ status: "erro", mensagem: "A data selecionada nao pertence ao ciclo contratado." });
+    }
 
     const db = dbFor(req);
     const [existingRows] = await db.query(
