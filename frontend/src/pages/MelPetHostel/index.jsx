@@ -5983,10 +5983,7 @@ export default function MelPetHostel({
       0,
       Number(presenceSummary?.diasContratados || 0),
     );
-    const reportRows = Array.from(
-      { length: Math.max(regularPresenceCount, rows.length) },
-      (_, index) => rows[index] || null,
-    );
+    const reportRows = rows;
 
     return (
       <div className="melpet-presence-report melpet-presence-report--admin-call-sheet">
@@ -6009,21 +6006,15 @@ export default function MelPetHostel({
           <tbody>
             {reportRows.length ? (
               reportRows.map((item, index) => (
-                <tr key={item?.id || item?.dataPresenca || `dia-${index + 1}`}>
+                <tr key={item.id || item.dataPresenca || `dia-${index + 1}`}>
                   <td>{index + 1}</td>
                   <td>{presenceSummary?.petNome || "-"}</td>
-                  <td>{item ? formatBrazilDate(item.dataPresenca) : ""}</td>
+                  <td>{formatBrazilDate(item.dataPresenca)}</td>
                   <td>
-                    {item ? (
-                      <span className="melpet-presence-call-entry">
-                        Presente
-                        {index >= regularPresenceCount ? <em>Excedente</em> : null}
-                      </span>
-                    ) : (
-                      <span className="melpet-presence-call-empty">
-                        Sem presença registrada
-                      </span>
-                    )}
+                    <span className="melpet-presence-call-entry">
+                      Presente
+                      {index >= regularPresenceCount ? <em>Excedente</em> : null}
+                    </span>
                   </td>
                 </tr>
               ))
