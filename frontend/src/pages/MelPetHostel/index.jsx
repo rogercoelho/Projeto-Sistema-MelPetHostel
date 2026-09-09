@@ -15,6 +15,7 @@ import api, { API_URL } from "../../services/api";
 import { maskCpf } from "../../utils/brFields";
 import { buildContractorDataFromCliente } from "../../utils/clientProfile";
 import { formatDateTimeSaoPaulo } from "../../utils/date";
+import melPetHostelLogo from "./assets/MelPetHostel_Logo.jpeg";
 import PetRegistrationForm from "./PetRegistrationForm";
 import { PET_ANAMNESIS_SECTIONS } from "./petAnamnesisForm";
 import "./styles.css";
@@ -391,8 +392,9 @@ export default function MelPetHostel({
     useState(null);
   const [reviewingHostingRequestId, setReviewingHostingRequestId] =
     useState(null);
-  const [hostingApprovalAdjustments, setHostingApprovalAdjustments] =
-    useState({});
+  const [hostingApprovalAdjustments, setHostingApprovalAdjustments] = useState(
+    {},
+  );
   const [rejectHostingTarget, setRejectHostingTarget] = useState(null);
   const [rejectHostingReason, setRejectHostingReason] = useState("");
   const [pixConfigForm, setPixConfigForm] = useState({
@@ -1289,8 +1291,10 @@ export default function MelPetHostel({
       const aCompetence = getPaymentCompetence(a);
       const bCompetence = getPaymentCompetence(b);
       if (aCompetence || bCompetence) {
-        const aConfirmed = String(a?.status || "").toLowerCase() === "confirmado";
-        const bConfirmed = String(b?.status || "").toLowerCase() === "confirmado";
+        const aConfirmed =
+          String(a?.status || "").toLowerCase() === "confirmado";
+        const bConfirmed =
+          String(b?.status || "").toLowerCase() === "confirmado";
         if (aConfirmed !== bConfirmed) return aConfirmed ? 1 : -1;
         return aCompetence.localeCompare(bCompetence);
       }
@@ -1371,8 +1375,7 @@ export default function MelPetHostel({
     return (
       isMonthlyHostingRequest(request) &&
       getHostingPayments(request).some(
-        (payment) =>
-          payment?.mensalidadeStatus === "cancelamento_solicitado",
+        (payment) => payment?.mensalidadeStatus === "cancelamento_solicitado",
       )
     );
   }
@@ -1421,7 +1424,10 @@ export default function MelPetHostel({
     );
   }
 
-  function getMonthlyCycleEndDate(request, payment = getMonthlyPayment(request)) {
+  function getMonthlyCycleEndDate(
+    request,
+    payment = getMonthlyPayment(request),
+  ) {
     const competence = getPaymentCompetence(payment) || request?.inicioMes;
     const anchorDate = String(request?.criadoEm || "").slice(0, 10);
     const competenceMatch = String(competence || "").match(/^(\d{4})-(\d{2})$/);
@@ -1455,7 +1461,11 @@ export default function MelPetHostel({
     })
       .formatToParts(new Date())
       .reduce((date, part) => {
-        if (part.type === "year" || part.type === "month" || part.type === "day") {
+        if (
+          part.type === "year" ||
+          part.type === "month" ||
+          part.type === "day"
+        ) {
           date[part.type] = part.value;
         }
         return date;
@@ -1625,7 +1635,10 @@ export default function MelPetHostel({
   }
 
   function buildPresenceMonthOptions(pet) {
-    const values = new Set([getCurrentCompetenceValue(), pet?.ultimaCompetencia]);
+    const values = new Set([
+      getCurrentCompetenceValue(),
+      pet?.ultimaCompetencia,
+    ]);
     return Array.from(values)
       .filter((value) => /^\d{4}-\d{2}$/.test(String(value || "")))
       .sort();
@@ -1634,26 +1647,48 @@ export default function MelPetHostel({
   function shiftPresenceCompetence(direction) {
     const match = String(presenceCompetence || "").match(/^(\d{4})-(\d{2})$/);
     if (!match || !activePresencePetId) return;
-    const date = new Date(Number(match[1]), Number(match[2]) - 1 + direction, 1);
+    const date = new Date(
+      Number(match[1]),
+      Number(match[2]) - 1 + direction,
+      1,
+    );
     const next = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     setPresenceCompetence(next);
     loadPresenceSummary(activePresencePetId, next);
   }
 
   function buildPresenceCalendarDays(cycleStart, cycleEnd) {
-    const startMatch = String(cycleStart || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const startMatch = String(cycleStart || "").match(
+      /^(\d{4})-(\d{2})-(\d{2})$/,
+    );
     const endMatch = String(cycleEnd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!startMatch || !endMatch) return [];
 
-    const start = new Date(Number(startMatch[1]), Number(startMatch[2]) - 1, Number(startMatch[3]));
-    const end = new Date(Number(endMatch[1]), Number(endMatch[2]) - 1, Number(endMatch[3]));
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
+    const start = new Date(
+      Number(startMatch[1]),
+      Number(startMatch[2]) - 1,
+      Number(startMatch[3]),
+    );
+    const end = new Date(
+      Number(endMatch[1]),
+      Number(endMatch[2]) - 1,
+      Number(endMatch[3]),
+    );
+    if (
+      Number.isNaN(start.getTime()) ||
+      Number.isNaN(end.getTime()) ||
+      start > end
+    )
+      return [];
 
     const firstWeekdayFromMonday = (start.getDay() + 6) % 7;
-    const blanks = Array.from({ length: firstWeekdayFromMonday }, (_, index) => ({
-      key: `blank-${index}`,
-      blank: true,
-    }));
+    const blanks = Array.from(
+      { length: firstWeekdayFromMonday },
+      (_, index) => ({
+        key: `blank-${index}`,
+        blank: true,
+      }),
+    );
     const days = [];
     const current = new Date(start);
     while (current <= end) {
@@ -1681,7 +1716,10 @@ export default function MelPetHostel({
       setPresencePets(pets);
       return pets;
     } catch (error) {
-      showToast(error?.message || "Não foi possível carregar presenças.", "error");
+      showToast(
+        error?.message || "Não foi possível carregar presenças.",
+        "error",
+      );
       return [];
     } finally {
       setLoadingPresence(false);
@@ -1698,7 +1736,10 @@ export default function MelPetHostel({
       setPresenceSummary(data?.resumo || null);
     } catch (error) {
       setPresenceSummary(null);
-      showToast(error?.message || "Não foi possível carregar o mês selecionado.", "error");
+      showToast(
+        error?.message || "Não foi possível carregar o mês selecionado.",
+        "error",
+      );
     } finally {
       setLoadingPresence(false);
     }
@@ -1714,7 +1755,8 @@ export default function MelPetHostel({
   }
 
   async function togglePresenceDate(date) {
-    if (!isAdmin || !activePresencePetId || !presenceCompetence || !date) return;
+    if (!isAdmin || !activePresencePetId || !presenceCompetence || !date)
+      return;
     setTogglingPresenceDate(date);
     try {
       const data = await api.post(
@@ -1723,7 +1765,10 @@ export default function MelPetHostel({
       );
       setPresenceSummary(data?.resumo || null);
     } catch (error) {
-      showToast(error?.message || "Não foi possível alterar a presença.", "error");
+      showToast(
+        error?.message || "Não foi possível alterar a presença.",
+        "error",
+      );
     } finally {
       setTogglingPresenceDate("");
     }
@@ -2720,12 +2765,21 @@ export default function MelPetHostel({
   }, [isAdmin, activeMenu]);
 
   useEffect(() => {
-    if (isAdmin || !["hospedagem", "extratoPagamentos"].includes(userMenu)) return;
+    if (isAdmin || !["hospedagem", "extratoPagamentos"].includes(userMenu))
+      return;
     loadPlanos();
+  }, [isAdmin, userMenu]);
+  useEffect(() => {
+    if (isAdmin || userMenu !== "controlePresenca") return;
+    setActivePresencePetId(null);
+    setPresenceSummary(null);
+    loadPresencePets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, userMenu]);
 
   useEffect(() => {
-    if (isAdmin || !["hospedagem", "extratoPagamentos"].includes(userMenu)) return;
+    if (isAdmin || !["hospedagem", "extratoPagamentos"].includes(userMenu))
+      return;
     loadHostingRequests();
   }, [isAdmin, userMenu]);
 
@@ -4127,8 +4181,7 @@ export default function MelPetHostel({
                     return shouldUpdateMonthly
                       ? {
                           ...payment,
-                          mensalidadeStatus:
-                            data.solicitacao.mensalidadeStatus,
+                          mensalidadeStatus: data.solicitacao.mensalidadeStatus,
                         }
                       : payment;
                   }),
@@ -4432,441 +4485,313 @@ export default function MelPetHostel({
 
   function renderHostingPaymentPanel(request) {
     const requestTotal = request.valorFinal ?? request.valorTotal;
-                          const payments = hasMonthlyCancellationRequested(request)
+    const payments = hasMonthlyCancellationRequested(request)
       ? getHostingPayments(request).filter(
-          (payment) => String(payment?.status || "").toLowerCase() === "confirmado",
+          (payment) =>
+            String(payment?.status || "").toLowerCase() === "confirmado",
         )
       : getVisibleHostingPayments(request);
-                          const canManagePayment = shouldShowHostingPaymentPanel(
-                            request,
-                            payments,
-                          );
-                          if (!canManagePayment && !payments.length) {
-                            return null;
-                          }
-                          const paymentMessage =
-                            getHostingPaymentMessage(request);
-                          if (!payments.length) {
-                            return (
-                              <div className="melpet-hosting-payment-card">
-                                <div>
-                                  <span className="melpet-hosting-history-kicker">
-                                    Pagamento PIX
-                                  </span>
-                                  <h4>{formatCurrency(requestTotal)}</h4>
-                                </div>
-                                <p>Escolha como deseja realizar o pagamento.</p>
-                                <div className="melpet-hosting-payment-options">
-                                  <Button
-                                    type="button"
-                                    className="melpet-hosting-payment-option is-total"
-                                    disabled={
-                                      generatingHostingPaymentId === request.id
-                                    }
-                                    onClick={() =>
-                                      generateHostingPaymentOption(
-                                        request,
-                                        "total",
-                                      )
-                                    }
-                                  >
-                                    <strong>Pagamento total</strong>
-                                    <span>Gerar um PIX único</span>
-                                  </Button>
-                                  {!isMonthlyHostingRequest(request) ? (
+    const canManagePayment = shouldShowHostingPaymentPanel(request, payments);
+    if (!canManagePayment && !payments.length) {
+      return null;
+    }
+    const paymentMessage = getHostingPaymentMessage(request);
+    if (!payments.length) {
+      return (
+        <div className="melpet-hosting-payment-card">
+          <div>
+            <span className="melpet-hosting-history-kicker">Pagamento PIX</span>
+            <h4>{formatCurrency(requestTotal)}</h4>
+          </div>
+          <p>Escolha como deseja realizar o pagamento.</p>
+          <div className="melpet-hosting-payment-options">
+            <Button
+              type="button"
+              className="melpet-hosting-payment-option is-total"
+              disabled={generatingHostingPaymentId === request.id}
+              onClick={() => generateHostingPaymentOption(request, "total")}
+            >
+              <strong>Pagamento total</strong>
+              <span>Gerar um PIX único</span>
+            </Button>
+            {!isMonthlyHostingRequest(request) ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="melpet-hosting-payment-option is-reserve"
+                disabled={generatingHostingPaymentId === request.id}
+                onClick={() =>
+                  generateHostingPaymentOption(
+                    request,
 
-                                    <Button
+                    "dividido",
+                  )
+                }
+              >
+                <strong>Reserva + Check-in</strong>
 
-                                      type="button"
+                <span>Dividir em duas etapas com PIX</span>
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              className="melpet-hosting-payment-option is-card"
+              disabled={generatingHostingPaymentId === request.id}
+              onClick={() =>
+                generateHostingPaymentOption(request, "cartao_credito")
+              }
+            >
+              <strong>Cartão de Crédito</strong>
+              <span>Enviaremos um Link de Pagamento</span>
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="melpet-hosting-payment-card">
+        {paymentMessage ? (
+          <div className="melpet-hosting-history-highlight">
+            {paymentMessage}
+          </div>
+        ) : null}
+        {canChangeHostingPaymentOption(request) ? (
+          <div className="melpet-hosting-payment-change">
+            <span className="melpet-hosting-history-kicker">
+              Mudar tipo de pagamento
+            </span>
+            <div className="melpet-hosting-payment-options is-compact">
+              <Button
+                type="button"
+                className="melpet-hosting-payment-option is-total"
+                disabled={generatingHostingPaymentId === request.id}
+                onClick={() => generateHostingPaymentOption(request, "total")}
+              >
+                <strong>Pagamento total</strong>
+                <span>Gerar um PIX único</span>
+              </Button>
+              {!isMonthlyHostingRequest(request) ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="melpet-hosting-payment-option is-reserve"
+                  disabled={generatingHostingPaymentId === request.id}
+                  onClick={() =>
+                    generateHostingPaymentOption(
+                      request,
 
-                                      variant="outline"
+                      "dividido",
+                    )
+                  }
+                >
+                  <strong>Reserva + Check-in</strong>
 
-                                      className="melpet-hosting-payment-option is-reserve"
-
-                                      disabled={
-
-                                        generatingHostingPaymentId === request.id
-
-                                      }
-
-                                      onClick={() =>
-
-                                        generateHostingPaymentOption(
-
-                                          request,
-
-                                          "dividido",
-
-                                        )
-
-                                      }
-
-                                    >
-
-                                      <strong>Reserva + Check-in</strong>
-
-                                      <span>Dividir em duas etapas com PIX</span>
-
-                                    </Button>
-
-                                  ) : null}
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="melpet-hosting-payment-option is-card"
-                                    disabled={
-                                      generatingHostingPaymentId === request.id
-                                    }
-                                    onClick={() =>
-                                      generateHostingPaymentOption(
-                                        request,
-                                        "cartao_credito",
-                                      )
-                                    }
-                                  >
-                                    <strong>Cartão de Crédito</strong>
-                                    <span>Enviaremos um Link de Pagamento</span>
-                                  </Button>
-                                </div>
-                              </div>
-                            );
-                          }
-                          return (
-                            <div className="melpet-hosting-payment-card">
-                              {paymentMessage ? (
-                                <div className="melpet-hosting-history-highlight">
-                                  {paymentMessage}
-                                </div>
-                              ) : null}
-                              {canChangeHostingPaymentOption(request) ? (
-                                <div className="melpet-hosting-payment-change">
-                                  <span className="melpet-hosting-history-kicker">
-                                    Mudar tipo de pagamento
-                                  </span>
-                                  <div className="melpet-hosting-payment-options is-compact">
-                                    <Button
-                                      type="button"
-                                      className="melpet-hosting-payment-option is-total"
-                                      disabled={
-                                        generatingHostingPaymentId ===
-                                        request.id
-                                      }
-                                      onClick={() =>
-                                        generateHostingPaymentOption(
-                                          request,
-                                          "total",
-                                        )
-                                      }
-                                    >
-                                      <strong>Pagamento total</strong>
-                                      <span>Gerar um PIX único</span>
-                                    </Button>
-                                    {!isMonthlyHostingRequest(request) ? (
-
-                                      <Button
-
-                                        type="button"
-
-                                        variant="outline"
-
-                                        className="melpet-hosting-payment-option is-reserve"
-
-                                        disabled={
-
-                                          generatingHostingPaymentId ===
-
-                                          request.id
-
-                                        }
-
-                                        onClick={() =>
-
-                                          generateHostingPaymentOption(
-
-                                            request,
-
-                                            "dividido",
-
-                                          )
-
-                                        }
-
-                                      >
-
-                                        <strong>Reserva + Check-in</strong>
-
-                                        <span>
-
-                                          Dividir em duas etapas com PIX
-
-                                        </span>
-
-                                      </Button>
-
-                                    ) : null}
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      className="melpet-hosting-payment-option is-card"
-                                      disabled={
-                                        generatingHostingPaymentId ===
-                                        request.id
-                                      }
-                                      onClick={() =>
-                                        generateHostingPaymentOption(
-                                          request,
-                                          "cartao_credito",
-                                        )
-                                      }
-                                    >
-                                      <strong>Cartão de Crédito</strong>
-                                      <span>
-                                        Enviaremos um Link de Pagamento
-                                      </span>
-                                    </Button>
-                                  </div>
-                                </div>
-                              ) : null}
-                              {payments.map((payment) => {
-                                const paymentKey =
-                                  request.id + "-" + payment.parcelaTipo;
-                                const paymentStatus = String(
-                                  payment.status || "",
-                                ).toLowerCase();
-                                const isConfirmed =
-                                  paymentStatus === "confirmado";
-                                const isRejected =
-                                  paymentStatus === "reprovado";
-                                const hasPendingReceipt =
-                                  paymentStatus === "comprovante_enviado";
-                                const uploadTarget = {
-                                  ...request,
-                                  parcelaTipo: payment.parcelaTipo,
-                                };
-                                return (
-                                  <div
-                                    className={`melpet-hosting-payment-installment ${isRejected ? "is-rejected" : isConfirmed ? "is-done" : hasPendingReceipt ? "is-pending" : ""}`}
-                                    key={payment.id || paymentKey}
-                                  >
-                                    <div>
-                                      <span className="melpet-hosting-history-kicker">
-                                        {getHostingPaymentLabel(payment)}
-                                      </span>
-                                      <h4>{formatCurrency(payment.valor)}</h4>
-                                      <span
-                                        className={`melpet-doc-status melpet-doc-status--${
-                                          isRejected
-                                            ? "rejected"
-                                            : isConfirmed
-                                              ? "approved"
-                                              : hasPendingReceipt
-                                                ? "pending"
-                                                : "pending"
-                                        }`}
-                                      >
-                                        {isRejected
-                                          ? "Reprovado"
-                                          : isConfirmed
-                                            ? "Aprovado"
-                                            : hasPendingReceipt
-                                              ? "Enviado para conferencia"
-                                              : "Pendente"}
-                                      </span>
-                                    </div>
-                                    {isConfirmed ? (
-                                      <div className="melpet-hosting-history-note is-success">
-                                        <strong>
-                                          {formatHostingCheckInOut(request)}
-                                        </strong>
-                                        <p>
-                                          {payment.conferidoEm
-                                            ? `Confirmado em ${formatDateTime(
-                                                payment.conferidoEm,
-                                              )}`
-                                            : "Comprovante aprovado pelo administrador."}
-                                        </p>
-                                        {getMonthlyPaymentCycleText(request, payment) ? (
-                                          <p className="melpet-hosting-payment-cycle">
-                                            {getMonthlyPaymentCycleText(request, payment)}
-                                          </p>
-                                        ) : null}
-                                        {payment.comprovanteUrl ? (
-                                          <div className="melpet-hosting-payment-confirmed-actions">
-                                            <Button
-                                              type="button"
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() =>
-                                                openHostingPaymentPreview(payment)
-                                              }
-                                            >
-                                              Visualizar comprovante
-                                            </Button>
-                                          </div>
-                                        ) : null}
-                                      </div>                                    ) : payment.parcelaTipo ===
-                                      "cartao_credito" ? (
-                                      <div className="melpet-hosting-card-payment-info">
-                                        <p>
-                                          Iremos gerar um link de pagamento para
-                                          a opção de cartão de crédito. Assim
-                                          que o link for gerado, ficará
-                                          disponivel abaixo e você também
-                                          receberá por email. Depois do
-                                          pagamento, envie o comprovante neste
-                                          pedido.
-                                        </p>
-                                        {payment.linkPagamento ? (
-                                          <a
-                                            href={payment.linkPagamento}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                          >
-                                            {payment.linkPagamento}
-                                          </a>
-                                        ) : (
-                                          <span>
-                                            Aguarde a geração do link de
-                                            pagamento. Avisaremos quando estiver
-                                            disponível.
-                                          </span>
-                                        )}
-                                      </div>
-                                    ) : payment.pixCopiaCola ? (
-                                      <div className="melpet-hosting-payment-grid">
-                                        {payment.qrCodeUrl ? (
-                                          <img
-                                            className="melpet-hosting-payment-qr"
-                                            src={payment.qrCodeUrl}
-                                            alt="QR Code PIX"
-                                          />
-                                        ) : null}
-                                        <label className="pet-form-field melpet-hosting-pix-copy-field">
-                                          <span>PIX copia e cola</span>
-                                          <textarea
-                                            readOnly
-                                            value={payment.pixCopiaCola}
-                                            rows={4}
-                                          />
-                                          <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() =>
-                                              copyHostingPixCode(
-                                                payment.pixCopiaCola,
-                                              )
-                                            }
-                                          >
-                                            Copiar
-                                          </Button>
-                                        </label>
-                                      </div>
-                                    ) : (
-                                      <p className="melpet-error">
-                                        PIX ainda não configurado para este
-                                        pedido.
-                                      </p>
-                                    )}
-                                    {isRejected ? (
-                                      <div className="melpet-vaccine-rejection-notice melpet-document-rejection-notice">
-                                        <strong>Detalhes da reprovacao</strong>
-                                        <div className="melpet-document-rejection-reason">
-                                          <span>Motivo:</span>
-                                          <p>
-                                            {payment.motivoRecusa ||
-                                              "Motivo nao informado."}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    ) : null}
-                                    {!isConfirmed &&
-                                    !isRejected &&
-                                    payment.comprovanteUrl ? (
-                                      <div className="melpet-hosting-history-note">
-                                        <strong>Comprovante enviado</strong>
-                                        <p>
-                                          {payment.comprovanteNome ||
-                                            "Aguardando aprovação do administrador."}
-                                        </p>
-                                      </div>
-                                    ) : null}
-                                    {!isConfirmed &&
-                                    !hasPendingReceipt &&
-                                    (payment.parcelaTipo !== "cartao_credito" ||
-                                      Boolean(payment.linkPagamento)) ? (
-                                      <div className="melpet-hosting-receipt-upload">
-                                        <input
-                                          ref={(el) => {
-                                            hostingPaymentFileRefs.current[
-                                              paymentKey
-                                            ] = el;
-                                          }}
-                                          type="file"
-                                          accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg"
-                                          className="melpet-file-input-hidden"
-                                          onChange={(event) =>
-                                            handleHostingPaymentFile(
-                                              paymentKey,
-                                              event,
-                                            )
-                                          }
-                                        />
-                                        <div className="melpet-hosting-receipt-upload-copy">
-                                          <strong>
-                                            Comprovante de pagamento
-                                          </strong>
-                                          <span>
-                                            Envie PDF, JPG ou PNG para análise.
-                                          </span>
-                                        </div>
-                                        <div className="melpet-hosting-receipt-upload-actions">
-                                          <Button
-                                            type="button"
-                                            variant="outline"
-                                            className="melpet-hosting-receipt-select"
-                                            onClick={() =>
-                                              hostingPaymentFileRefs.current[
-                                                paymentKey
-                                              ]?.click()
-                                            }
-                                          >
-                                            <strong>
-                                              Selecionar comprovante
-                                            </strong>
-                                            <span>
-                                              {hostingPaymentFiles[paymentKey]
-                                                ?.name ||
-                                                "Nenhum arquivo selecionado"}
-                                            </span>
-                                          </Button>
-                                          <Button
-                                            type="button"
-                                            className="melpet-hosting-receipt-send"
-                                            disabled={
-                                              uploadingHostingPaymentId ===
-                                              request.id
-                                            }
-                                            onClick={() =>
-                                              uploadHostingPaymentReceipt(
-                                                uploadTarget,
-                                              )
-                                            }
-                                          >
-                                            {uploadingHostingPaymentId ===
-                                            request.id
-                                              ? "Enviando..."
-                                              : "Enviar comprovante"}
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        
+                  <span>Dividir em duas etapas com PIX</span>
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                className="melpet-hosting-payment-option is-card"
+                disabled={generatingHostingPaymentId === request.id}
+                onClick={() =>
+                  generateHostingPaymentOption(request, "cartao_credito")
+                }
+              >
+                <strong>Cartão de Crédito</strong>
+                <span>Enviaremos um Link de Pagamento</span>
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        {payments.map((payment) => {
+          const paymentKey = request.id + "-" + payment.parcelaTipo;
+          const paymentStatus = String(payment.status || "").toLowerCase();
+          const isConfirmed = paymentStatus === "confirmado";
+          const isRejected = paymentStatus === "reprovado";
+          const hasPendingReceipt = paymentStatus === "comprovante_enviado";
+          const uploadTarget = {
+            ...request,
+            parcelaTipo: payment.parcelaTipo,
+          };
+          return (
+            <div
+              className={`melpet-hosting-payment-installment ${isRejected ? "is-rejected" : isConfirmed ? "is-done" : hasPendingReceipt ? "is-pending" : ""}`}
+              key={payment.id || paymentKey}
+            >
+              <div>
+                <span className="melpet-hosting-history-kicker">
+                  {getHostingPaymentLabel(payment)}
+                </span>
+                <h4>{formatCurrency(payment.valor)}</h4>
+                <span
+                  className={`melpet-doc-status melpet-doc-status--${
+                    isRejected
+                      ? "rejected"
+                      : isConfirmed
+                        ? "approved"
+                        : hasPendingReceipt
+                          ? "pending"
+                          : "pending"
+                  }`}
+                >
+                  {isRejected
+                    ? "Reprovado"
+                    : isConfirmed
+                      ? "Aprovado"
+                      : hasPendingReceipt
+                        ? "Enviado para conferencia"
+                        : "Pendente"}
+                </span>
+              </div>
+              {isConfirmed ? (
+                <div className="melpet-hosting-history-note is-success">
+                  <strong>{formatHostingCheckInOut(request)}</strong>
+                  <p>
+                    {payment.conferidoEm
+                      ? `Confirmado em ${formatDateTime(payment.conferidoEm)}`
+                      : "Comprovante aprovado pelo administrador."}
+                  </p>
+                  {getMonthlyPaymentCycleText(request, payment) ? (
+                    <p className="melpet-hosting-payment-cycle">
+                      {getMonthlyPaymentCycleText(request, payment)}
+                    </p>
+                  ) : null}
+                  {payment.comprovanteUrl ? (
+                    <div className="melpet-hosting-payment-confirmed-actions">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openHostingPaymentPreview(payment)}
+                      >
+                        Visualizar comprovante
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : payment.parcelaTipo === "cartao_credito" ? (
+                <div className="melpet-hosting-card-payment-info">
+                  <p>
+                    Iremos gerar um link de pagamento para a opção de cartão de
+                    crédito. Assim que o link for gerado, ficará disponivel
+                    abaixo e você também receberá por email. Depois do
+                    pagamento, envie o comprovante neste pedido.
+                  </p>
+                  {payment.linkPagamento ? (
+                    <a
+                      href={payment.linkPagamento}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {payment.linkPagamento}
+                    </a>
+                  ) : (
+                    <span>
+                      Aguarde a geração do link de pagamento. Avisaremos quando
+                      estiver disponível.
+                    </span>
+                  )}
+                </div>
+              ) : payment.pixCopiaCola ? (
+                <div className="melpet-hosting-payment-grid">
+                  {payment.qrCodeUrl ? (
+                    <img
+                      className="melpet-hosting-payment-qr"
+                      src={payment.qrCodeUrl}
+                      alt="QR Code PIX"
+                    />
+                  ) : null}
+                  <label className="pet-form-field melpet-hosting-pix-copy-field">
+                    <span>PIX copia e cola</span>
+                    <textarea readOnly value={payment.pixCopiaCola} rows={4} />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => copyHostingPixCode(payment.pixCopiaCola)}
+                    >
+                      Copiar
+                    </Button>
+                  </label>
+                </div>
+              ) : (
+                <p className="melpet-error">
+                  PIX ainda não configurado para este pedido.
+                </p>
+              )}
+              {isRejected ? (
+                <div className="melpet-vaccine-rejection-notice melpet-document-rejection-notice">
+                  <strong>Detalhes da reprovacao</strong>
+                  <div className="melpet-document-rejection-reason">
+                    <span>Motivo:</span>
+                    <p>{payment.motivoRecusa || "Motivo nao informado."}</p>
+                  </div>
+                </div>
+              ) : null}
+              {!isConfirmed && !isRejected && payment.comprovanteUrl ? (
+                <div className="melpet-hosting-history-note">
+                  <strong>Comprovante enviado</strong>
+                  <p>
+                    {payment.comprovanteNome ||
+                      "Aguardando aprovação do administrador."}
+                  </p>
+                </div>
+              ) : null}
+              {!isConfirmed &&
+              !hasPendingReceipt &&
+              (payment.parcelaTipo !== "cartao_credito" ||
+                Boolean(payment.linkPagamento)) ? (
+                <div className="melpet-hosting-receipt-upload">
+                  <input
+                    ref={(el) => {
+                      hostingPaymentFileRefs.current[paymentKey] = el;
+                    }}
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg"
+                    className="melpet-file-input-hidden"
+                    onChange={(event) =>
+                      handleHostingPaymentFile(paymentKey, event)
+                    }
+                  />
+                  <div className="melpet-hosting-receipt-upload-copy">
+                    <strong>Comprovante de pagamento</strong>
+                    <span>Envie PDF, JPG ou PNG para análise.</span>
+                  </div>
+                  <div className="melpet-hosting-receipt-upload-actions">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="melpet-hosting-receipt-select"
+                      onClick={() =>
+                        hostingPaymentFileRefs.current[paymentKey]?.click()
+                      }
+                    >
+                      <strong>Selecionar comprovante</strong>
+                      <span>
+                        {hostingPaymentFiles[paymentKey]?.name ||
+                          "Nenhum arquivo selecionado"}
+                      </span>
+                    </Button>
+                    <Button
+                      type="button"
+                      className="melpet-hosting-receipt-send"
+                      disabled={uploadingHostingPaymentId === request.id}
+                      onClick={() => uploadHostingPaymentReceipt(uploadTarget)}
+                    >
+                      {uploadingHostingPaymentId === request.id
+                        ? "Enviando..."
+                        : "Enviar comprovante"}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
   }
 
   const hostingRequestsContent = (
@@ -4975,6 +4900,11 @@ export default function MelPetHostel({
                       <span className="melpet-hosting-history-card-badge">
                         {request.itens?.length || 0} item(s)
                       </span>
+                      {hostingHistoryStats.latestRequest?.id === request.id ? (
+                        <span className="melpet-hosting-history-highlight">
+                          Pedido mais recente
+                        </span>
+                      ) : null}
                     </div>
                     <div className="melpet-hosting-history-card-date">
                       <span>Data do pedido</span>
@@ -5001,8 +4931,8 @@ export default function MelPetHostel({
                         : requestStatusTone === "confirmed"
                           ? formatHostingCheckInOut(request)
                           : showPaymentPendingStatus
-                          ? "Pagamento Pendente"
-                          : getHostingRequestStatusDetail(request.status)}
+                            ? "Pagamento Pendente"
+                            : getHostingRequestStatusDetail(request.status)}
                     </span>
                   </span>
                   <span
@@ -5025,7 +4955,7 @@ export default function MelPetHostel({
                         <dd>{formatHostingRequestPeriod(request)}</dd>
                       </div>
                       <div>
-                        <dt>Total solicitado</dt>
+                        <dt>Total geral</dt>
                         <dd>{formatCurrency(requestTotal)}</dd>
                       </div>
                       <div>
@@ -5034,19 +4964,32 @@ export default function MelPetHostel({
                       </div>
                     </dl>
 
-                    {hostingHistoryStats.latestRequest?.id === request.id ? (
-                      <div className="melpet-hosting-history-highlight">
-                        Pedido mais recente
-                      </div>
-                    ) : null}
-
                     <div
                       className={`melpet-hosting-history-items ${isUsedHosting ? "is-used-hosting" : ""}`}
                     >
                       <h4>Itens</h4>
                       <ul>
                         {(request.itens || []).map((item) => {
-                          const itemTotal = item.valorTotal;
+                          const itemTotal = Number(item.valorTotal || 0);
+                          const adjustmentValue = Number(
+                            request.descontoValor || 0,
+                          );
+                          const requestOriginalTotal = Number(
+                            request.valorTotal || 0,
+                          );
+                          const itemAdjustment =
+                            requestOriginalTotal > 0
+                              ? Number(
+                                  (
+                                    (Math.abs(adjustmentValue) * itemTotal) /
+                                    requestOriginalTotal
+                                  ).toFixed(2),
+                                )
+                              : 0;
+                          const itemFinalTotal =
+                            adjustmentValue > 0
+                              ? itemTotal - itemAdjustment
+                              : itemTotal + itemAdjustment;
                           return (
                             <li key={item.id}>
                               <strong>
@@ -5059,6 +5002,22 @@ export default function MelPetHostel({
                               </small>
                               <small>{formatHostingItemPeriod(item)}</small>
                               <strong>{formatCurrency(itemTotal)}</strong>
+                              {adjustmentValue !== 0 ? (
+                                <div className="melpet-hosting-history-item-adjustment">
+                                  <span>
+                                    {adjustmentValue > 0
+                                      ? "Desconto"
+                                      : "Acréscimo"}
+                                  </span>
+                                  <strong>
+                                    {formatCurrency(itemAdjustment)}
+                                  </strong>
+                                  <span>Total</span>
+                                  <strong>
+                                    {formatCurrency(itemFinalTotal)}
+                                  </strong>
+                                </div>
+                              ) : null}
                             </li>
                           );
                         })}
@@ -5076,11 +5035,25 @@ export default function MelPetHostel({
                         <p>{request.motivoRecusa}</p>
                       </div>
                     ) : null}
-                    {!isUsedHosting && shouldShowHostingPaymentPanel(request, getVisibleHostingPayments(request)) ? (
+                    {!isUsedHosting &&
+                    shouldShowHostingPaymentPanel(
+                      request,
+                      getVisibleHostingPayments(request),
+                    ) ? (
                       <div className="melpet-hosting-payment-redirect">
                         <strong>Pagamento disponível</strong>
-                        <p>Acesse o Extrato de Pagamentos para efetuar o pagamento e confirmar o pedido.</p>
-                        <Button type="button" variant="outline" size="sm" onClick={() => onNavigateUserMenu?.("extratoPagamentos")}>
+                        <p>
+                          Acesse o Extrato de Pagamentos para efetuar o
+                          pagamento e confirmar o pedido.
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            onNavigateUserMenu?.("extratoPagamentos")
+                          }
+                        >
                           Acessar Extrato de Pagamentos
                         </Button>
                       </div>
@@ -5121,10 +5094,13 @@ export default function MelPetHostel({
   );
 
   const paymentStatementRequests = hostingRequests.filter((request) => {
-    const isUsedHosting = getHostingRequestStatusKey(request.status) === "concluido";
+    const isUsedHosting =
+      getHostingRequestStatusKey(request.status) === "concluido";
     if (isUsedHosting) return false;
     const payments = getVisibleHostingPayments(request);
-    return payments.length > 0 || shouldShowHostingPaymentPanel(request, payments);
+    return (
+      payments.length > 0 || shouldShowHostingPaymentPanel(request, payments)
+    );
   });
   const openPaymentStatementCount = paymentStatementRequests.filter((request) =>
     shouldShowHostingPaymentPanel(request, getVisibleHostingPayments(request)),
@@ -5136,7 +5112,10 @@ export default function MelPetHostel({
         <div>
           <span className="melpet-hosting-history-kicker">Financeiro</span>
           <h3>Extrato de Pagamentos</h3>
-          <p>Consulte cobranças, realize pagamentos e acompanhe cada comprovante em um único lugar.</p>
+          <p>
+            Consulte cobranças, realize pagamentos e acompanhe cada comprovante
+            em um único lugar.
+          </p>
         </div>
         <div className="melpet-hosting-history-stats">
           <div>
@@ -5150,11 +5129,16 @@ export default function MelPetHostel({
       ) : paymentStatementRequests.length ? (
         <div className="melpet-hosting-history-list">
           {paymentStatementRequests.map((request) => (
-            <article key={request.id} className="melpet-hosting-history-card is-open">
+            <article
+              key={request.id}
+              className="melpet-hosting-history-card is-open"
+            >
               <div className="melpet-hosting-history-card-main">
                 <div className="melpet-hosting-history-card-topline">
                   <strong>Pedido #{request.id}</strong>
-                  <span className="melpet-hosting-history-card-badge">{request.itens?.length || 0} item(s)</span>
+                  <span className="melpet-hosting-history-card-badge">
+                    {request.itens?.length || 0} item(s)
+                  </span>
                 </div>
                 <div className="melpet-hosting-history-card-date">
                   <span>Data do pedido</span>
@@ -5164,13 +5148,47 @@ export default function MelPetHostel({
               <div className="melpet-hosting-history-items">
                 <h4>Itens</h4>
                 <ul>
-                  {(request.itens || []).map((item) => (
-                    <li key={item.id}>
-                      <strong>{item.petNome || `Pet ${item.petId}`}</strong>
-                      <small>{isMonthlyHostingRequest(request) ? formatMonthlyHostingItem(item) : `${item.tipo} · ${formatHostingItemPeriod(item)}`}</small>
-                      <strong>{formatCurrency(item.valorTotal)}</strong>
-                    </li>
-                  ))}
+                  {(request.itens || []).map((item) => {
+                    const itemTotal = Number(item.valorTotal || 0);
+                    const adjustmentValue = Number(request.descontoValor || 0);
+                    const requestOriginalTotal = Number(
+                      request.valorTotal || 0,
+                    );
+                    const itemAdjustment =
+                      requestOriginalTotal > 0
+                        ? Number(
+                            (
+                              (Math.abs(adjustmentValue) * itemTotal) /
+                              requestOriginalTotal
+                            ).toFixed(2),
+                          )
+                        : 0;
+                    const itemFinalTotal =
+                      adjustmentValue > 0
+                        ? itemTotal - itemAdjustment
+                        : itemTotal + itemAdjustment;
+                    return (
+                      <li key={item.id}>
+                        <strong>{item.petNome || `Pet ${item.petId}`}</strong>
+                        <small>
+                          {isMonthlyHostingRequest(request)
+                            ? formatMonthlyHostingItem(item)
+                            : `${item.tipo} · ${formatHostingItemPeriod(item)}`}
+                        </small>
+                        <strong>{formatCurrency(itemTotal)}</strong>
+                        {adjustmentValue !== 0 ? (
+                          <div className="melpet-hosting-history-item-adjustment">
+                            <span>
+                              {adjustmentValue > 0 ? "Desconto" : "Acréscimo"}
+                            </span>
+                            <strong>{formatCurrency(itemAdjustment)}</strong>
+                            <span>Total</span>
+                            <strong>{formatCurrency(itemFinalTotal)}</strong>
+                          </div>
+                        ) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
               {renderHostingPaymentPanel(request)}
@@ -5178,7 +5196,9 @@ export default function MelPetHostel({
           ))}
         </div>
       ) : (
-        <p className="melpet-validate-message">Nenhuma cobrança disponível no momento.</p>
+        <p className="melpet-validate-message">
+          Nenhuma cobrança disponível no momento.
+        </p>
       )}
       <div className="pet-main-actions melpet-back-actions">
         <Button
@@ -5770,7 +5790,8 @@ export default function MelPetHostel({
                                     : "Ex.: 50,00"
                                 }
                                 value={
-                                  hostingApprovalAdjustments[request.id]?.value || ""
+                                  hostingApprovalAdjustments[request.id]
+                                    ?.value || ""
                                 }
                                 disabled={busy}
                                 onChange={(event) =>
@@ -5791,7 +5812,8 @@ export default function MelPetHostel({
                                 maxLength={500}
                                 placeholder="Obrigatório quando houver desconto ou acréscimo"
                                 value={
-                                  hostingApprovalAdjustments[request.id]?.reason || ""
+                                  hostingApprovalAdjustments[request.id]
+                                    ?.reason || ""
                                 }
                                 disabled={busy}
                                 onChange={(event) =>
@@ -5809,7 +5831,11 @@ export default function MelPetHostel({
                           <dl className="melpet-hosting-history-meta melpet-hosting-adjustment-summary">
                             <div>
                               <dt>Valor solicitado</dt>
-                              <dd>{formatCurrency(Number(request.valorTotal || 0))}</dd>
+                              <dd>
+                                {formatCurrency(
+                                  Number(request.valorTotal || 0),
+                                )}
+                              </dd>
                             </div>
                             <div>
                               <dt>
@@ -5817,7 +5843,9 @@ export default function MelPetHostel({
                                   ? "Acréscimo"
                                   : "Desconto"}
                               </dt>
-                              <dd>{formatCurrency(adjustment.calculatedValue)}</dd>
+                              <dd>
+                                {formatCurrency(adjustment.calculatedValue)}
+                              </dd>
                             </div>
                             <div>
                               <dt>Total para pagamento</dt>
@@ -5869,16 +5897,31 @@ export default function MelPetHostel({
   const presenceWeekdays = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
   function renderPresenceCalendar({ editable = false } = {}) {
-    const registeredPresences = [...(presenceSummary?.presencas || [])]
-      .sort((first, second) => String(first.dataPresenca).localeCompare(String(second.dataPresenca)));
-    const regularPresenceCount = Math.max(0, Number(presenceSummary?.diasContratados || 0));
-    const markedDates = new Set(registeredPresences.map((item) => item.dataPresenca));
-    const excessPresenceDates = new Set(
-      registeredPresences.slice(regularPresenceCount).map((item) => item.dataPresenca),
+    const registeredPresences = [...(presenceSummary?.presencas || [])].sort(
+      (first, second) =>
+        String(first.dataPresenca).localeCompare(String(second.dataPresenca)),
     );
-    const days = buildPresenceCalendarDays(presenceSummary?.cicloInicio, presenceSummary?.cicloFim);
+    const regularPresenceCount = Math.max(
+      0,
+      Number(presenceSummary?.diasContratados || 0),
+    );
+    const markedDates = new Set(
+      registeredPresences.map((item) => item.dataPresenca),
+    );
+    const excessPresenceDates = new Set(
+      registeredPresences
+        .slice(regularPresenceCount)
+        .map((item) => item.dataPresenca),
+    );
+    const days = buildPresenceCalendarDays(
+      presenceSummary?.cicloInicio,
+      presenceSummary?.cicloFim,
+    );
     return (
-      <div className="melpet-presence-calendar" aria-label="Calendário de presença">
+      <div
+        className="melpet-presence-calendar"
+        aria-label="Calendário de presença"
+      >
         <div className="melpet-presence-calendar-weekdays">
           {presenceWeekdays.map((day) => (
             <span key={day}>{day}</span>
@@ -5886,7 +5929,10 @@ export default function MelPetHostel({
         </div>
         <div className="melpet-presence-calendar-grid">
           {days.map((item) => {
-            if (item.blank) return <span key={item.key} className="melpet-presence-day is-empty" />;
+            if (item.blank)
+              return (
+                <span key={item.key} className="melpet-presence-day is-empty" />
+              );
             const isMarked = markedDates.has(item.date);
             const isExcess = excessPresenceDates.has(item.date);
             return (
@@ -5896,28 +5942,61 @@ export default function MelPetHostel({
                 className={`melpet-presence-day ${isMarked ? "is-present" : ""} ${isExcess ? "is-excess" : ""}`}
                 disabled={!editable || togglingPresenceDate === item.date}
                 onClick={() => togglePresenceDate(item.date)}
-                title={isMarked ? "Clique para retirar a presença" : "Clique para registrar presença"}
+                title={
+                  isMarked
+                    ? "Clique para retirar a presença"
+                    : "Clique para registrar presença"
+                }
               >
                 <strong>{item.day}</strong>
-                {isMarked ? <span>{isExcess ? "Excedente" : "Presente"}</span> : null}
+                {isMarked ? (
+                  <span className={`melpet-presence-day-label ${isExcess ? "is-excess" : "is-regular"}`}>
+                    {isExcess ? "Excedente" : "Presente"}
+                  </span>
+                ) : null}
               </button>
             );
           })}
         </div>
-        <div className="melpet-presence-legend" aria-label="Legenda do calendário">
-          <span className="is-regular"><i aria-hidden="true" />Presença dentro da franquia</span>
-          <span className="is-excess"><i aria-hidden="true" />Presença excedente</span>
+        <div
+          className="melpet-presence-legend"
+          aria-label="Legenda do calendário"
+        >
+          <span className="is-regular">
+            <i aria-hidden="true" />
+            Presença dentro da franquia
+          </span>
+          <span className="is-excess">
+            <i aria-hidden="true" />
+            Presença excedente
+          </span>
         </div>
       </div>
     );
   }
 
   function renderPresenceReport() {
-const rows = [...(presenceSummary?.presencas || [])]
-      .sort((first, second) => String(first.dataPresenca).localeCompare(String(second.dataPresenca)));
-    const regularPresenceCount = Math.max(0, Number(presenceSummary?.diasContratados || 0));
+    const rows = [...(presenceSummary?.presencas || [])].sort((first, second) =>
+      String(first.dataPresenca).localeCompare(String(second.dataPresenca)),
+    );
+    const regularPresenceCount = Math.max(
+      0,
+      Number(presenceSummary?.diasContratados || 0),
+    );
+    const reportRows = Array.from(
+      { length: Math.max(regularPresenceCount, rows.length) },
+      (_, index) => rows[index] || null,
+    );
+
     return (
-      <div className="melpet-presence-report">
+      <div className="melpet-presence-report melpet-presence-report--admin-call-sheet">
+        <header className="melpet-presence-call-sheet-header">
+          <img src={melPetHostelLogo} alt="Mel Pet Hostel" />
+          <div>
+            <span>Mel Pet Hostel &amp; Cia</span>
+            <strong>Chamada</strong>
+          </div>
+        </header>
         <table>
           <thead>
             <tr>
@@ -5928,33 +6007,49 @@ const rows = [...(presenceSummary?.presencas || [])]
             </tr>
           </thead>
           <tbody>
-            {rows.length ? (
-              rows.map((item, index) => (
-                <tr key={item.id || item.dataPresenca}>
+            {reportRows.length ? (
+              reportRows.map((item, index) => (
+                <tr key={item?.id || item?.dataPresenca || `dia-${index + 1}`}>
                   <td>{index + 1}</td>
                   <td>{presenceSummary?.petNome || "-"}</td>
-                  <td>{formatBrazilDate(item.dataPresenca)}</td>
+                  <td>{item ? formatBrazilDate(item.dataPresenca) : ""}</td>
                   <td>
-                    <span className="melpet-presence-status">Presente</span>
-                    {index >= regularPresenceCount ? <span className="melpet-presence-status is-excess">Excedente</span> : null}
+                    {item ? (
+                      <span className="melpet-presence-call-entry">
+                        Presente
+                        {index >= regularPresenceCount ? <em>Excedente</em> : null}
+                      </span>
+                    ) : (
+                      <span className="melpet-presence-call-empty">
+                        Sem presença registrada
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="4">Nenhuma presença registrada neste ciclo.</td>
+                <td colSpan="4">Nenhum dia contratado para este ciclo.</td>
               </tr>
             )}
           </tbody>
         </table>
+        <footer className="melpet-presence-call-sheet-footer">
+          <span><img className="melpet-institutional-icon" src="https://api.iconify.design/material-symbols:phone-in-talk-rounded.svg?color=%23cfeafa" alt="" aria-hidden="true" />+55 11 96789-7374</span>
+          <span><img className="melpet-institutional-icon" src="https://api.iconify.design/material-symbols:mail-rounded.svg?color=%23cfeafa" alt="" aria-hidden="true" />comercial@melpethostel.com.br</span>
+          <span><img className="melpet-institutional-icon" src="https://api.iconify.design/material-symbols:location-on-rounded.svg?color=%23cfeafa" alt="" aria-hidden="true" />Rua Caviuna, 1 - São Roque - SP / CEP: 18143-453</span>
+          <span><img className="melpet-institutional-icon" src="https://api.iconify.design/simple-icons:instagram.svg?color=%23cfeafa" alt="" aria-hidden="true" />@melpethostel</span>
+        </footer>
       </div>
     );
   }
-
   function renderPresenceDetail({ editable = false } = {}) {
     return (
       <section className="melpet-section-content melpet-presence-page melpet-presence-single-card">
-        <div className="melpet-presence-month-nav" aria-label="Navegar pelos meses">
+        <div
+          className="melpet-presence-month-nav"
+          aria-label="Navegar pelos meses"
+        >
           <Button
             type="button"
             variant="outline"
@@ -5965,7 +6060,11 @@ const rows = [...(presenceSummary?.presencas || [])]
           </Button>
           <div className="melpet-presence-month-current">
             <span>Ciclo contratado</span>
-            <strong>{presenceSummary?.cicloInicio ? `${formatBrazilDate(presenceSummary.cicloInicio)} a ${formatBrazilDate(presenceSummary.cicloFim)}` : formatPresenceCompetence(presenceCompetence)}</strong>
+            <strong>
+              {presenceSummary?.cicloInicio
+                ? `${formatBrazilDate(presenceSummary.cicloInicio)} a ${formatBrazilDate(presenceSummary.cicloFim)}`
+                : formatPresenceCompetence(presenceCompetence)}
+            </strong>
           </div>
           <Button
             type="button"
@@ -5976,35 +6075,72 @@ const rows = [...(presenceSummary?.presencas || [])]
             &gt;
           </Button>
         </div>
-        {loadingPresence ? <p className="melpet-validate-message">Carregando presenças...</p> : null}
+        {loadingPresence ? (
+          <p className="melpet-validate-message">Carregando presenças...</p>
+        ) : null}
         {presenceSummary ? (
           <div className="melpet-presence-detail-body melpet-presence-print-area">
-            <div className="melpet-presence-summary-band">
-              <div>
-                <span>{presenceSummary.clienteNome}</span>
-                <strong>{presenceSummary.petNome}</strong>
+            {presenceViewMode === "report" ? (
+              <div className="melpet-presence-admin-report-context">
+                <span>Ciclo de presença</span>
+                <strong>
+                  {formatBrazilDate(presenceSummary.cicloInicio)} a{" "}
+                  {formatBrazilDate(presenceSummary.cicloFim)}
+                </strong>
               </div>
-              <div>
-                <span>{formatBrazilDate(presenceSummary.cicloInicio)} a {formatBrazilDate(presenceSummary.cicloFim)}</span>
-                <strong>{presenceSummary.diasRestantes} dias restantes</strong>
+            ) : (
+              <div className="melpet-presence-summary-band">
+                <div>
+                  <span>{presenceSummary.clienteNome}</span>
+                  <strong>{presenceSummary.petNome}</strong>
+                </div>
+                <div>
+                  <span>
+                    {formatBrazilDate(presenceSummary.cicloInicio)} a{" "}
+                    {formatBrazilDate(presenceSummary.cicloFim)}
+                  </span>
+                  <strong>
+                    {presenceSummary.diasRestantes} dias restantes
+                  </strong>
+                </div>
               </div>
-            </div>
-            {presenceViewMode === "calendar"
-              ? renderPresenceCalendar({ editable })
-              : renderPresenceReport()}
+            )}
+            {presenceViewMode === "calendar" ? (
+              renderPresenceCalendar({ editable })
+            ) : (
+              <div className="melpet-presence-admin-report-frame">
+                {renderPresenceReport()}
+              </div>
+            )}
             <div className="melpet-presence-balance">
-              Restam <strong>{presenceSummary.diasRestantes}</strong> de <strong>{presenceSummary.diasContratados}</strong> dias para usar neste ciclo.
+              Restam <strong>{presenceSummary.diasRestantes}</strong> de{" "}
+              <strong>{presenceSummary.diasContratados}</strong> dias para usar
+              neste ciclo.
             </div>
             {Number(presenceSummary.diasExcedentes || 0) > 0 ? (
               <div className="melpet-presence-extra-billing">
-                <strong>{presenceSummary.diasExcedentes} dia(s) excedente(s)</strong>
-                <span>Valor excedente: {formatCurrency(presenceSummary.valorExcedente || 0)}</span>
-                <span>Total com excedente: {formatCurrency(presenceSummary.valorTotalComExcedente || 0)}</span>
-                {Array.isArray(presenceSummary.faixasExcedentes) && presenceSummary.faixasExcedentes.length ? (
+                <strong>
+                  {presenceSummary.diasExcedentes} dia(s) excedente(s)
+                </strong>
+                <span>
+                  Valor excedente:{" "}
+                  {formatCurrency(presenceSummary.valorExcedente || 0)}
+                </span>
+                <span>
+                  Total com excedente:{" "}
+                  {formatCurrency(presenceSummary.valorTotalComExcedente || 0)}
+                </span>
+                {Array.isArray(presenceSummary.faixasExcedentes) &&
+                presenceSummary.faixasExcedentes.length ? (
                   <ul>
                     {presenceSummary.faixasExcedentes.map((faixa) => (
-                      <li key={`${faixa.planoQuantidade}-${faixa.diasUsados}-${faixa.valorFaixa}`}>
-                        {faixa.planoQuantidade}x na semana ({faixa.diasDoPlano} dias no mês): {faixa.diasUsados} dia(s) x {formatCurrency(faixa.valorDia)} = {formatCurrency(faixa.valorFaixa)}
+                      <li
+                        key={`${faixa.planoQuantidade}-${faixa.diasUsados}-${faixa.valorFaixa}`}
+                      >
+                        {faixa.planoQuantidade}x na semana ({faixa.diasDoPlano}{" "}
+                        dias no mês): {faixa.diasUsados} dia(s) x{" "}
+                        {formatCurrency(faixa.valorDia)} ={" "}
+                        {formatCurrency(faixa.valorFaixa)}
                       </li>
                     ))}
                   </ul>
@@ -6013,14 +6149,39 @@ const rows = [...(presenceSummary?.presencas || [])]
             ) : null}
           </div>
         ) : !loadingPresence ? (
-          <p className="melpet-validate-message">Selecione um pet e um mês válido para visualizar o controle de presença.</p>
+          <p className="melpet-validate-message">
+            Selecione um pet e um mês válido para visualizar o controle de
+            presença.
+          </p>
         ) : null}
         <div className="pet-main-actions melpet-back-actions melpet-presence-actions">
-          <Button type="button" variant="outline" onClick={() => setPresenceViewMode((mode) => mode === "calendar" ? "report" : "calendar")}>
-            {presenceViewMode === "calendar" ? "Modo Relatório" : "Modo Calendário"}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              setPresenceViewMode((mode) =>
+                mode === "calendar" ? "report" : "calendar",
+              )
+            }
+          >
+            {presenceViewMode === "calendar"
+              ? "Modo Relatório"
+              : "Modo Calendário"}
           </Button>
-          <Button type="button" variant="outline" onClick={savePresencePdf}>Salvar em PDF</Button>
-          <Button type="button" variant="outline" onClick={() => { setActivePresencePetId(null); setPresenceSummary(null); }} className="melpet-back-button">Voltar</Button>
+          <Button type="button" variant="outline" onClick={savePresencePdf}>
+            Salvar em PDF
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setActivePresencePetId(null);
+              setPresenceSummary(null);
+            }}
+            className="melpet-back-button"
+          >
+            Voltar
+          </Button>
         </div>
       </section>
     );
@@ -6070,18 +6231,24 @@ const rows = [...(presenceSummary?.presencas || [])]
         <select
           value={activePresencePetId || ""}
           onChange={(event) => {
-            const pet = presencePets.find((item) => Number(item.petId) === Number(event.target.value));
+            const pet = presencePets.find(
+              (item) => Number(item.petId) === Number(event.target.value),
+            );
             if (pet) openPresencePet(pet);
           }}
         >
           <option value="">Selecione o pet</option>
           {presencePets.map((pet) => (
-            <option key={pet.petId} value={pet.petId}>{pet.clienteNome} - {pet.petNome}</option>
+            <option key={pet.petId} value={pet.petId}>
+              {pet.clienteNome} - {pet.petNome}
+            </option>
           ))}
         </select>
       </label>
       {!loadingPresence && !presencePets.length ? (
-        <p className="melpet-validate-message">Nenhum pet com mensalidade confirmada para registrar presença.</p>
+        <p className="melpet-validate-message">
+          Nenhum pet com mensalidade confirmada para registrar presença.
+        </p>
       ) : null}
     </section>
   );
@@ -6114,7 +6281,7 @@ const rows = [...(presenceSummary?.presencas || [])]
                 : "meusPedidosHospedagem",
             ),
           content: hostingRequestsContent,
-        }
+        },
       ],
       after: (
         <div className="pet-main-actions melpet-back-actions">
@@ -7148,7 +7315,8 @@ const rows = [...(presenceSummary?.presencas || [])]
                     if (shouldOpen) loadPendingCardPaymentRequests();
                   },
                   content: adminCardPaymentLinkContent,
-                },                {
+                },
+                {
                   id: "fazer-check-in",
                   title: "Fazer Check-in",
                   summary: "Confirmar check-in de hospedagens liberadas.",
@@ -7797,7 +7965,10 @@ const rows = [...(presenceSummary?.presencas || [])]
   if (!isAdmin && userMenu === "hospedagem") {
     return (
       <>
-        <MenuTemplate className="melpet-user-hosting-menu" panels={hostingPanels} />
+        <MenuTemplate
+          className="melpet-user-hosting-menu"
+          panels={hostingPanels}
+        />
         {deletePetModal}
       </>
     );
@@ -7809,7 +7980,10 @@ const rows = [...(presenceSummary?.presencas || [])]
   ) {
     return (
       <>
-        <MenuTemplate className="melpet-pet-registration-menu" panels={userPetRegistrationPanels} />
+        <MenuTemplate
+          className="melpet-pet-registration-menu"
+          panels={userPetRegistrationPanels}
+        />
         {deletePetModal}
       </>
     );

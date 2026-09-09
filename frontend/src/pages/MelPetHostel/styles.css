@@ -1827,6 +1827,9 @@
   background: linear-gradient(135deg, rgba(226, 246, 255, 0.82), rgba(255, 255, 255, 0.94));
 }
 
+.melpet-hosting-adjustment .pet-form-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
 .melpet-hosting-adjustment-heading {
   display: flex;
   align-items: baseline;
@@ -1880,6 +1883,28 @@
   padding-top: 10px;
 }
 
+.melpet-hosting-history-item-adjustment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 12px;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(var(--cor-marrom-rgb), 0.18);
+  color: var(--cor-marrom-claro);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.melpet-hosting-history-item-adjustment strong {
+  color: var(--cor-marrom);
+  text-align: right;
+}
+
+.melpet-hosting-history-item-adjustment span:nth-of-type(2),
+.melpet-hosting-history-item-adjustment strong:last-child {
+  color: #0f5d78;
+  font-weight: 900;
+}
 .melpet-hosting-history-items h4,
 .melpet-hosting-history-note strong {
   margin: 0;
@@ -5953,6 +5978,238 @@ button.melpet-presence-day:not(:disabled):focus-visible {
   border-radius: 0 12px 12px 0;
 }
 
+.melpet-presence-admin-report-context {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.melpet-presence-admin-report-context span {
+  color: #3f6d85;
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.melpet-presence-admin-report-context strong {
+  color: var(--cor-marrom);
+  font-size: 1rem;
+}
+
+.melpet-presence-admin-report-frame {
+  display: grid;
+  width: 100%;
+  padding: clamp(14px, 3vw, 24px);
+  border: 2px solid rgba(54, 107, 141, 0.34);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(229, 244, 251, 0.94), rgba(255, 255, 255, 0.94));
+  box-shadow: 0 12px 24px rgba(54, 107, 141, 0.12);
+}
+.melpet-presence-report--admin-call-sheet {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.melpet-presence-call-sheet-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 104px;
+  padding: 14px 18px;
+  background: #1d4384;
+  color: #fff;
+}
+
+.melpet-presence-call-sheet-header img {
+  width: 76px;
+  height: 76px;
+  flex: 0 0 auto;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 14px;
+  object-fit: cover;
+}
+
+.melpet-presence-call-sheet-header div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.melpet-presence-call-sheet-header span {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.melpet-presence-call-sheet-header strong {
+  color: #fff;
+  font-size: clamp(1.6rem, 1.25rem + 1vw, 2.2rem);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.melpet-presence-report--admin-call-sheet table {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border: 2px solid #111;
+  border-radius: 0;
+  table-layout: fixed;
+}
+
+.melpet-presence-report--admin-call-sheet th,
+.melpet-presence-report--admin-call-sheet td {
+  padding: 7px 12px;
+  border: 1.5px solid #111;
+  color: #000;
+  overflow: hidden;
+  padding: 6px 5px;
+  font-size: clamp(0.7rem, 0.66rem + 0.3vw, 0.92rem);
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.melpet-presence-report--admin-call-sheet th {
+  background: #68aee2;
+  color: #000;
+  font-weight: 900;
+  text-align: center;
+  text-transform: none;
+}
+
+.melpet-presence-report--admin-call-sheet th:nth-child(1),
+.melpet-presence-report--admin-call-sheet td:nth-child(1) {
+  width: 12%;
+  text-align: center;
+}
+
+.melpet-presence-report--admin-call-sheet th:nth-child(2),
+.melpet-presence-report--admin-call-sheet td:nth-child(2) {
+  width: 24%;
+}
+
+.melpet-presence-report--admin-call-sheet th:nth-child(3),
+.melpet-presence-report--admin-call-sheet td:nth-child(3) {
+  width: 36%;
+}
+
+.melpet-presence-report--admin-call-sheet th:nth-child(4),
+.melpet-presence-report--admin-call-sheet td:nth-child(4) {
+  width: 28%;
+}
+
+.melpet-presence-report--admin-call-sheet td:not(:last-child) {
+  background: #fff;
+}
+
+.melpet-presence-report--admin-call-sheet td:first-child {
+  font-weight: 900;
+}
+
+.melpet-presence-report--admin-call-sheet td:last-child {
+  padding: 0;
+  background: #4bd15d;
+  font-weight: 700;
+  text-align: center;
+}
+
+.melpet-presence-call-sheet-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px 18px;
+  min-width: 0;
+  padding: 14px 18px;
+  background: #1d4384;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: clamp(0.68rem, 0.62rem + 0.24vw, 0.8rem);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.melpet-presence-call-sheet-footer span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.melpet-institutional-icon {
+  display: block;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.melpet-presence-report.melpet-presence-report--admin-call-sheet td:last-child {
+  display: table-cell;
+  width: 28%;
+  padding: 0;
+  border-radius: 0;
+  background: #4bd15d;
+}
+
+.melpet-presence-report.melpet-presence-report--admin-call-sheet td:last-child .melpet-presence-call-entry,
+.melpet-presence-report.melpet-presence-report--admin-call-sheet td:last-child .melpet-presence-call-empty {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 38px;
+  margin: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.melpet-presence-call-entry,
+.melpet-presence-call-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 4px;
+  color: #000;
+  white-space: nowrap;
+}
+
+
+.melpet-presence-call-entry em {
+  margin-left: 4px;
+  color: #7f1d1d;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.melpet-presence-call-empty {
+  color: transparent;
+  user-select: none;
+}
+
+@media (min-width: 640px) {
+  .melpet-presence-report--admin-call-sheet th,
+  .melpet-presence-report--admin-call-sheet td {
+    padding: 8px 12px;
+    font-size: clamp(0.8rem, 0.74rem + 0.35vw, 0.98rem);
+  }
+
+  .melpet-presence-call-sheet-footer {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 14px 18px;
+  }
+}
 .melpet-presence-status {
   display: inline-flex;
   border-radius: 999px;
@@ -6733,7 +6990,7 @@ button.melpet-presence-day:not(:disabled):focus-visible::before {
 }
 
 .melpet-presence-calendar:not(.melpet-presence-calendar-table) .melpet-presence-day.is-present {
-  border-color: rgba(22, 163, 74, 0.64);
+  border: 3px solid #056c3b;
   background: linear-gradient(145deg, #31bd73, #087a43);
   box-shadow: 0 10px 20px rgba(22, 163, 74, 0.22);
 }
@@ -6741,7 +6998,7 @@ button.melpet-presence-day:not(:disabled):focus-visible::before {
 .melpet-presence-calendar:not(.melpet-presence-calendar-table) .melpet-presence-day.is-excess,
 .melpet-admin-presence-page .melpet-presence-calendar:not(.melpet-presence-calendar-table) .melpet-presence-day.is-excess,
 .melpet-admin-menu .melpet-presence-calendar:not(.melpet-presence-calendar-table) .melpet-presence-day.is-excess {
-  border-color: rgba(217, 119, 6, 0.72);
+  border: 3px solid #a95005;
   background: linear-gradient(145deg, #fbbf24, #d97706);
   box-shadow: 0 10px 20px rgba(217, 119, 6, 0.25);
   color: #4a2500;
@@ -6806,4 +7063,45 @@ button.melpet-presence-day:not(:disabled):focus-visible::before {
   background: #fef3c7;
   color: #92400e;
   box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.3);
+}
+/* Presence day label */
+.melpet-presence-calendar:not(.melpet-presence-calendar-table) .melpet-presence-day .melpet-presence-day-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: min(100%, 94px);
+  min-height: 22px;
+  margin-top: 1px;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.56);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 3px 8px rgba(15, 61, 39, 0.16);
+  color: #075c32;
+  font-size: clamp(0.56rem, 0.5rem + 0.25vw, 0.68rem);
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.melpet-presence-calendar:not(.melpet-presence-calendar-table) .melpet-presence-day.is-present .melpet-presence-day-label.is-regular {
+  color: #08733e;
+}
+
+.melpet-presence-calendar:not(.melpet-presence-calendar-table) .melpet-presence-day.is-excess .melpet-presence-day-label.is-excess {
+  border-color: rgba(120, 53, 15, 0.2);
+  background: rgba(255, 250, 235, 0.96);
+  box-shadow: 0 3px 8px rgba(120, 53, 15, 0.14);
+  color: #8a3d00;
+}
+
+@media (max-width: 520px) {
+  .melpet-presence-calendar:not(.melpet-presence-calendar-table) .melpet-presence-day .melpet-presence-day-label {
+    width: 100%;
+    min-height: 18px;
+    padding: 2px 3px;
+    font-size: 0.44rem;
+  }
 }
