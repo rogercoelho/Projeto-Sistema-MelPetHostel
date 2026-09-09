@@ -676,6 +676,60 @@ router.post("/login", async (req, res) => {
   }
 });
 
+router.post("/impersonar/:id", async (req, res) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+
+    const targetId = Number(req.params.id);
+    if (!Number.isInteger(targetId) || targetId <= 0) {
+      return res.status(400).json({ status: "erro", mensagem: "Usuário inválido." });
+    }
+
+    const target = await Usuario.findById(req, targetId);
+    if (!target || target.ativo === false || target.ativo === 0) {
+      return res.status(404).json({ status: "erro", mensagem: "Usuário não encontrado ou inativo." });
+    }
+
+    const grupo = target.Grupo_ID || target.grupo || null;
+    const grupoRec = await resolveGroupRecord(req, grupo);
+    const grupoNome = target.grupoNome || grupoRec?.nome || grupoRec?.Nome_Grupo || (await resolveGroupName(req, grupo));
+    const grupoAcesso = target.grupoAcesso || grupoRec?.acesso || grupoRec?.Acesso || null;
+    if (isAdminAccessValue(grupoAcesso)) {
+      return res.status(400).json({ status: "erro", mensagem: "Selecione um usuário de acesso cliente." });
+    }
+
+    const payload = {
+      ...createTokenPayload({ row: target, source: "usuarios", grupo, grupoNome, grupoAcesso }),
+      impersonadoPor: { id: req.user?.id || null, login: req.user?.login || null },
+    };
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "1h" });
+    const enderecos = await Endereco.listByCliente(req, target.Cliente_ID || target.clienteId);
+    const cadastro = getClienteCadastroStatus(target.cliente, enderecos);
+
+    return res.json({
+      status: "sucesso",
+      token,
+      usuario: {
+        id: target.Usuario_ID,
+        login: target.Usuario_Login,
+        grupo: grupo || null,
+        grupoNome: grupoNome || null,
+        grupoAcesso: grupoAcesso || null,
+        clienteId: target.Cliente_ID || target.clienteId || null,
+        clienteCadastroPendente: Boolean(cadastro.pendente),
+        cadastroCompleto: Boolean(cadastro.completo),
+        admin: false,
+        source: "usuarios",
+        modules: [DEFAULT_MODULE],
+        primeiroAcesso: userNeedsFirstAccess(target),
+        impersonadoPor: payload.impersonadoPor,
+      },
+    });
+  } catch (error) {
+    console.error("Error in /auth/impersonar:", error);
+    return res.status(500).json({ status: "erro", mensagem: error.message });
+  }
+});
 router.get("/verificar", (req, res) => {
   try {
     const authHeader = req.headers.authorization;

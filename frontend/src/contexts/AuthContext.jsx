@@ -189,6 +189,54 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const accessAsUser = async (userId) => {
+    const origin = {
+      token: localStorage.getItem("token"),
+      usuario: localStorage.getItem("usuario"),
+    };
+    if (!origin.token || !origin.usuario) {
+      return { sucesso: false, mensagem: "Sessão administrativa não encontrada." };
+    }
+    try {
+      const data = await api.post(`/auth/impersonar/${userId}`, {});
+      if (!data?.token || !data?.usuario) {
+        return { sucesso: false, mensagem: data?.mensagem || "Não foi possível acessar o usuário." };
+      }
+      sessionStorage.setItem("melpet:admin-session", JSON.stringify(origin));
+      localStorage.setItem("melpet:admin-session", JSON.stringify(origin));
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("usuario", JSON.stringify(data.usuario));
+      api.setToken(data.token);
+      setUsuario(data.usuario);
+      const decoded = decodeJwtPayload(data.token);
+      if (decoded?.exp) startSessionTimer(decoded.exp * 1000);
+      return { sucesso: true };
+    } catch (error) {
+      return { sucesso: false, mensagem: error?.message || "Não foi possível acessar o usuário." };
+    }
+  };
+
+  const returnToAdmin = () => {
+    try {
+      const origin = JSON.parse(
+        sessionStorage.getItem("melpet:admin-session") ||
+        localStorage.getItem("melpet:admin-session") ||
+        "null",
+      );
+      if (!origin?.token || !origin?.usuario) return false;
+      localStorage.setItem("token", origin.token);
+      localStorage.setItem("usuario", origin.usuario);
+      api.setToken(origin.token);
+      setUsuario(JSON.parse(origin.usuario));
+      const decoded = decodeJwtPayload(origin.token);
+      if (decoded?.exp) startSessionTimer(decoded.exp * 1000);
+      sessionStorage.removeItem("melpet:admin-session");
+      localStorage.removeItem("melpet:admin-session");
+      return true;
+    } catch {
+      return false;
+    }
+  };
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("usuario");
@@ -198,7 +246,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ usuario, login, logout, carregando }}>
+    <AuthContext.Provider value={{ usuario, login, logout, carregando, accessAsUser, returnToAdmin }}>
       {children}
     </AuthContext.Provider>
   );

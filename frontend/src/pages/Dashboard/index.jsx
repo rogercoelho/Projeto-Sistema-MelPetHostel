@@ -15,6 +15,7 @@ import melPetLogo from "../MelPetHostel/assets/MelPetHostel_Logo.jpeg";
 import AdminGroupsPage from "./AdminGroupsPage";
 import AdminUserMaintenancePage from "./AdminUserMaintenancePage";
 import AdminUsersPage from "./AdminUsersPage";
+import UserAccessPage from "./UserAccessPage";
 import ChangePasswordModal from "./ChangePasswordModal";
 import ClientProfileModal from "./ClientProfileModal";
 import ClientProfilePage from "./ClientProfilePage";
@@ -30,7 +31,7 @@ import {
 import "./styles.css";
 
 function Dashboard() {
-  const { usuario, logout } = useAuth();
+  const { usuario, logout, returnToAdmin } = useAuth();
   const { showToast } = useToast();
   const userModuleGateCheckedRef = useRef(false);
   const [view, setView] = useState("home");
@@ -301,6 +302,10 @@ function Dashboard() {
             {
               label: "Manutenção de Usuários",
               onAction: () => openView("admin-user-maintenance"),
+            },
+            {
+              label: "Acesso do Usuario",
+              onAction: () => openView("admin-user-access"),
             },
           ],
         }
@@ -636,6 +641,28 @@ function Dashboard() {
               <span className="user-badge">{usuarioGrupo}</span>
             )}
 
+            {usuario?.impersonadoPor ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (!returnToAdmin()) {
+                    showToast("Não foi possível restaurar a sessão administrativa.", "error");
+                    return;
+                  }
+                  setMelComplianceGate(false);
+                  setMelPetRegistrationOnly(false);
+                  setMelInitialAdminMenu("");
+                  setMelUserMenu("");
+                  setOpenDashboardSection("");
+                  setView("home");
+                  showToast("Sessão administrativa restaurada.", "success");
+                }}
+              >
+                Voltar ao administrador
+              </Button>
+            ) : null}
+
             <SessionTimerBadge />
             <Button variant="outline" size="sm" onClick={logout}>
               Sair
@@ -739,6 +766,8 @@ function Dashboard() {
         />
       ) : view === "admin-users" ? (
         <AdminUsersPage onBack={() => handleDashboardBack("home")} />
+      ) : view === "admin-user-access" ? (
+        <UserAccessPage onBack={() => handleDashboardBack("home")} />
       ) : view === "client-profile" ? (
         <ClientProfilePage
           cliente={clientProfileInitial}
