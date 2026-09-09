@@ -391,6 +391,8 @@ export default function MelPetHostel({
     useState(null);
   const [reviewingHostingRequestId, setReviewingHostingRequestId] =
     useState(null);
+  const [hostingApprovalAdjustments, setHostingApprovalAdjustments] =
+    useState({});
   const [rejectHostingTarget, setRejectHostingTarget] = useState(null);
   const [rejectHostingReason, setRejectHostingReason] = useState("");
   const [pixConfigForm, setPixConfigForm] = useState({
@@ -1100,6 +1102,28 @@ export default function MelPetHostel({
     });
   }
 
+  function getHostingApprovalAdjustment(request) {
+    const adjustment = hostingApprovalAdjustments[request?.id] || {};
+    const value = Number(String(adjustment.value || "").replace(",", "."));
+    const baseValue = Number(request?.valorTotal || 0);
+    const rawValue = Number.isFinite(value) && value > 0 ? value : 0;
+    const calculatedValue =
+      adjustment.mode === "percentual"
+        ? Number(((baseValue * rawValue) / 100).toFixed(2))
+        : rawValue;
+    const finalValue =
+      adjustment.type === "acrescimo"
+        ? baseValue + calculatedValue
+        : Math.max(0, baseValue - calculatedValue);
+    return {
+      type: adjustment.type || "desconto",
+      mode: adjustment.mode || "valor",
+      value: rawValue,
+      reason: adjustment.reason || "",
+      calculatedValue,
+      finalValue,
+    };
+  }
   async function loadPlanos() {
     setLoadingPlanos(true);
     setPlanosError("");
@@ -1147,10 +1171,23 @@ export default function MelPetHostel({
 
   async function approveHostingRequest(request) {
     if (!request?.id) return;
+    const adjustment = getHostingApprovalAdjustment(request);
+    if (adjustment.value > 0 && !adjustment.reason.trim()) {
+      showToast("Informe o motivo do desconto ou acréscimo.", "warning");
+      return;
+    }
     setReviewingHostingRequestId(request.id);
     try {
       const data = await api.patch(
         "/melpethostel/hospedagens/solicitacoes/" + request.id + "/aprovar",
+        adjustment.value > 0
+          ? {
+              ajusteTipo: adjustment.type,
+              ajusteModo: adjustment.mode,
+              ajusteValor: adjustment.value,
+              ajusteMotivo: adjustment.reason.trim(),
+            }
+          : {},
       );
       showToast("Hospedagem aprovada.", "success");
       if (data?.email && !data.email.sent) {
@@ -1164,6 +1201,11 @@ export default function MelPetHostel({
       setPendingHostingRequests((current) =>
         current.filter((item) => Number(item.id) !== Number(request.id)),
       );
+      setHostingApprovalAdjustments((current) => {
+        const next = { ...current };
+        delete next[request.id];
+        return next;
+      });
       if (selectedPendingHostingId === request.id)
         setSelectedPendingHostingId(null);
     } catch (error) {
@@ -1908,6 +1950,11 @@ export default function MelPetHostel({
       setPendingHostingRequests((current) =>
         current.filter((item) => Number(item.id) !== Number(request.id)),
       );
+      setHostingApprovalAdjustments((current) => {
+        const next = { ...current };
+        delete next[request.id];
+        return next;
+      });
       if (selectedPendingHostingId === request.id)
         setSelectedPendingHostingId(null);
       setRejectHostingTarget(null);
@@ -5575,6 +5622,7 @@ export default function MelPetHostel({
                 const isOpen = selectedPendingHostingId === request.id;
                 const requestTotal = request.valorFinal ?? request.valorTotal;
                 const busy = reviewingHostingRequestId === request.id;
+                const adjustment = getHostingApprovalAdjustment(request);
                 return (
                   <article
                     className={`melpet-hosting-history-card ${isOpen ? "is-open" : ""}`}
@@ -5662,6 +5710,120 @@ export default function MelPetHostel({
                               </li>
                             ))}
                           </ul>
+                        </div>
+                        <div className="melpet-hosting-adjustment">
+                          <div className="melpet-hosting-adjustment-heading">
+                            <strong>Ajuste financeiro</strong>
+                            <span>Opcional, aplicado antes da aprovação</span>
+                          </div>
+                          <div className="pet-form-grid">
+                            <label className="pet-form-field">
+                              <span>Operação</span>
+                              <select
+                                value={adjustment.type}
+                                disabled={busy}
+                                onChange={(event) =>
+                                  setHostingApprovalAdjustments((current) => ({
+                                    ...current,
+                                    [request.id]: {
+                                      ...(current[request.id] || {}),
+                                      type: event.target.value,
+                                    },
+                                  }))
+                                }
+                              >
+                                <option value="desconto">Desconto</option>
+                                <option value="acrescimo">Acréscimo</option>
+                              </select>
+                            </label>
+                            <label className="pet-form-field">
+                              <span>Formato</span>
+                              <select
+                                value={adjustment.mode}
+                                disabled={busy}
+                                onChange={(event) =>
+                                  setHostingApprovalAdjustments((current) => ({
+                                    ...current,
+                                    [request.id]: {
+                                      ...(current[request.id] || {}),
+                                      mode: event.target.value,
+                                    },
+                                  }))
+                                }
+                              >
+                                <option value="valor">Valor em reais</option>
+                                <option value="percentual">Percentual</option>
+                              </select>
+                            </label>
+                            <label className="pet-form-field">
+                              <span>
+                                {adjustment.mode === "percentual"
+                                  ? "Percentual"
+                                  : "Valor do ajuste"}
+                              </span>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                placeholder={
+                                  adjustment.mode === "percentual"
+                                    ? "Ex.: 5"
+                                    : "Ex.: 50,00"
+                                }
+                                value={
+                                  hostingApprovalAdjustments[request.id]?.value || ""
+                                }
+                                disabled={busy}
+                                onChange={(event) =>
+                                  setHostingApprovalAdjustments((current) => ({
+                                    ...current,
+                                    [request.id]: {
+                                      ...(current[request.id] || {}),
+                                      value: event.target.value,
+                                    },
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="pet-form-field pet-form-field--wide">
+                              <span>Motivo do ajuste</span>
+                              <input
+                                type="text"
+                                maxLength={500}
+                                placeholder="Obrigatório quando houver desconto ou acréscimo"
+                                value={
+                                  hostingApprovalAdjustments[request.id]?.reason || ""
+                                }
+                                disabled={busy}
+                                onChange={(event) =>
+                                  setHostingApprovalAdjustments((current) => ({
+                                    ...current,
+                                    [request.id]: {
+                                      ...(current[request.id] || {}),
+                                      reason: event.target.value,
+                                    },
+                                  }))
+                                }
+                              />
+                            </label>
+                          </div>
+                          <dl className="melpet-hosting-history-meta melpet-hosting-adjustment-summary">
+                            <div>
+                              <dt>Valor solicitado</dt>
+                              <dd>{formatCurrency(Number(request.valorTotal || 0))}</dd>
+                            </div>
+                            <div>
+                              <dt>
+                                {adjustment.type === "acrescimo"
+                                  ? "Acréscimo"
+                                  : "Desconto"}
+                              </dt>
+                              <dd>{formatCurrency(adjustment.calculatedValue)}</dd>
+                            </div>
+                            <div>
+                              <dt>Total para pagamento</dt>
+                              <dd>{formatCurrency(adjustment.finalValue)}</dd>
+                            </div>
+                          </dl>
                         </div>
                         <div className="melpet-hosting-history-actions">
                           <Button

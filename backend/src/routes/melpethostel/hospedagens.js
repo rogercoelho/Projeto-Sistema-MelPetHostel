@@ -398,6 +398,27 @@ async function ensureCurrentMonthlyPaymentsForRequests(req, requests) {
   }
   return changed;
 }
+async function ensureHostingRequestAdjustmentColumns(req) {
+  const table = await resolveTableName(req, TABLE_NAMES.hospedagemSolicitacoes);
+  if (!table) return;
+  const db = dbFor(req);
+  const columns = [
+    { name: "ajuste_tipo", sql: "ADD COLUMN ajuste_tipo VARCHAR(20) NULL DEFAULT NULL AFTER valor_final" },
+    { name: "ajuste_modo", sql: "ADD COLUMN ajuste_modo VARCHAR(20) NULL DEFAULT NULL AFTER ajuste_tipo" },
+    { name: "ajuste_valor", sql: "ADD COLUMN ajuste_valor DECIMAL(10,2) NULL DEFAULT NULL AFTER ajuste_modo" },
+    { name: "ajuste_motivo", sql: "ADD COLUMN ajuste_motivo TEXT NULL AFTER ajuste_valor" },
+  ];
+
+  for (const column of columns) {
+    const [existing] = await db.query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+      [table, column.name],
+    );
+    if (!existing?.length) {
+      await db.query(`ALTER TABLE ${qtable(table)} ${column.sql}`);
+    }
+  }
+}
 async function ensureHostingPaymentsTable(req) {
   const db = dbFor(req);
   await db.query(
@@ -1288,8 +1309,9 @@ router.patch("/hospedagens/solicitacoes/:id/aprovar", async (req, res) => {
         status: "erro",
         mensagem: "Tabela de hospedagem nao encontrada.",
       });
+    await ensureHostingRequestAdjustmentColumns(req);
     const [rows] = await dbFor(req).query(
-      `SELECT id, status FROM ${qtable(table)} WHERE id = ? LIMIT 1`,
+      `SELECT id, status, valor_total FROM ${qtable(table)} WHERE id = ? LIMIT 1`,
       [solicitacaoId],
     );
     const solicitacao = rows && rows[0] ? rows[0] : null;
@@ -1301,9 +1323,48 @@ router.patch("/hospedagens/solicitacoes/:id/aprovar", async (req, res) => {
       return res
         .status(409)
         .json({ status: "erro", mensagem: "A solicitacao nao esta pendente." });
+    const ajusteTipo = clean(req.body?.ajusteTipo);
+    const ajusteModo = clean(req.body?.ajusteModo);
+    const ajusteValor = Number(req.body?.ajusteValor || 0);
+    const ajusteMotivo = clean(req.body?.ajusteMotivo);
+    const hasAdjustment = Number.isFinite(ajusteValor) && ajusteValor > 0;
+    const valorTotal = Number(solicitacao.valor_total || 0);
+    let valorAjusteCalculado = 0;
+    let valorFinal = valorTotal;
+
+    if (hasAdjustment) {
+      if (!["desconto", "acrescimo"].includes(ajusteTipo))
+        return res.status(400).json({ status: "erro", mensagem: "Tipo de ajuste invalido." });
+      if (!["valor", "percentual"].includes(ajusteModo))
+        return res.status(400).json({ status: "erro", mensagem: "Formato de ajuste invalido." });
+      if (!ajusteMotivo)
+        return res.status(400).json({ status: "erro", mensagem: "Informe o motivo do ajuste." });
+      if (ajusteModo === "percentual" && ajusteValor > 100)
+        return res.status(400).json({ status: "erro", mensagem: "O percentual de ajuste nao pode ser maior que 100%." });
+
+      valorAjusteCalculado = ajusteModo === "percentual"
+        ? Number(((valorTotal * ajusteValor) / 100).toFixed(2))
+        : Number(ajusteValor.toFixed(2));
+      valorFinal = ajusteTipo === "desconto"
+        ? valorTotal - valorAjusteCalculado
+        : valorTotal + valorAjusteCalculado;
+      if (valorFinal < 0)
+        return res.status(400).json({ status: "erro", mensagem: "O desconto nao pode deixar o valor final negativo." });
+    }
+
     await dbFor(req).query(
-      `UPDATE ${qtable(table)} SET status = ?, analisado_por = ?, analisado_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`,
-      ["aprovado", getReqLogin(req), solicitacaoId],
+      `UPDATE ${qtable(table)} SET status = ?, desconto_valor = ?, valor_final = ?, ajuste_tipo = ?, ajuste_modo = ?, ajuste_valor = ?, ajuste_motivo = ?, analisado_por = ?, analisado_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`,
+      [
+        "aprovado",
+        hasAdjustment && ajusteTipo === "desconto" ? valorAjusteCalculado : hasAdjustment ? -valorAjusteCalculado : null,
+        Number(valorFinal.toFixed(2)),
+        hasAdjustment ? ajusteTipo : null,
+        hasAdjustment ? ajusteModo : null,
+        hasAdjustment ? ajusteValor : null,
+        hasAdjustment ? ajusteMotivo : null,
+        getReqLogin(req),
+        solicitacaoId,
+      ],
     );
     const solicitacaoAprovada = (await loadHostingRequestById(
       req,
