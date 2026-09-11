@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const express = require("express");
+const { getMonthlyPresence } = require("./presencas");
 const router = express.Router();
 const {
   MODULE,
@@ -174,6 +175,16 @@ async function ensureHostingMonthlyPaymentsTable(req) {
   );
 }
 
+async function ensureMonthlyAdjustmentsTable(req) {
+  await dbFor(req).query(
+    "CREATE TABLE IF NOT EXISTS " + qtable(TABLE_NAMES.hospedagemAjustesMensais) +
+    " (id INT NOT NULL AUTO_INCREMENT, solicitacao_id INT NOT NULL, pet_id INT NOT NULL, competencia CHAR(7) NOT NULL, tipo VARCHAR(20) NOT NULL, modo VARCHAR(20) NOT NULL, valor DECIMAL(10,2) NOT NULL, motivo TEXT NOT NULL, recorrente TINYINT(1) NOT NULL DEFAULT 0, criado_por VARCHAR(191) NULL, criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (id), INDEX idx_hosp_ajuste_pet (pet_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+  );  try {
+    await dbFor(req).query("ALTER TABLE " + qtable(TABLE_NAMES.hospedagemAjustesMensais) + " DROP INDEX uk_hosp_ajuste_pet_mes");
+  } catch (error) {
+    if (Number(error?.errno) !== 1091) throw error;
+  }
+}
 function getMonthlyCompetence(request) {
   const raw = clean(request?.inicioMes || request?.itens?.[0]?.inicioMes);
   const match = raw.match(/^(\d{4})-(\d{2})/);
@@ -235,6 +246,12 @@ function getHostingPaymentsFromRequest(request) {
   return request?.pagamento ? [request.pagamento] : [];
 }
 
+function normalizeText(value) {
+  return clean(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 function getMonthlyPaymentType(competencia) {
   return "mensal_" + clean(competencia).replace("-", "_");
 }
@@ -309,6 +326,116 @@ function isMonthlyCycleEnd(request, competencia) {
   );
   return todayAtStart >= cycleEndAtStart;
 }
+function incrementCompetence(competencia) {
+  const match = clean(competencia).match(/^(\d{4})-(\d{2})$/);
+  if (!match) return "";
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]), 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function decrementCompetence(competencia) {
+  const match = clean(competencia).match(/^(\d{4})-(\d{2})$/);
+  if (!match) return "";
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 2, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function isMonthlyPaymentReleaseOpen(request, competencia) {
+  const cycleEnd = getMonthlyCycleEndDate(request, competencia);
+  if (!cycleEnd) return false;
+  const now = new Date();
+  const today = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const releaseUtc = cycleEnd.getTime() - 15 * 86400000;
+  return todayUtc >= releaseUtc;
+}
+
+function getContractedCrecheRange(item, competencia, valorBase) {
+  if (!clean(item?.tipo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("creche")) return null;
+  const quantidadeSemanal = Math.trunc(Number(item?.tempoQuantidade || 0));
+  const match = clean(competencia).match(/^(\d{4})-(\d{2})$/);
+  if (!quantidadeSemanal || !match) return null;
+  const diasNoMes = new Date(Date.UTC(Number(match[1]), Number(match[2]), 0)).getUTCDate();
+  const diasDoPlano = quantidadeSemanal * Math.ceil(diasNoMes / 7);
+  const valor = Number(valorBase || 0);
+  return { planoQuantidade: quantidadeSemanal, diasUsados: 0, diasDoPlano, valorFaixa: valor, valorDia: diasDoPlano > 0 ? Number((valor / diasDoPlano).toFixed(2)) : 0 };
+}
+async function getMonthlyForecast(req, request, competenciaAtual = getMonthlyCycleCompetence(request)) {
+  const monthlyItems = (request.itens || []).filter(
+    (item) => normalizeBillingMode(item?.modoCobranca) === "mensal",
+  );
+  await ensureMonthlyAdjustmentsTable(req);
+  const competenciaPrevisao = incrementCompetence(competenciaAtual);
+  // Exact adjustments take precedence. A recurring adjustment remains effective
+  // until a newer adjustment for the same pet replaces it.
+  const [adjustmentRows] = await dbFor(req).query(
+    "SELECT pet_id, tipo, modo, valor, motivo, competencia, recorrente FROM " +
+      qtable(TABLE_NAMES.hospedagemAjustesMensais) +
+      " WHERE solicitacao_id = ? AND competencia <= ? AND (competencia = ? OR recorrente = 1) ORDER BY pet_id ASC, competencia DESC",
+    [request.id, competenciaPrevisao, competenciaPrevisao],
+  );
+  const adjustmentsByPet = new Map();
+  for (const adjustment of adjustmentRows || []) {
+    const petId = Number(adjustment.pet_id);
+    if (!adjustmentsByPet.has(petId)) adjustmentsByPet.set(petId, []);
+    adjustmentsByPet.get(petId).push(adjustment);
+  }
+  const summaries = await Promise.all(
+    monthlyItems.map(async (item) => ({
+      item,
+      resumo: await getMonthlyPresence(req, {
+        petId: Number(item.petId),
+        competencia: competenciaPrevisao,
+      }).catch(() => null),
+    })),
+  );
+  const itens = summaries.map(({ item, resumo }) => {
+    const valorBase = Number(resumo?.valorBase ?? item?.valorTotal ?? 0);
+    const valorExcedente = Number(resumo?.valorExcedente || 0);
+    const adjustments = adjustmentsByPet.get(Number(item.petId)) || [];
+    const ajustes = adjustments.map((adjustment) => {
+      const valorCalculado = adjustment.modo === "percentual"
+        ? ((valorBase + valorExcedente) * Number(adjustment.valor)) / 100
+        : Number(adjustment.valor);
+      return { ...adjustment, valorCalculado: Number(valorCalculado.toFixed(2)) };
+    });
+    const adjustmentDelta = ajustes.reduce(
+      (sum, adjustment) => sum + (adjustment.tipo === "desconto" ? -adjustment.valorCalculado : adjustment.valorCalculado),
+      0,
+    );
+    const total = Math.max(0, valorBase + valorExcedente + adjustmentDelta);
+    const faixaContratada = resumo?.faixaBase || getContractedCrecheRange(item, competenciaPrevisao, valorBase);
+    return {
+      petNome: item?.petNome || "Pet",
+      plano: item?.tipo || request?.tipo || "Plano mensal",
+      diasContratados: Number(resumo?.diasContratados || faixaContratada?.diasDoPlano || 0),
+      diasUsados: Number(resumo?.diasUsados || 0),
+      diasExcedentes: Number(resumo?.diasExcedentes || 0),
+      faixaBase: faixaContratada,
+      faixasExcedentes: Array.isArray(resumo?.faixasExcedentes) ? resumo.faixasExcedentes : [],
+      valorBase,
+      valorExcedente,
+      ajuste: ajustes[0] || null,
+      ajustes,
+      valorTotal: Number(total.toFixed(2)),
+    };
+  });
+  const valorBase = itens.reduce((sum, item) => sum + item.valorBase, 0);
+  const valorExcedente = itens.reduce((sum, item) => sum + item.valorExcedente, 0);
+  const estimatedValue = itens.reduce((sum, item) => sum + item.valorTotal, 0);
+  const cycleEnd = getMonthlyCycleEndDate(request, competenciaAtual);
+  return {
+    competencia: incrementCompetence(competenciaAtual),
+    valor: estimatedValue,
+    valorBase,
+    ajuste: 0,
+    diasExcedentes: itens.reduce((sum, item) => sum + item.diasExcedentes, 0),
+    valorExcedente,
+    itens,
+    vencimento: cycleEnd ? cycleEnd.toISOString().slice(0, 10) : null,
+    liberado: isMonthlyPaymentReleaseOpen(request, competenciaAtual),
+  };
+}
 function hasUnsettledPreviousMonthlyPayment(request, competencia) {
   return (request?.pagamentos || []).some((payment) => {
     const paymentCompetence = getPaymentCompetence(payment);
@@ -331,14 +458,17 @@ function hasConfirmedMonthlyPaymentAtOrAfter(request, competencia) {
   });
 }
 
-async function ensureCurrentMonthlyPayment(req, request) {
+async function ensureCurrentMonthlyPayment(req, request, competenciaForcada = "") {
   if (!request || !isMonthlyHostingRequest(request)) return false;
   if (normalizeHostingStatus(request.status) !== "confirmado") return false;
   if (hasMonthlyCancellationRequested(request)) return false;
   await ensureHostingMonthlyPaymentsTable(req);
-  const competencia = getMonthlyCycleCompetence(request);
-  if (hasUnsettledPreviousMonthlyPayment(request, competencia)) return false;
-  if (hasConfirmedMonthlyPaymentAtOrAfter(request, competencia)) return false;
+  const competenciaAtual = competenciaForcada ? decrementCompetence(competenciaForcada) : getMonthlyCycleCompetence(request);
+  const previsaoMensal = await getMonthlyForecast(req, request, competenciaAtual);
+  request.previsaoMensal = previsaoMensal;
+  if (!previsaoMensal.competencia) return false;
+  const competencia = previsaoMensal.competencia;
+  if (!competenciaForcada && !previsaoMensal.liberado) return false;
   const parcelaTipo = getMonthlyPaymentType(competencia);
   const existing = (request.pagamentos || []).some(
     (payment) => clean(payment.parcelaTipo) === parcelaTipo,
@@ -346,7 +476,7 @@ async function ensureCurrentMonthlyPayment(req, request) {
   if (existing) return false;
   const pixConfig = await getActivePixConfig(req);
   if (!pixConfig?.chavePix) return false;
-  const valor = Number(request.valorFinal ?? request.valorTotal ?? 0);
+  const valor = Number(previsaoMensal.valor || 0);
   const pixCopiaCola = buildPixPayload({
     key: pixConfig.chavePix,
     name: pixConfig.nomeRecebedor,
@@ -394,7 +524,25 @@ async function ensureCurrentMonthlyPaymentsForRequests(req, requests) {
   const items = Array.isArray(requests) ? requests : [];
   let changed = false;
   for (const request of items) {
-    changed = (await ensureCurrentMonthlyPayment(req, request)) || changed;
+    if (!isMonthlyHostingRequest(request) || normalizeHostingStatus(request.status) !== "confirmado") continue;
+    if (hasMonthlyCancellationRequested(request)) continue;
+
+    const firstCompetencia = getMonthlyCompetence(request);
+    const nextCycleForecast = await getMonthlyForecast(req, request, getMonthlyCycleCompetence(request));
+    const lastCompetencia = nextCycleForecast?.competencia || "";
+    for (let competencia = firstCompetencia; competencia && competencia <= lastCompetencia; competencia = incrementCompetence(competencia)) {
+      const parcelaTipo = getMonthlyPaymentType(competencia);
+      const payment = (request.pagamentos || []).find((item) => clean(item?.parcelaTipo) === parcelaTipo);
+      if (payment) {
+        if (clean(payment.status).toLowerCase() !== "confirmado") break;
+        continue;
+      }
+      // Competências retroativas e o ciclo em curso podem ser cobrados imediatamente.
+      // Apenas o ciclo posterior depende da janela de 15 dias.
+      if (competencia === lastCompetencia && !nextCycleForecast.liberado) break;
+      changed = (await ensureCurrentMonthlyPayment(req, request, competencia)) || changed;
+      break;
+    }
   }
   return changed;
 }
@@ -891,6 +1039,52 @@ Obrigado por escolher os serviço da Mel Pet Hostel.`,
     console.warn("Hosting payment link email not sent:", result.reason);
   return result;
 }
+async function notifyMonthlyInvoiceReleased(req, { request, competencia, valor }) {
+  const pets = (request?.itens || [])
+    .map((item) => clean(item.petNome))
+    .filter(Boolean);
+  const petsLabel = pets.length ? pets.join(", ") : "seu pet";
+  const monthLabel = formatTelegramMonth(competencia);
+  const valueLabel = formatTelegramMoney(valor);
+
+  const email = await sendEmail({
+    to: request?.clienteEmail,
+    subject: `Fatura de ${monthLabel} liberada — Mel Pet Hostel`,
+    text: `Olá, ${request?.clienteNome || "tutor(a)"}!
+
+A fatura da hospedagem de ${petsLabel} para o ciclo ${monthLabel} já está disponível.
+
+Total do ciclo: ${valueLabel}
+
+No portal Mel Pet Hostel, você encontra o demonstrativo completo — plano, presenças, descontos ou acréscimos — e pode escolher PIX ou cartão de crédito.
+
+Para manter a reserva ativa sem interrupções, faça o pagamento dentro do prazo indicado no seu extrato.
+
+Com carinho,
+Equipe Mel Pet Hostel`,
+  }).catch((error) => {
+    console.warn("Monthly invoice email was not sent:", error?.message || error);
+    return { sent: false, reason: "erro_envio_email" };
+  });
+
+  await sendTelegramToConfiguredAdmins({
+    db: dbFor(req),
+    module: MODULE,
+    message: [
+      "Fatura mensal liberada",
+      `Tutor: <b>${clean(request?.usuarioLogin) || clean(request?.clienteNome) || "-"}</b>`,
+      `Ciclo: <b>${monthLabel}</b>`,
+      `Pets: <b>${petsLabel}</b>`,
+      `Total: <b>${valueLabel}</b>`,
+    ].join("\n"),
+    disabledReason: "notificacao_desativada",
+  }).catch((error) => {
+    console.warn("Monthly invoice Telegram notification was not sent:", error?.message || error);
+  });
+
+  return email;
+}
+
 async function notifyAdmins(req, pedido) {
   const db = dbFor(req);
   const message = buildHostingTelegramMessage({
@@ -1178,6 +1372,19 @@ async function listHostingRequests(
     `;
   const [rows] = await db.query(sql, params);
   const requests = mapHostingRows(rows);
+  for (const request of requests) {
+    if ((request.itens || []).length) {
+      const status = normalizeHostingStatus(request.status);
+      const firstCycle = status === "aprovado" ? getMonthlyCompetence(request) : "";
+      request.previsaoMensal = firstCycle
+        ? await getMonthlyForecast(req, request, decrementCompetence(firstCycle))
+        : await getMonthlyForecast(req, request);
+      for (const payment of getHostingPaymentsFromRequest(request)) {
+        const competence = getPaymentCompetence(payment);
+        if (competence) payment.demonstrativo = await getMonthlyForecast(req, request, decrementCompetence(competence));
+      }
+    }
+  }
   if (ensureMonthly) {
     const shouldCancelMonthly = requests.filter(
       (request) =>
@@ -1552,7 +1759,7 @@ router.post(
       } else {
         await ensureHostingPaymentsTable(req);
       }
-      const valorFinal = Number(
+      let valorFinal = Number(
         solicitacao.valor_final ?? solicitacao.valor_total ?? 0,
       );
       const monthlyCompetence = isMonthlyPayment
@@ -1561,6 +1768,10 @@ router.post(
       const monthlyType = monthlyCompetence
         ? "mensal_" + monthlyCompetence.replace("-", "_")
         : "mensal";
+      if (isMonthlyPayment && monthlyCompetence) {
+        const demonstrativo = await getMonthlyForecast(req, requestForPaymentRule, decrementCompetence(monthlyCompetence));
+        valorFinal = Number(demonstrativo.valor || 0);
+      }
       const parcelas = isMonthlyPayment
         ? [
             {
@@ -2110,10 +2321,11 @@ router.post(
         return res
           .status(404)
           .json({ status: "erro", mensagem: "Solicitação não encontrada." });
-      if (normalizeHostingStatus(solicitacao.status) !== "aprovado")
+      const statusPedido = normalizeHostingStatus(solicitacao.status);
+      if (!["aprovado", "confirmado"].includes(statusPedido))
         return res.status(409).json({
           status: "erro",
-          mensagem: "Comprovante disponível apenas para hospedagem aprovada.",
+          mensagem: "Comprovante disponível apenas para pedido de hospedagem aprovado.",
         });
       await ensureHostingPaymentsTable(req);
       const user = await getUsuarioByLogin(req, login);
@@ -2594,4 +2806,38 @@ router.post("/hospedagens/solicitacoes", async (req, res) => {
   }
 });
 
+router.get("/hospedagens/ajustes-mensais/pets", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const requests = await listHostingRequests(req, { ensureMonthly: false });
+    const pets = requests.flatMap((request) => (request.itens || []).map((item) => ({ petId: item.petId, petNome: item.petNome, clienteNome: request.clienteNome, solicitacaoId: request.id, modoCobranca: item.modoCobranca || request.modoCobranca, tipo: item.tipo || request.tipo, inicioMes: item.inicioMes || request.inicioMes, dataEntrada: item.dataEntrada || request.dataEntrada, dataSaida: item.dataSaida || request.dataSaida })));
+    const unique = Array.from(new Map(pets.map((pet) => [`${pet.solicitacaoId}:${pet.petId}`, pet])).values());
+    return res.json({ status: "sucesso", pets: unique });
+  } catch (error) { return res.status(500).json({ status: "erro", mensagem: error.message }); }
+});
+
+router.post("/hospedagens/ajustes-mensais", async (req, res) => {
+  try {
+    if (!(await requireHostingAdmin(req, res))) return;
+    const solicitacaoId = Number(req.body?.solicitacaoId); const petId = Number(req.body?.petId); const competencia = clean(req.body?.competencia);
+    const tipo = clean(req.body?.tipo).toLowerCase(); const modo = clean(req.body?.modo).toLowerCase(); const valor = Number(req.body?.valor); const motivo = clean(req.body?.motivo); const recorrente = req.body?.recorrente ? 1 : 0;
+    if (!solicitacaoId || !petId || !/^\d{4}-\d{2}$/.test(competencia) || !["desconto","acrescimo"].includes(tipo) || !["valor","percentual"].includes(modo) || !Number.isFinite(valor) || valor <= 0 || !motivo) return res.status(400).json({ status:"erro", mensagem:"Informe pet, mês, tipo, valor e motivo do ajuste." });
+    await ensureMonthlyAdjustmentsTable(req);
+    const parcelaTipo = getMonthlyPaymentType(competencia);
+    const [paymentRows] = await dbFor(req).query(
+      "SELECT status FROM " + qtable(TABLE_NAMES.hospedagemPagamentos) +
+        " WHERE solicitacao_id = ? AND parcela_tipo = ? ORDER BY id DESC LIMIT 1",
+      [solicitacaoId, parcelaTipo],
+    );
+    const paymentStatus = clean(paymentRows?.[0]?.status).toLowerCase();
+    if (paymentStatus && !["aguardando_comprovante", "reprovado"].includes(paymentStatus)) {
+      return res.status(409).json({
+        status: "erro",
+        mensagem: "Não é possível alterar esta mensalidade após o envio do comprovante. Reprove o comprovante para liberar novos ajustes.",
+      });
+    }
+    await dbFor(req).query("INSERT INTO " + qtable(TABLE_NAMES.hospedagemAjustesMensais) + " (solicitacao_id, pet_id, competencia, tipo, modo, valor, motivo, recorrente, criado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [solicitacaoId,petId,competencia,tipo,modo,valor,motivo,recorrente,getReqLogin(req)]);
+    return res.json({ status:"sucesso", mensagem:"Ajuste mensal salvo." });
+  } catch (error) { return res.status(500).json({ status:"erro", mensagem:error.message }); }
+});
 module.exports = router;

@@ -15,6 +15,7 @@ import melPetLogo from "../MelPetHostel/assets/MelPetHostel_Logo.jpeg";
 import AdminGroupsPage from "./AdminGroupsPage";
 import AdminUserMaintenancePage from "./AdminUserMaintenancePage";
 import AdminUsersPage from "./AdminUsersPage";
+import MonthlyAdjustmentPage from "./MonthlyAdjustmentPage";
 import UserAccessPage from "./UserAccessPage";
 import ChangePasswordModal from "./ChangePasswordModal";
 import ClientProfileModal from "./ClientProfileModal";
@@ -238,6 +239,10 @@ function Dashboard() {
         {
           label: "Hospedagem",
           onAction: openMelPetHostingAdmin,
+        },
+        {
+          label: "Registrar Desconto / Acrescimo",
+          onAction: () => openView("monthly-adjustments"),
         },
         {
           label: "Registrar Presença",
@@ -764,6 +769,8 @@ function Dashboard() {
             setMelComplianceGate(false);
           }}
         />
+      ) : view === "monthly-adjustments" ? (
+        <MonthlyAdjustmentPage onBack={() => handleDashboardBack("home")} />
       ) : view === "admin-users" ? (
         <AdminUsersPage onBack={() => handleDashboardBack("home")} />
       ) : view === "admin-user-access" ? (

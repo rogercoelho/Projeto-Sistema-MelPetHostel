@@ -392,9 +392,6 @@ export default function MelPetHostel({
     useState(null);
   const [reviewingHostingRequestId, setReviewingHostingRequestId] =
     useState(null);
-  const [hostingApprovalAdjustments, setHostingApprovalAdjustments] = useState(
-    {},
-  );
   const [rejectHostingTarget, setRejectHostingTarget] = useState(null);
   const [rejectHostingReason, setRejectHostingReason] = useState("");
   const [pixConfigForm, setPixConfigForm] = useState({
@@ -442,6 +439,8 @@ export default function MelPetHostel({
   const [rejectHostingPaymentReason, setRejectHostingPaymentReason] =
     useState("");
   const [paymentPreview, setPaymentPreview] = useState(null);
+  const [paymentStatementPage, setPaymentStatementPage] = useState(1);
+  const [monthlyPaymentSort, setMonthlyPaymentSort] = useState({});
   const [activeMenu, setActiveMenu] = useState(
     initialAdminMenu === "cadastroPets" ? "" : initialAdminMenu,
   );
@@ -1104,28 +1103,6 @@ export default function MelPetHostel({
     });
   }
 
-  function getHostingApprovalAdjustment(request) {
-    const adjustment = hostingApprovalAdjustments[request?.id] || {};
-    const value = Number(String(adjustment.value || "").replace(",", "."));
-    const baseValue = Number(request?.valorTotal || 0);
-    const rawValue = Number.isFinite(value) && value > 0 ? value : 0;
-    const calculatedValue =
-      adjustment.mode === "percentual"
-        ? Number(((baseValue * rawValue) / 100).toFixed(2))
-        : rawValue;
-    const finalValue =
-      adjustment.type === "acrescimo"
-        ? baseValue + calculatedValue
-        : Math.max(0, baseValue - calculatedValue);
-    return {
-      type: adjustment.type || "desconto",
-      mode: adjustment.mode || "valor",
-      value: rawValue,
-      reason: adjustment.reason || "",
-      calculatedValue,
-      finalValue,
-    };
-  }
   async function loadPlanos() {
     setLoadingPlanos(true);
     setPlanosError("");
@@ -1173,53 +1150,22 @@ export default function MelPetHostel({
 
   async function approveHostingRequest(request) {
     if (!request?.id) return;
-    const adjustment = getHostingApprovalAdjustment(request);
-    if (adjustment.value > 0 && !adjustment.reason.trim()) {
-      showToast("Informe o motivo do desconto ou acréscimo.", "warning");
-      return;
-    }
     setReviewingHostingRequestId(request.id);
     try {
       const data = await api.patch(
-        "/melpethostel/hospedagens/solicitacoes/" + request.id + "/aprovar",
-        adjustment.value > 0
-          ? {
-              ajusteTipo: adjustment.type,
-              ajusteModo: adjustment.mode,
-              ajusteValor: adjustment.value,
-              ajusteMotivo: adjustment.reason.trim(),
-            }
-          : {},
+        "/melpethostel/hospedagens/solicitacoes/" + request.id + "/aprovar"
       );
       showToast("Hospedagem aprovada.", "success");
       if (data?.email && !data.email.sent) {
-        showToast(
-          data.email.reason === "email_nao_informado"
-            ? "Hospedagem aprovada, mas o tutor não possui e-mail cadastrado."
-            : "Hospedagem aprovada, mas o e-mail não foi enviado. Verifique as variáveis SMTP e reinicie o app NodeJS.",
-          "warning",
-        );
+        showToast("Hospedagem aprovada, mas o e-mail não foi enviado.", "warning");
       }
-      setPendingHostingRequests((current) =>
-        current.filter((item) => Number(item.id) !== Number(request.id)),
-      );
-      setHostingApprovalAdjustments((current) => {
-        const next = { ...current };
-        delete next[request.id];
-        return next;
-      });
-      if (selectedPendingHostingId === request.id)
-        setSelectedPendingHostingId(null);
+      setPendingHostingRequests((current) => current.filter((item) => Number(item.id) !== Number(request.id)));
     } catch (error) {
-      showToast(
-        error?.message || "Não foi possível aprovar a hospedagem.",
-        "error",
-      );
+      showToast(error.message || "Erro ao aprovar hospedagem.", "error");
     } finally {
       setReviewingHostingRequestId(null);
     }
   }
-
   async function loadPixConfig() {
     setLoadingPixConfig(true);
     setPixConfigError("");
@@ -1995,11 +1941,6 @@ export default function MelPetHostel({
       setPendingHostingRequests((current) =>
         current.filter((item) => Number(item.id) !== Number(request.id)),
       );
-      setHostingApprovalAdjustments((current) => {
-        const next = { ...current };
-        delete next[request.id];
-        return next;
-      });
       if (selectedPendingHostingId === request.id)
         setSelectedPendingHostingId(null);
       setRejectHostingTarget(null);
@@ -4483,14 +4424,143 @@ export default function MelPetHostel({
     </div>
   );
 
+  function renderMonthlyForecast(request, payment = null) {
+    const forecast = payment?.demonstrativo || request?.previsaoMensal;
+    if (!forecast?.competencia) return null;
+
+    const items = Array.isArray(forecast.itens) ? forecast.itens : [];
+    return (
+      <section className="melpet-billing-summary" aria-label="Resumo financeiro do ciclo">
+        <header className="melpet-billing-summary__header">
+          <div>
+            <span>Resumo do ciclo</span>
+            <strong>{formatMonthlyCompetence(forecast.competencia)}</strong>
+          </div>
+          {forecast.vencimento ? (
+            <small>Vencimento {formatBrazilDate(forecast.vencimento)}</small>
+          ) : null}
+        </header>
+
+        <div className="melpet-billing-summary__items">
+          {items.map((item, index) => {
+            const adjustmentValue = Number(item.ajuste?.valorCalculado || 0);
+            const excessValue = Number(item.valorExcedente || 0);
+            return (
+              <article key={`${item.petNome}-${index}`}>
+                <dl>
+                  {item.faixaBase ? (
+                    <div className="melpet-billing-range">
+                      <dt>
+                        <span>Faixa do plano</span>
+                        <span className="melpet-billing-rate">{formatCurrency(item.faixaBase.valorDia || 0)}/dia</span>
+                      </dt>
+                      <dd>
+                        <span className="melpet-billing-range__badges">
+                          <span>{item.faixaBase.planoQuantidade}x/semana</span>
+                          <span>{item.faixaBase.diasUsados || 0} de {item.faixaBase.diasDoPlano} dias</span>
+                        </span>
+                        <strong>{formatCurrency(item.faixaBase.valorFaixa || 0)}</strong>
+                      </dd>
+                    </div>
+                  ) : null}
+                  {(item.faixasExcedentes || []).map((faixa, faixaIndex) => (
+                    <div className="melpet-billing-range is-addition" key={`${item.petNome}-faixa-${faixaIndex}`}>
+                      <dt>
+                        <span>Faixa excedente</span>
+                        <span className="melpet-billing-rate">{formatCurrency(faixa.valorDia || 0)}/dia</span>
+                      </dt>
+                      <dd>
+                        <span className="melpet-billing-range__badges">
+                          <span>{faixa.planoQuantidade}x/semana</span>
+                          <span>{faixa.diasUsados || 0} usados</span>
+                        </span>
+                        <strong>+ {formatCurrency(faixa.valorFaixa || 0)}</strong>
+                      </dd>
+                    </div>
+                  ))}
+                  {(Number(item.diasContratados || 0) > 0 ||
+                    Number(item.diasUsados || 0) > 0) ? (
+                    <div className="melpet-billing-presence">
+                      <dt>Presenças</dt>
+                      <dd>
+                        <strong>{Number(item.diasUsados || 0)}</strong>
+                        <span>de {Number(item.diasContratados || 0)} dias do plano</span>
+                      </dd>
+                    </div>
+                  ) : null}
+                  {excessValue > 0 ? (
+                    <div className="is-addition">
+                      <dt>Presenças excedentes</dt>
+                      <dd>+ {formatCurrency(excessValue)}</dd>
+                    </div>
+                  ) : null}
+                  {(item.ajustes?.length ? item.ajustes : item.ajuste ? [item.ajuste] : []).map((ajuste, ajusteIndex) => (
+                    <div
+                      className={`melpet-billing-adjustment ${ajuste.tipo === "desconto" ? "is-discount" : "is-addition"}`}
+                      key={`${item.petNome}-ajuste-${ajusteIndex}`}
+                    >
+                      <dt>{ajuste.tipo === "desconto" ? "Desconto" : "Acréscimo"}</dt>
+                      <dd>
+                        {ajuste.tipo === "desconto" ? "−" : "+"}{" "}
+                        {formatCurrency(ajuste.valorCalculado || 0)}
+                      </dd>
+                      {ajuste.motivo ? (
+                        <p className="melpet-billing-summary__reason">
+                          <strong>Motivo:</strong> {ajuste.motivo}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </dl>
+              </article>
+            );
+          })}
+        </div>
+
+        <footer className="melpet-billing-summary__total">
+          <span>Total a pagar</span>
+          <strong>{formatCurrency(forecast.valor || 0)}</strong>
+        </footer>
+      </section>
+    );
+  }
+  function renderUpcomingCyclePreview(request) {
+    const forecast = request?.previsaoMensal;
+    if (!isMonthlyHostingRequest(request) || !forecast?.competencia || getHostingRequestStatusTone(request.status) !== "confirmed") return null;
+    return (
+      <section className="melpet-hosting-payment-card">
+        <div className="melpet-hosting-payment-installment is-pending">
+          <div>
+            <span className="melpet-hosting-history-kicker">{`Mensalidade ${formatMonthlyCompetence(forecast.competencia)}`}</span>
+            <p className="melpet-next-cycle-release-note">
+              A forma de pagamento será liberada 15 dias antes do início deste ciclo.
+            </p>
+          </div>
+          {renderMonthlyForecast(request)}
+        </div>
+      </section>
+    );
+  }
+
   function renderHostingPaymentPanel(request) {
-    const requestTotal = request.valorFinal ?? request.valorTotal;
+    const requestTotal = isMonthlyHostingRequest(request)
+      ? request?.previsaoMensal?.valor ?? request.valorFinal ?? request.valorTotal
+      : request.valorFinal ?? request.valorTotal;
     const payments = hasMonthlyCancellationRequested(request)
       ? getHostingPayments(request).filter(
           (payment) =>
             String(payment?.status || "").toLowerCase() === "confirmado",
         )
       : getVisibleHostingPayments(request);
+    const monthlySortOrder = monthlyPaymentSort[request.id] || "recent";
+    const orderedPayments = isMonthlyHostingRequest(request)
+      ? [...payments].sort((first, second) => {
+          const firstCompetence = getPaymentCompetence(first) || String(first?.parcelaTipo || "");
+          const secondCompetence = getPaymentCompetence(second) || String(second?.parcelaTipo || "");
+          const comparison = firstCompetence.localeCompare(secondCompetence, "pt-BR", { numeric: true });
+          return monthlySortOrder === "oldest" ? comparison : -comparison;
+        })
+      : payments;
     const canManagePayment = shouldShowHostingPaymentPanel(request, payments);
     if (!canManagePayment && !payments.length) {
       return null;
@@ -4501,8 +4571,11 @@ export default function MelPetHostel({
         <div className="melpet-hosting-payment-card">
           <div>
             <span className="melpet-hosting-history-kicker">Pagamento PIX</span>
-            <h4>{formatCurrency(requestTotal)}</h4>
+            {!request?.previsaoMensal?.competencia ? (
+              <h4>{formatCurrency(requestTotal)}</h4>
+            ) : null}
           </div>
+          {renderMonthlyForecast(request)}
           <p>Escolha como deseja realizar o pagamento.</p>
           <div className="melpet-hosting-payment-options">
             <Button
@@ -4605,7 +4678,7 @@ export default function MelPetHostel({
             </div>
           </div>
         ) : null}
-        {payments.map((payment) => {
+        {orderedPayments.map((payment) => {
           const paymentKey = request.id + "-" + payment.parcelaTipo;
           const paymentStatus = String(payment.status || "").toLowerCase();
           const isConfirmed = paymentStatus === "confirmado";
@@ -4617,14 +4690,16 @@ export default function MelPetHostel({
           };
           return (
             <div
-              className={`melpet-hosting-payment-installment ${isRejected ? "is-rejected" : isConfirmed ? "is-done" : hasPendingReceipt ? "is-pending" : ""}`}
+              className={`melpet-hosting-payment-installment ${isRejected ? "is-rejected" : isConfirmed ? "is-done" : "is-pending"}`}
               key={payment.id || paymentKey}
             >
               <div>
                 <span className="melpet-hosting-history-kicker">
                   {getHostingPaymentLabel(payment)}
                 </span>
-                <h4>{formatCurrency(payment.valor)}</h4>
+                {!payment?.demonstrativo?.competencia ? (
+                  <h4>{formatCurrency(payment.valor)}</h4>
+                ) : null}
                 <span
                   className={`melpet-doc-status melpet-doc-status--${
                     isRejected
@@ -4645,6 +4720,7 @@ export default function MelPetHostel({
                         : "Pendente"}
                 </span>
               </div>
+              {renderMonthlyForecast(request, payment)}
               {isConfirmed ? (
                 <div className="melpet-hosting-history-note is-success">
                   <strong>{formatHostingCheckInOut(request)}</strong>
@@ -4969,7 +5045,7 @@ export default function MelPetHostel({
                     >
                       <h4>Itens</h4>
                       <ul>
-                        {(request.itens || []).map((item) => {
+                        {(request.itens || []).map((item, itemIndex) => {
                           const itemTotal = Number(item.valorTotal || 0);
                           const adjustmentValue = Number(
                             request.descontoValor || 0,
@@ -5093,15 +5169,29 @@ export default function MelPetHostel({
     </section>
   );
 
-  const paymentStatementRequests = hostingRequests.filter((request) => {
-    const isUsedHosting =
-      getHostingRequestStatusKey(request.status) === "concluido";
-    if (isUsedHosting) return false;
-    const payments = getVisibleHostingPayments(request);
-    return (
-      payments.length > 0 || shouldShowHostingPaymentPanel(request, payments)
-    );
-  });
+  const paymentStatementRequests = hostingRequests
+    .filter((request) => {
+      const isUsedHosting = getHostingRequestStatusKey(request.status) === "concluido";
+      if (isUsedHosting) return false;
+      const payments = getVisibleHostingPayments(request);
+      return payments.length > 0 || shouldShowHostingPaymentPanel(request, payments);
+    })
+    .sort((first, second) => {
+      const lastActivity = (request) => {
+        const dates = [request.atualizadoEm, request.criadoEm, ...(request.pagamentos || []).flatMap((payment) => [payment.conferidoEm, payment.enviadoEm])]
+          .map((value) => Date.parse(value || ""))
+          .filter(Number.isFinite);
+        return dates.length ? Math.max(...dates) : 0;
+      };
+      return lastActivity(second) - lastActivity(first);
+    });
+  const paymentStatementPageSize = 12;
+  const paymentStatementPageCount = Math.max(1, Math.ceil(paymentStatementRequests.length / paymentStatementPageSize));
+  const currentPaymentStatementPage = Math.min(paymentStatementPage, paymentStatementPageCount);
+  const visiblePaymentStatementRequests = paymentStatementRequests.slice(
+    (currentPaymentStatementPage - 1) * paymentStatementPageSize,
+    currentPaymentStatementPage * paymentStatementPageSize,
+  );
   const openPaymentStatementCount = paymentStatementRequests.filter((request) =>
     shouldShowHostingPaymentPanel(request, getVisibleHostingPayments(request)),
   ).length;
@@ -5128,7 +5218,7 @@ export default function MelPetHostel({
         <p className="melpet-validate-message">Carregando extrato...</p>
       ) : paymentStatementRequests.length ? (
         <div className="melpet-hosting-history-list">
-          {paymentStatementRequests.map((request) => (
+          {visiblePaymentStatementRequests.map((request) => (
             <article
               key={request.id}
               className="melpet-hosting-history-card is-open"
@@ -5148,7 +5238,7 @@ export default function MelPetHostel({
               <div className="melpet-hosting-history-items">
                 <h4>Itens</h4>
                 <ul>
-                  {(request.itens || []).map((item) => {
+                  {(request.itens || []).map((item, itemIndex) => {
                     const itemTotal = Number(item.valorTotal || 0);
                     const adjustmentValue = Number(request.descontoValor || 0);
                     const requestOriginalTotal = Number(
@@ -5186,12 +5276,36 @@ export default function MelPetHostel({
                             <strong>{formatCurrency(itemFinalTotal)}</strong>
                           </div>
                         ) : null}
-                      </li>
+
+                        {itemIndex === 0 && isMonthlyHostingRequest(request) && getVisibleHostingPayments(request).length > 1 ? (
+                  <label className="melpet-monthly-payment-sort">
+                    <span>Ordenar mensalidades</span>
+                    <select
+                      value={monthlyPaymentSort[request.id] || "recent"}
+                      onChange={(event) =>
+                        setMonthlyPaymentSort((current) => ({
+                          ...current,
+                          [request.id]: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="recent">Mais recentes primeiro</option>
+                      <option value="oldest">Mais antigas primeiro</option>
+                    </select>
+                  </label>
+                ) : null}                      </li>
                     );
                   })}
                 </ul>
+
               </div>
+              {isMonthlyHostingRequest(request) && (monthlyPaymentSort[request.id] || "recent") === "recent"
+                ? renderUpcomingCyclePreview(request)
+                : null}
               {renderHostingPaymentPanel(request)}
+              {!isMonthlyHostingRequest(request) || (monthlyPaymentSort[request.id] || "recent") === "recent"
+                ? null
+                : renderUpcomingCyclePreview(request)}
             </article>
           ))}
         </div>
@@ -5200,7 +5314,17 @@ export default function MelPetHostel({
           Nenhuma cobrança disponível no momento.
         </p>
       )}
-      <div className="pet-main-actions melpet-back-actions">
+      {paymentStatementRequests.length > paymentStatementPageSize ? (
+        <nav className="melpet-payment-statement-pagination" aria-label="Paginação do extrato">
+          <Button type="button" variant="outline" disabled={currentPaymentStatementPage === 1} onClick={() => setPaymentStatementPage((page) => Math.max(1, page - 1))}>
+            Anterior
+          </Button>
+          <span>{`Página ${currentPaymentStatementPage} de ${paymentStatementPageCount}`}</span>
+          <Button type="button" variant="outline" disabled={currentPaymentStatementPage === paymentStatementPageCount} onClick={() => setPaymentStatementPage((page) => Math.min(paymentStatementPageCount, page + 1))}>
+            Próxima
+          </Button>
+        </nav>
+      ) : null}      <div className="pet-main-actions melpet-back-actions">
         <Button
           type="button"
           variant="outline"
@@ -5642,7 +5766,6 @@ export default function MelPetHostel({
                 const isOpen = selectedPendingHostingId === request.id;
                 const requestTotal = request.valorFinal ?? request.valorTotal;
                 const busy = reviewingHostingRequestId === request.id;
-                const adjustment = getHostingApprovalAdjustment(request);
                 return (
                   <article
                     className={`melpet-hosting-history-card ${isOpen ? "is-open" : ""}`}
@@ -5730,128 +5853,6 @@ export default function MelPetHostel({
                               </li>
                             ))}
                           </ul>
-                        </div>
-                        <div className="melpet-hosting-adjustment">
-                          <div className="melpet-hosting-adjustment-heading">
-                            <strong>Ajuste financeiro</strong>
-                            <span>Opcional, aplicado antes da aprovação</span>
-                          </div>
-                          <div className="pet-form-grid">
-                            <label className="pet-form-field">
-                              <span>Operação</span>
-                              <select
-                                value={adjustment.type}
-                                disabled={busy}
-                                onChange={(event) =>
-                                  setHostingApprovalAdjustments((current) => ({
-                                    ...current,
-                                    [request.id]: {
-                                      ...(current[request.id] || {}),
-                                      type: event.target.value,
-                                    },
-                                  }))
-                                }
-                              >
-                                <option value="desconto">Desconto</option>
-                                <option value="acrescimo">Acréscimo</option>
-                              </select>
-                            </label>
-                            <label className="pet-form-field">
-                              <span>Formato</span>
-                              <select
-                                value={adjustment.mode}
-                                disabled={busy}
-                                onChange={(event) =>
-                                  setHostingApprovalAdjustments((current) => ({
-                                    ...current,
-                                    [request.id]: {
-                                      ...(current[request.id] || {}),
-                                      mode: event.target.value,
-                                    },
-                                  }))
-                                }
-                              >
-                                <option value="valor">Valor em reais</option>
-                                <option value="percentual">Percentual</option>
-                              </select>
-                            </label>
-                            <label className="pet-form-field">
-                              <span>
-                                {adjustment.mode === "percentual"
-                                  ? "Percentual"
-                                  : "Valor do ajuste"}
-                              </span>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                placeholder={
-                                  adjustment.mode === "percentual"
-                                    ? "Ex.: 5"
-                                    : "Ex.: 50,00"
-                                }
-                                value={
-                                  hostingApprovalAdjustments[request.id]
-                                    ?.value || ""
-                                }
-                                disabled={busy}
-                                onChange={(event) =>
-                                  setHostingApprovalAdjustments((current) => ({
-                                    ...current,
-                                    [request.id]: {
-                                      ...(current[request.id] || {}),
-                                      value: event.target.value,
-                                    },
-                                  }))
-                                }
-                              />
-                            </label>
-                            <label className="pet-form-field pet-form-field--wide">
-                              <span>Motivo do ajuste</span>
-                              <input
-                                type="text"
-                                maxLength={500}
-                                placeholder="Obrigatório quando houver desconto ou acréscimo"
-                                value={
-                                  hostingApprovalAdjustments[request.id]
-                                    ?.reason || ""
-                                }
-                                disabled={busy}
-                                onChange={(event) =>
-                                  setHostingApprovalAdjustments((current) => ({
-                                    ...current,
-                                    [request.id]: {
-                                      ...(current[request.id] || {}),
-                                      reason: event.target.value,
-                                    },
-                                  }))
-                                }
-                              />
-                            </label>
-                          </div>
-                          <dl className="melpet-hosting-history-meta melpet-hosting-adjustment-summary">
-                            <div>
-                              <dt>Valor solicitado</dt>
-                              <dd>
-                                {formatCurrency(
-                                  Number(request.valorTotal || 0),
-                                )}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt>
-                                {adjustment.type === "acrescimo"
-                                  ? "Acréscimo"
-                                  : "Desconto"}
-                              </dt>
-                              <dd>
-                                {formatCurrency(adjustment.calculatedValue)}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt>Total para pagamento</dt>
-                              <dd>{formatCurrency(adjustment.finalValue)}</dd>
-                            </div>
-                          </dl>
                         </div>
                         <div className="melpet-hosting-history-actions">
                           <Button

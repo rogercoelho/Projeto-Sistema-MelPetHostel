@@ -3933,8 +3933,8 @@
 }
 
 .melpet-hosting-payment-installment.is-pending {
-  border-color: rgba(245, 158, 11, 0.28);
-  background: rgba(255, 251, 235, 0.82);
+  border-color: rgba(198, 40, 40, 0.32);
+  background: rgba(255, 245, 245, 0.9);
 }
 .melpet-hosting-payment-installment + .melpet-hosting-receipt-upload {
   display: grid;
@@ -7103,5 +7103,708 @@ button.melpet-presence-day:not(:disabled):focus-visible::before {
     min-height: 18px;
     padding: 2px 3px;
     font-size: 0.44rem;
+  }
+}
+.melpet-monthly-payment-forecast {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 14px 0;
+  padding: clamp(14px, 2.5vw, 20px);
+  border: 2px solid rgba(48, 126, 170, 0.34);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #e8f7fc, #f8fdff);
+  color: #17435d;
+}
+.melpet-monthly-payment-forecast span { display:block; font-size:.74rem; font-weight:900; text-transform:uppercase; }
+.melpet-monthly-payment-forecast > div > strong { display:block; margin-top:4px; font-size:1.05rem; }
+.melpet-monthly-payment-forecast-value { padding:10px 12px; border-radius:12px; background:rgba(255,255,255,.78); }
+.melpet-monthly-payment-forecast-value > strong { color:#0b6087; font-size:1.35rem !important; }
+.melpet-monthly-payment-forecast-value span { margin-top:4px; color:#9a4e00; font-size:.7rem; }
+.melpet-monthly-payment-forecast p { margin:0; line-height:1.45; font-size:.88rem; }
+@media (min-width: 680px) { .melpet-monthly-payment-forecast { grid-template-columns:minmax(0,1fr) auto; align-items:center; } .melpet-monthly-payment-forecast p { grid-column:1/-1; } }.melpet-monthly-payment-forecast header,.melpet-monthly-payment-forecast footer{display:grid;gap:6px}.melpet-monthly-payment-forecast-items{display:grid;gap:10px}.melpet-monthly-payment-forecast-items article{padding:12px;border:1px solid rgba(48,126,170,.28);border-radius:12px;background:rgba(255,255,255,.78)}.melpet-monthly-payment-forecast-items article>div{display:grid;gap:3px}.melpet-monthly-payment-forecast-items article>div span{font-size:.76rem;color:#37657a}.melpet-monthly-payment-forecast-items dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 0}.melpet-monthly-payment-forecast-items dl div{padding:7px;border-radius:8px;background:#f3fbfd}.melpet-monthly-payment-forecast-items dt{font-size:.65rem;font-weight:900;text-transform:uppercase}.melpet-monthly-payment-forecast-items dd{margin:3px 0 0;font-weight:900}.melpet-monthly-payment-forecast-items .is-excess{background:#fff4d6}.melpet-monthly-payment-forecast-items .is-total{background:#dff5e8;color:#075c32}
+.melpet-hosting-history-items.melpet-monthly-forecast-details {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 0 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.melpet-monthly-forecast-details .melpet-monthly-payment-forecast-items { display:grid; gap:8px; }
+.melpet-monthly-forecast-details .melpet-monthly-payment-forecast-items article { display:grid; gap:8px; padding:12px; border:1px solid rgba(var(--cor-marrom-rgb),.12); border-radius:8px; background:#fff; }
+.melpet-monthly-forecast-details footer { display:grid; gap:6px; padding:10px 12px; border-radius:8px; background:rgba(219,242,250,.68); color:#17435d; }
+.melpet-monthly-forecast-details .melpet-monthly-payment-forecast-items dl { grid-template-columns:1fr; }
+@media (min-width:680px){.melpet-monthly-forecast-details .melpet-monthly-payment-forecast-items dl{grid-template-columns:repeat(2,minmax(0,1fr));}}
+/* Adjustment form: mobile-first financial workflow */
+.melpet-adjustment-page { display:grid; gap:18px; max-width:880px; margin:0 auto; }
+.melpet-adjustment-page__header { display:grid; gap:6px; }
+.melpet-adjustment-page__header > span { color:#0b6087; font-size:.76rem; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+.melpet-adjustment-page__header h2 { margin:0; color:var(--cor-marrom); font-size:clamp(1.35rem,4vw,2rem); line-height:1.15; }
+.melpet-adjustment-page__header p { margin:0; color:#5f4a3f; line-height:1.5; }
+.melpet-adjustment-page__pet { max-width:560px; }
+.melpet-adjustment-page__context { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.melpet-adjustment-page__context div { display:grid; gap:4px; padding:12px; border:1px solid rgba(126,91,62,.18); border-radius:12px; background:#fffaf5; }
+.melpet-adjustment-page__context span { color:#6d5a4c; font-size:.7rem; font-weight:900; letter-spacing:.04em; text-transform:uppercase; }
+.melpet-adjustment-form { display:grid; gap:16px; padding:clamp(14px,4vw,24px); border:1px solid rgba(126,91,62,.2); border-radius:18px; background:linear-gradient(180deg,#fff 0%,#fbf6f0 100%); }
+.melpet-adjustment-form fieldset { display:grid; gap:14px; min-width:0; margin:0; padding:0; border:0; }
+.melpet-adjustment-form legend { margin-bottom:10px; color:var(--cor-marrom); font-weight:900; }
+.melpet-adjustment-form__grid { display:grid; gap:12px; }
+.melpet-adjustment-form__reason { grid-column:1 / -1; }
+.melpet-adjustment-form textarea { width:100%; resize:vertical; }
+.melpet-adjustment-form__recurrence { display:flex; gap:10px; align-items:flex-start; padding:12px; border-radius:12px; background:#edf8f5; color:#155e4a; cursor:pointer; }
+.melpet-adjustment-form__recurrence input { flex:0 0 auto; width:18px; height:18px; margin:2px 0 0; accent-color:#0b8062; }
+.melpet-adjustment-form__recurrence span { display:grid; gap:3px; }
+.melpet-adjustment-form__recurrence small { color:#3e6d60; line-height:1.35; }
+@media (min-width:640px) { .melpet-adjustment-form__grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+\n
+/* Compact monthly billing summary */
+.melpet-billing-summary {
+  display: grid;
+  gap: 14px;
+  padding: clamp(14px, 3vw, 20px);
+  border: 1px solid rgba(82, 132, 160, 0.22);
+  border-radius: 16px;
+  background: #f8fbfc;
+}
+.melpet-billing-summary__header,
+.melpet-billing-summary__header > div,
+.melpet-billing-summary__items,
+.melpet-billing-summary__items article {
+  display: grid;
+  gap: 4px;
+}
+.melpet-billing-summary__header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(82, 132, 160, 0.16);
+}
+.melpet-billing-summary__header span,
+.melpet-billing-summary__items header span {
+  color: #60727c;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+.melpet-billing-summary__header > div > span {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.melpet-billing-summary__header > div > strong {
+  color: #28556b;
+  font-size: 1rem;
+}
+.melpet-billing-summary__header small {
+  color: #60727c;
+  font-size: 0.75rem;
+}
+.melpet-billing-summary__items {
+  gap: 10px;
+}
+.melpet-billing-summary__items article {
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(126, 91, 62, 0.12);
+  border-radius: 12px;
+  background: #fff;
+}
+.melpet-billing-summary__items article > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+.melpet-billing-summary__items article > header > div {
+  display: grid;
+  gap: 2px;
+}
+.melpet-billing-summary__items dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+.melpet-billing-summary__items dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #52616a;
+}
+.melpet-billing-summary__items dt,
+.melpet-billing-summary__items dd {
+  margin: 0;
+}
+.melpet-billing-summary__items dd {
+  color: #263840;
+  font-weight: 850;
+  text-align: right;
+}
+.melpet-billing-summary__items .is-discount dt,
+.melpet-billing-summary__items .is-discount dd {
+  color: #157347;
+}
+.melpet-billing-summary__items .is-addition dt,
+.melpet-billing-summary__items .is-addition dd {
+  color: #a24b16;
+}
+.melpet-billing-summary__reason {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f2f7f8;
+  color: #52616a;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.melpet-billing-summary__total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding-top: 13px;
+  border-top: 1px solid rgba(82, 132, 160, 0.2);
+  color: #28556b;
+  font-weight: 900;
+}
+.melpet-billing-summary__total strong {
+  font-size: clamp(1.3rem, 5vw, 1.65rem);
+}
+@media (max-width: 520px) {
+  .melpet-billing-summary__header {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .melpet-billing-summary__items article > header {
+    align-items: flex-start;
+  }
+}
+
+/* Monthly statement hierarchy */
+.melpet-payment-statement .melpet-hosting-history-items.is-monthly-overview {
+  display: none;
+}
+.melpet-billing-summary__items .is-discount dt,
+.melpet-billing-summary__items .is-discount dd {
+  color: #c62828;
+}
+.melpet-billing-summary__items .is-addition dt,
+.melpet-billing-summary__items .is-addition dd {
+  color: #1565c0;
+}
+.melpet-next-cycle-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid rgba(21, 101, 192, 0.22);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f3f8ff 0%, #ffffff 100%);
+}
+.melpet-next-cycle-preview > div {
+  display: grid;
+  gap: 4px;
+}
+.melpet-next-cycle-preview span {
+  color: #4d6580;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.melpet-next-cycle-preview strong {
+  color: #155a9c;
+  font-size: 1.05rem;
+}
+.melpet-next-cycle-preview p {
+  margin: 2px 0 0;
+  color: #52616a;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+.melpet-next-cycle-preview > div:last-child {
+  min-width: 118px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  text-align: right;
+}
+@media (max-width: 520px) {
+  .melpet-next-cycle-preview {
+    grid-template-columns: 1fr;
+  }
+  .melpet-next-cycle-preview > div:last-child {
+    text-align: left;
+  }
+}
+
+.melpet-next-cycle-preview { display:grid; grid-template-columns:1fr; align-items:stretch; }
+.melpet-next-cycle-preview > header { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:center; }
+.melpet-next-cycle-preview > header > div { display:grid; gap:4px; }
+.melpet-next-cycle-preview__items { display:grid; gap:10px; padding-top:2px; }
+.melpet-next-cycle-preview__items article { display:grid; gap:10px; padding:12px; border:1px solid rgba(21,101,192,.14); border-radius:12px; background:rgba(255,255,255,.82); }
+.melpet-next-cycle-preview__items article > header,.melpet-next-cycle-preview__items article > header > div { display:grid; gap:3px; }
+.melpet-next-cycle-preview__items article > header { grid-template-columns:minmax(0,1fr) auto; align-items:start; }
+.melpet-next-cycle-preview__items article > header > strong { color:#155a9c; font-size:.95rem; }
+.melpet-next-cycle-preview__items ul { display:grid; gap:7px; margin:0; padding:0; list-style:none; }
+.melpet-next-cycle-preview__items li { display:flex; justify-content:space-between; gap:12px; color:#52616a; font-size:.82rem; line-height:1.35; }
+.melpet-next-cycle-preview__items li strong { color:#263840; font-size:inherit; text-align:right; }
+.melpet-next-cycle-preview__items li.is-extra,.melpet-next-cycle-preview__items li.is-extra strong { color:#1565c0; }
+.melpet-next-cycle-preview__items li.is-discount,.melpet-next-cycle-preview__items li.is-discount strong { color:#c62828; }
+@media (max-width:520px){.melpet-next-cycle-preview > header{grid-template-columns:1fr;}}
+
+/* The forecast intentionally reuses the current-cycle statement shell. */
+.melpet-billing-summary.melpet-next-cycle-preview { margin-top:14px; background:#f8fbfc; }
+.melpet-next-cycle-preview .melpet-next-cycle-preview__value { min-width:118px; padding:0; background:transparent; text-align:right; }
+.melpet-next-cycle-preview .melpet-next-cycle-preview__value strong { color:#28556b; font-size:1.15rem; }
+@media (max-width:520px){.melpet-next-cycle-preview .melpet-next-cycle-preview__value{text-align:left;}}
+
+.melpet-billing-range dd {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.melpet-billing-range dd > strong {
+  white-space: nowrap;
+}
+.melpet-billing-range__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.melpet-billing-range__badges > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 7px;
+  border: 1px solid rgba(82, 132, 160, 0.18);
+  border-radius: 999px;
+  background: #f4f8fa;
+  color: #4d6573;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+.melpet-billing-range__badges > .is-rate {
+  border-color: rgba(21, 101, 192, 0.22);
+  background: #eef6ff;
+  color: #1565c0;
+}
+.melpet-billing-range.is-addition .melpet-billing-range__badges > span {
+  border-color: rgba(21, 101, 192, 0.2);
+  background: #eef6ff;
+  color: #1565c0;
+}
+@media (max-width: 520px) {
+  .melpet-billing-range dd {
+    grid-template-columns: 1fr;
+  }
+}
+
+.melpet-next-cycle-release-note {
+  margin: 6px 0 0;
+  color: #49616b;
+  font-size: .82rem;
+  line-height: 1.45;
+}
+.melpet-billing-summary__items .melpet-billing-range {
+  justify-content: flex-start;
+  align-items: center;
+}
+.melpet-billing-summary__items .melpet-billing-range dd {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  text-align: left;
+}
+.melpet-billing-summary__items .melpet-billing-range dd > strong {
+  margin-left: auto;
+}
+@media (max-width: 520px) {
+  .melpet-billing-summary__items .melpet-billing-range {
+    align-items: flex-start;
+  }
+  .melpet-billing-summary__items .melpet-billing-range dd {
+    flex-basis: 0;
+    flex-wrap: wrap;
+  }
+  .melpet-billing-summary__items .melpet-billing-range dd > strong {
+    margin-left: 0;
+  }
+}
+/* Solicitação de hospedagem: grade fluida, segura em qualquer largura de card. */
+.melpet-hosting-pet-period {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  align-items: start;
+}
+.melpet-hosting-pet-period label {
+  min-width: 0;
+}
+.melpet-hosting-pet-period input,
+.melpet-hosting-pet-period select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+@media (max-width: 639px) {
+  .melpet-hosting-pet-period {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Resumo de ciclo: faixa do plano prioriza leitura vertical no mobile. */
+.melpet-billing-summary__items .melpet-billing-range {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+}
+.melpet-billing-summary__items .melpet-billing-range dd {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+.melpet-billing-summary__items .melpet-billing-range__badges {
+  width: 100%;
+  justify-content: flex-start;
+}
+.melpet-billing-summary__items .melpet-billing-range dd > strong {
+  width: 100%;
+  margin-left: 0;
+  text-align: left;
+}
+@media (min-width: 640px) {
+  .melpet-billing-summary__items .melpet-billing-range {
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: 10px;
+    align-items: center;
+  }
+  .melpet-billing-summary__items .melpet-billing-range dd {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .melpet-billing-summary__items .melpet-billing-range dd > strong {
+    width: auto;
+    margin-left: auto;
+    text-align: right;
+  }
+}
+/* Análise administrativa de comprovantes: ações empilhadas e sem overflow no mobile. */
+.melpet-admin-hosting-payment-review .melpet-hosting-history-card-header {
+  min-width: 0;
+}
+.melpet-admin-hosting-payment-review .melpet-hosting-history-card-header > * {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.melpet-admin-hosting-payment-review .melpet-hosting-payment-subitem {
+  box-sizing: border-box;
+  min-width: 0;
+}
+.melpet-admin-hosting-payment-review .melpet-hosting-history-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+.melpet-admin-hosting-payment-review .melpet-hosting-history-actions .btn {
+  width: 100%;
+  min-width: 0;
+  white-space: normal;
+  text-align: center;
+}
+@media (min-width: 640px) {
+  .melpet-admin-hosting-payment-review .melpet-hosting-history-card-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .melpet-admin-hosting-payment-review .melpet-hosting-history-actions {
+    grid-template-columns: repeat(3, minmax(0, max-content));
+    justify-content: flex-start;
+  }
+  .melpet-admin-hosting-payment-review .melpet-hosting-history-actions .btn {
+    width: auto;
+  }
+}
+.melpet-payment-statement-pagination {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+.melpet-payment-statement-pagination span {
+  color: #49616b;
+  font-size: .82rem;
+  font-weight: 800;
+  text-align: center;
+}
+.melpet-payment-statement-pagination .btn { width: 100%; }
+@media (min-width: 560px) {
+  .melpet-payment-statement-pagination { grid-template-columns: max-content 1fr max-content; }
+  .melpet-payment-statement-pagination .btn { width: auto; }
+}
+/* Faixas e presenças: leitura curta e hierarquia clara em telas pequenas. */
+.melpet-billing-summary__items .melpet-billing-range,
+.melpet-billing-summary__items .melpet-billing-presence {
+  padding: 10px;
+  border: 1px solid rgba(82, 132, 160, .16);
+  border-radius: 10px;
+  background: #f8fbfc;
+}
+.melpet-billing-summary__items .melpet-billing-range dt,
+.melpet-billing-summary__items .melpet-billing-presence dt {
+  color: #385667;
+  font-size: .7rem;
+  font-weight: 900;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+.melpet-billing-summary__items .melpet-billing-range__badges {
+  gap: 6px;
+}
+.melpet-billing-summary__items .melpet-billing-range__badges > span {
+  min-height: 26px;
+  padding: 4px 8px;
+  font-size: .72rem;
+}
+.melpet-billing-summary__items .melpet-billing-range dd > strong {
+  padding-top: 2px;
+  color: #244958;
+  font-size: 1rem;
+}
+.melpet-billing-summary__items .melpet-billing-presence {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.melpet-billing-summary__items .melpet-billing-presence dd {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 6px;
+  text-align: left;
+}
+.melpet-billing-summary__items .melpet-billing-presence dd strong {
+  color: #155a9c;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.melpet-billing-summary__items .melpet-billing-presence dd span {
+  color: #52616a;
+  font-size: .8rem;
+  font-weight: 750;
+}
+@media (min-width: 640px) {
+  .melpet-billing-summary__items .melpet-billing-presence {
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+  }
+}
+/* Faixa: rótulo e badges compartilham a mesma linha no mobile. */
+@media (max-width: 639px) {
+  .melpet-billing-summary__items .melpet-billing-range {
+    grid-template-columns: 92px minmax(0, 1fr);
+    column-gap: 8px;
+    row-gap: 0;
+    align-items: start;
+  }
+  .melpet-billing-summary__items .melpet-billing-range dt {
+    padding-top: 6px;
+    line-height: 1.25;
+  }
+  .melpet-billing-summary__items .melpet-billing-range dd {
+    gap: 7px;
+  }
+  .melpet-billing-summary__items .melpet-billing-range__badges {
+    justify-content: flex-start;
+  }
+  .melpet-billing-summary__items .melpet-billing-range dd > strong {
+    padding-top: 2px;
+  }
+}
+
+.melpet-monthly-payment-sort {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+  margin: 2px 0;
+  color: #49616b;
+  font-size: .76rem;
+  font-weight: 850;
+}
+.melpet-monthly-payment-sort select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid rgba(82, 132, 160, .28);
+  border-radius: 9px;
+  background: #fff;
+  color: #264653;
+  font: inherit;
+  font-weight: 750;
+  padding: 8px 10px;
+}
+@media (min-width: 640px) {
+  .melpet-monthly-payment-sort {
+    grid-template-columns: max-content minmax(220px, 280px);
+    align-items: center;
+    justify-content: end;
+  }
+}
+/* Mobile: faixa em duas linhas — título acima; detalhes e valor abaixo. */
+@media (max-width: 639px) {
+  .melpet-billing-summary__items .melpet-billing-range {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+  }
+  .melpet-billing-summary__items .melpet-billing-range dt {
+    padding-top: 0;
+  }
+  .melpet-billing-summary__items .melpet-billing-range dd {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .melpet-billing-summary__items .melpet-billing-range__badges {
+    flex: 1;
+    min-width: 0;
+  }
+  .melpet-billing-summary__items .melpet-billing-range dd > strong {
+    flex: 0 0 auto;
+    width: auto;
+    margin-left: 0;
+    padding-top: 4px;
+    white-space: nowrap;
+  }
+}
+/* Duas linhas fixas para cada faixa: cabeçalho com tarifa e detalhes com total. */
+.melpet-billing-summary__items .melpet-billing-range dt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.melpet-billing-rate {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 7px;
+  border: 1px solid rgba(21, 101, 192, .22);
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #1565c0;
+  font-size: .7rem;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+}
+.melpet-billing-summary__items .melpet-billing-range.is-addition .melpet-billing-rate {
+  border-color: rgba(21, 101, 192, .22);
+  background: #eef6ff;
+  color: #1565c0;
+}
+.melpet-billing-summary__items .melpet-billing-range dd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.melpet-billing-summary__items .melpet-billing-range__badges {
+  flex: 1;
+  min-width: 0;
+}
+.melpet-billing-summary__items .melpet-billing-range dd > strong {
+  flex: 0 0 auto;
+  width: auto;
+  margin-left: 0;
+  padding-top: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+/* A tarifa pertence ao cabeçalho; os demais badges ocupam sempre a linha seguinte. */
+.melpet-billing-summary__items .melpet-billing-range {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
+}
+.melpet-billing-summary__items .melpet-billing-range dt,
+.melpet-billing-summary__items .melpet-billing-range dd {
+  grid-column: 1;
+  width: 100%;
+}
+.melpet-billing-summary__items dl > div > .melpet-billing-summary__reason {
+  flex: 1 0 100%;
+  margin: 2px 0 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.72);
+  color: inherit;
+  font-size: .78rem;
+  line-height: 1.4;
+}
+/* Lançamentos de ajuste: valor e motivo não competem por espaço no mobile. */
+.melpet-billing-summary__items dl > .melpet-billing-adjustment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 7px 10px;
+  align-items: center;
+}
+.melpet-billing-summary__items dl > .melpet-billing-adjustment > dt {
+  min-width: 0;
+}
+.melpet-billing-summary__items dl > .melpet-billing-adjustment > dd {
+  margin: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+.melpet-billing-summary__items dl > .melpet-billing-adjustment > .melpet-billing-summary__reason {
+  grid-column: 1 / -1;
+  width: 100%;
+  box-sizing: border-box;
+}
+/* Calendário de presença: badge compacto e legível nas células de 7 colunas. */
+.melpet-presence-day-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 520px) {
+  .melpet-presence-calendar:not(.melpet-presence-calendar-table) .melpet-presence-day-label {
+    width: 16px;
+    min-width: 16px;
+    height: 16px;
+    min-height: 16px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 0;
+    line-height: 1;
+  }
+  .melpet-presence-calendar:not(.melpet-presence-calendar-table) .melpet-presence-day-label::after {
+    color: currentColor;
+    font-size: .62rem;
+    font-weight: 950;
+    line-height: 1;
+  }
+  .melpet-presence-calendar:not(.melpet-presence-calendar-table) .melpet-presence-day-label.is-regular::after {
+    content: "✓";
+  }
+  .melpet-presence-calendar:not(.melpet-presence-calendar-table) .melpet-presence-day-label.is-excess::after {
+    content: "+";
   }
 }

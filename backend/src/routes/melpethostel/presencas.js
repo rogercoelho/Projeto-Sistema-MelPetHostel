@@ -238,6 +238,7 @@ async function getCrechePresenceBilling(req, row, diasUsados) {
   }
 
   return {
+    faixaBase: { planoQuantidade: selectedQuantity, diasUsados: Math.min(diasUsados, baseDays), diasDoPlano: baseDays, valorFaixa: baseValue, valorDia: baseDays > 0 ? roundMoney(baseValue / baseDays) : 0 },
     diasContratados: baseDays,
     diasUsados,
     diasRestantes: Math.max(0, baseDays - diasUsados),
@@ -408,11 +409,11 @@ async function getMonthlyPresence(req, { petId, clienteId = null, competencia })
       SELECT id, data_presenca, registrado_por, criado_em
       FROM ${qtable(TABLE_NAMES.petPresencas)}
       WHERE pet_id = ?
-        AND competencia = ?
+        AND solicitacao_id = ?
         AND data_presenca BETWEEN ? AND ?
       ORDER BY data_presenca ASC
     `,
-    [petId, competencia, cycle.inicio, cycle.fim],
+    [petId, Number(month.solicitacao_id), cycle.inicio, cycle.fim],
   );
 
   const presencas = (presenceRows || []).map((row) => ({
@@ -442,6 +443,7 @@ async function getMonthlyPresence(req, { petId, clienteId = null, competencia })
     diasExcedentes: billing.diasExcedentes,
     limiteDias: billing.limiteDias,
     limiteAtingido: billing.limiteAtingido,
+    faixaBase: billing.faixaBase || null,
     valorBase: billing.valorBase,
     valorExcedente: billing.valorExcedente,
     valorTotalComExcedente: billing.valorTotalComExcedente,
@@ -538,3 +540,4 @@ router.post("/presencas/pets/:petId/toggle", async (req, res) => {
 });
 
 module.exports = router;
+module.exports.getMonthlyPresence = getMonthlyPresence;
