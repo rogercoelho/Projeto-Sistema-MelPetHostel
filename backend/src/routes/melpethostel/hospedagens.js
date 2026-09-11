@@ -517,6 +517,7 @@ async function ensureCurrentMonthlyPayment(req, request, competenciaForcada = ""
       "aguardando_comprovante",
     ],
   );
+  await notifyMonthlyInvoiceReleased(req, { request, competencia, valor });
   return true;
 }
 
@@ -1040,28 +1041,34 @@ Obrigado por escolher os serviço da Mel Pet Hostel.`,
   return result;
 }
 async function notifyMonthlyInvoiceReleased(req, { request, competencia, valor }) {
-  const pets = (request?.itens || [])
-    .map((item) => clean(item.petNome))
-    .filter(Boolean);
-  const petsLabel = pets.length ? pets.join(", ") : "seu pet";
+  const pets = (request?.itens || []).map((item) => clean(item.petNome)).filter(Boolean);
+  const petsLabel = pets.length ? pets.join(", ") : "-";
   const monthLabel = formatTelegramMonth(competencia);
   const valueLabel = formatTelegramMoney(valor);
+  const presenceReference = pets.length > 1
+    ? "dos pequenos"
+    : getPetGenderArticle(request) === "da pequena"
+      ? "da sua pequena"
+      : "do seu pequeno";
+  const message = `Olá ${clean(request?.clienteNome) || "tutor(a)"}, tudo bem!?
+
+📌 A Fatura mensal já está disponível para pagamento.
+
+Segue o resumo:
+Tutor: ${clean(request?.clienteNome) || "-"}
+Ciclo: ${monthLabel}
+Pets: ${petsLabel}
+Total: ${valueLabel}
+
+Acesse o portal para escolher a forma de pagamento e para mais detalhes sobre as presenças ${presenceReference}.
+
+Se tiver qualquer dúvida, estamos à disposição!
+Equipe Mel Pet Hostel!`;
 
   const email = await sendEmail({
     to: request?.clienteEmail,
-    subject: `Fatura de ${monthLabel} liberada — Mel Pet Hostel`,
-    text: `Olá, ${request?.clienteNome || "tutor(a)"}!
-
-A fatura da hospedagem de ${petsLabel} para o ciclo ${monthLabel} já está disponível.
-
-Total do ciclo: ${valueLabel}
-
-No portal Mel Pet Hostel, você encontra o demonstrativo completo — plano, presenças, descontos ou acréscimos — e pode escolher PIX ou cartão de crédito.
-
-Para manter a reserva ativa sem interrupções, faça o pagamento dentro do prazo indicado no seu extrato.
-
-Com carinho,
-Equipe Mel Pet Hostel`,
+    subject: `Fatura mensal disponível — ${monthLabel} | Mel Pet Hostel`,
+    text: message,
   }).catch((error) => {
     console.warn("Monthly invoice email was not sent:", error?.message || error);
     return { sent: false, reason: "erro_envio_email" };
@@ -1070,13 +1077,7 @@ Equipe Mel Pet Hostel`,
   await sendTelegramToConfiguredAdmins({
     db: dbFor(req),
     module: MODULE,
-    message: [
-      "Fatura mensal liberada",
-      `Tutor: <b>${clean(request?.usuarioLogin) || clean(request?.clienteNome) || "-"}</b>`,
-      `Ciclo: <b>${monthLabel}</b>`,
-      `Pets: <b>${petsLabel}</b>`,
-      `Total: <b>${valueLabel}</b>`,
-    ].join("\n"),
+    message,
     disabledReason: "notificacao_desativada",
   }).catch((error) => {
     console.warn("Monthly invoice Telegram notification was not sent:", error?.message || error);
@@ -1084,7 +1085,6 @@ Equipe Mel Pet Hostel`,
 
   return email;
 }
-
 async function notifyAdmins(req, pedido) {
   const db = dbFor(req);
   const message = buildHostingTelegramMessage({
