@@ -14,12 +14,14 @@ const {
   startBackgroundServices,
   stopBackgroundServices,
 } = require("./src/services/backgroundServices");
+const { startPaymentReminderService, stopPaymentReminderService } = require("./src/services/paymentReminderService");
 
 function shouldStartBackgroundServices() {
   return process.env.START_BACKGROUND_SERVICES === "true";
 }
 
 async function startAppBackgroundServices() {
+  startPaymentReminderService();
   if (!shouldStartBackgroundServices()) {
     console.log("Background services disabled for API process");
     return;
@@ -46,6 +48,7 @@ function installShutdownHandlers(server) {
     forceExitTimer.unref?.();
 
     try {
+      stopPaymentReminderService();
       await stopBackgroundServices();
       server.close(async () => {
         try {

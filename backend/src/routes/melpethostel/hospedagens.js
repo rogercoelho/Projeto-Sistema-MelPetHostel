@@ -6,7 +6,12 @@ const {
   MODULE,
   sendTelegramToConfiguredAdmins,
 } = require("../../utils/moduleAccessNotification");
-const { sendEmail } = require("../../services/emailService");
+const {
+  buildMonthlyInvoiceReleaseMessage,
+  sendHostingApprovalEmail,
+  sendHostingPaymentLinkEmail,
+  sendMonthlyInvoiceReleaseEmail,
+} = require("../../services/hostingNotificationService");
 const {
   TABLE_NAMES,
   dbFor,
@@ -246,12 +251,6 @@ function getHostingPaymentsFromRequest(request) {
   return request?.pagamento ? [request.pagamento] : [];
 }
 
-function normalizeText(value) {
-  return clean(value)
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
 function getMonthlyPaymentType(competencia) {
   return "mensal_" + clean(competencia).replace("-", "_");
 }
@@ -436,13 +435,6 @@ async function getMonthlyForecast(req, request, competenciaAtual = getMonthlyCyc
     liberado: isMonthlyPaymentReleaseOpen(request, competenciaAtual),
   };
 }
-function hasUnsettledPreviousMonthlyPayment(request, competencia) {
-  return (request?.pagamentos || []).some((payment) => {
-    const paymentCompetence = getPaymentCompetence(payment);
-    if (!paymentCompetence || paymentCompetence >= competencia) return false;
-    return clean(payment?.status).toLowerCase() !== "confirmado";
-  });
-}
 function hasMonthlyCancellationRequested(request) {
   return (request?.pagamentos || []).some(
     (payment) =>
@@ -450,14 +442,6 @@ function hasMonthlyCancellationRequested(request) {
       "cancelamento_solicitado",
   );
 }
-function hasConfirmedMonthlyPaymentAtOrAfter(request, competencia) {
-  return (request?.pagamentos || []).some((payment) => {
-    if (clean(payment?.status).toLowerCase() !== "confirmado") return false;
-    const paymentCompetence = getPaymentCompetence(payment);
-    return paymentCompetence && paymentCompetence >= competencia;
-  });
-}
-
 async function ensureCurrentMonthlyPayment(req, request, competenciaForcada = "") {
   if (!request || !isMonthlyHostingRequest(request)) return false;
   if (normalizeHostingStatus(request.status) !== "confirmado") return false;
@@ -1011,64 +995,21 @@ async function notifyHostingPaymentLinkAdmins(req, { login, request }) {
   });
 }
 
-function getPetGenderArticle(request) {
-  const pet = (request?.itens || [])[0] || {};
-  const text = clean(pet.sexo || pet.genero || pet.gender)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-  return text.startsWith("f") ? "da pequena" : "do pequeno";
-}
-
-async function sendHostingPaymentLinkEmail(request, linkPagamento) {
-  const petNome = clean((request?.itens || [])[0]?.petNome) || "pet";
-  const result = await sendEmail({
-    to: request?.clienteEmail,
-    subject: "Link de Pagamento - Mel Pet Hostel",
-    text: `Ola ${request?.clienteNome || "Tutor"},
-Para a estadia ${getPetGenderArticle(request)} ${petNome}, o modo de pagamento selecionado foi via cartao de credito.
-Geramos o Link de Pagamnto abaixo:
-${linkPagamento}
-
-Para pagamentos realizados por cartão de crédito, juros, encargos e taxas administrativas de eventuais parcelamentos, serão de responsabilidade do cliente.
-
-
-Caso queira, você também pode acessar o sistema da Mel Pet Hostel para confirmar o link de pagamento ou mudar a opção de pagamento.
-Obrigado por escolher os serviço da Mel Pet Hostel.`,
-  });
-  if (!result.sent)
-    console.warn("Hosting payment link email not sent:", result.reason);
-  return result;
-}
 async function notifyMonthlyInvoiceReleased(req, { request, competencia, valor }) {
-  const pets = (request?.itens || []).map((item) => clean(item.petNome)).filter(Boolean);
-  const petsLabel = pets.length ? pets.join(", ") : "-";
-  const monthLabel = formatTelegramMonth(competencia);
-  const valueLabel = formatTelegramMoney(valor);
-  const presenceReference = pets.length > 1
-    ? "dos pequenos"
-    : getPetGenderArticle(request) === "da pequena"
-      ? "da sua pequena"
-      : "do seu pequeno";
-  const message = `Olá ${clean(request?.clienteNome) || "tutor(a)"}, tudo bem!?
+  const message = buildMonthlyInvoiceReleaseMessage({
+    request,
+    competencia,
+    valor,
+    formatMonth: formatTelegramMonth,
+    formatMoney: formatTelegramMoney,
+  });
 
-📌 A Fatura mensal já está disponível para pagamento.
-
-Segue o resumo:
-Tutor: ${clean(request?.clienteNome) || "-"}
-Ciclo: ${monthLabel}
-Pets: ${petsLabel}
-Total: ${valueLabel}
-
-Acesse o portal para escolher a forma de pagamento e para mais detalhes sobre as presenças ${presenceReference}.
-
-Se tiver qualquer dúvida, estamos à disposição!
-Equipe Mel Pet Hostel!`;
-
-  const email = await sendEmail({
-    to: request?.clienteEmail,
-    subject: `Fatura mensal disponível — ${monthLabel} | Mel Pet Hostel`,
-    text: message,
+  const email = await sendMonthlyInvoiceReleaseEmail({
+    request,
+    competencia,
+    valor,
+    formatMonth: formatTelegramMonth,
+    formatMoney: formatTelegramMoney,
   }).catch((error) => {
     console.warn("Monthly invoice email was not sent:", error?.message || error);
     return { sent: false, reason: "erro_envio_email" };
@@ -1125,39 +1066,6 @@ function normalizeHostingStatus(value) {
   return "pendente";
 }
 
-function getHostingStatusLabel(status) {
-  const normalized = normalizeHostingStatus(status);
-  if (normalized === "aprovado") return "Aprovado";
-  if (normalized === "aguardando_pagamento") return "Aguardando pagamento";
-  if (normalized === "confirmado") return "Confirmado";
-  if (normalized === "concluido") return "Concluído";
-  if (normalized === "cancelado") return "Cancelado";
-  return "Pendente";
-}
-
-function formatEmailDate(value) {
-  if (!value) return "data nao informada";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return clean(value) || "data nao informada";
-  return date.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-}
-
-async function sendHostingApprovalEmail(request) {
-  const result = await sendEmail({
-    to: request?.clienteEmail,
-    subject: "Confirmação do seu Pedido de Hospedagem - Mel Pet Hostel",
-    text: `Ola ${request?.clienteNome || "Tutor"},
-O seu pedido de ${request?.tipo || "hospedagem"} para ${formatEmailDate(request?.dataEntrada)} até ${formatEmailDate(request?.dataSaida)} foi analisado e aprovado.
-Para confirmar a sua reserva, acesse o sistema da Mel Pet Hostel, efetue o processo de pagamento e nos envie o comprovante.
-Lembrando que a estadia só será liberada após a comprovação dos pagamentos.
-Muito obrigado por escolher a Mel pet Hostel.`,
-  });
-
-  if (!result.sent) {
-    console.warn("Hosting approval email not sent:", result.reason);
-  }
-  return result;
-}
 function isMonthlyHostingRequest(request) {
   if (normalizeBillingMode(request?.modoCobranca) === "mensal") return true;
   return (request?.itens || []).some(
