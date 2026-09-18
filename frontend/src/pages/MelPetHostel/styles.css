@@ -8010,6 +8010,15 @@ button.melpet-presence-day:not(:disabled):focus-visible::before {
   font: inherit;
   text-align: left;
 }
+.melpet-financial-item--trigger.is-static {
+  cursor: default;
+}
+.melpet-financial-item--trigger.is-static::after {
+  display: none;
+}
+.melpet-financial-item--trigger.is-static:hover {
+  background: linear-gradient(135deg, #fffaf4, #fff);
+}
 .melpet-financial-item--trigger:hover {
   background: #f0f8fa;
 }
@@ -8503,4 +8512,30 @@ button.melpet-presence-day:not(:disabled):focus-visible::before {
   .melpet-card-checkout__mercadopago-logo {
     width: 96px;
   }
+}
+.melpet-financial-hosting-card__header {
+  position: relative;
+  padding-right: 54px;
+}
+.melpet-financial-hosting-card__header::after,
+.melpet-financial-hosting-card__header[aria-expanded="true"]::after {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: #d8edf3;
+  color: #27647d;
+  content: "+";
+  font-size: 1.35rem;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+.melpet-financial-hosting-card__header[aria-expanded="true"]::after {
+  background: #317895;
+  color: #fff;
+  content: "−";
 }
