@@ -9,7 +9,6 @@ const {
 const {
   buildMonthlyInvoiceReleaseMessage,
   sendHostingApprovalEmail,
-  sendHostingPaymentLinkEmail,
   sendMonthlyInvoiceReleaseEmail,
 } = require("../../services/hostingNotificationService");
 const {
@@ -972,29 +971,82 @@ async function notifyHostingReceiptAdmins(
   });
 }
 
-function buildHostingPaymentLinkTelegramMessage({ login, request }) {
-  return (
-    buildHostingTelegramMessage({
-      header: "=== ENVIAR LINK DE PAGAMENTO ===",
-      login,
-      tipo: request?.tipo,
-      items: request?.itens || [],
-      totalFormatado: formatTelegramMoney(
-        request?.valorFinal ?? request?.valorTotal,
-      ),
-    }) + "\nGere o link de pagamento e inclua no sistema da Mel Pet Hostel."
-  );
-}
-
-async function notifyHostingPaymentLinkAdmins(req, { login, request }) {
-  return sendTelegramToConfiguredAdmins({
-    db: dbFor(req),
-    module: MODULE,
-    message: buildHostingPaymentLinkTelegramMessage({ login, request }),
-    disabledReason: "notificacao_desativada",
+function buildCardPaymentReceiptPdf(lines) {
+  const escapeText = (value) => clean(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/([\\()])/g, "\\$1");
+  const content = [
+    "BT",
+    "/F1 16 Tf",
+    "50 790 Td",
+    `(${escapeText("Comprovante de pagamento - Mel Pet Hostel")}) Tj`,
+    "/F1 11 Tf",
+    ...lines.flatMap((line) => ["0 -22 Td", `(${escapeText(line)}) Tj`]),
+    "ET",
+  ].join("\n");
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    `<< /Length ${Buffer.byteLength(content, "utf8")} >>\nstream\n${content}\nendstream`,
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(pdf, "utf8"));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
   });
+  const xrefOffset = Buffer.byteLength(pdf, "utf8");
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(pdf, "utf8");
 }
 
+async function attachAutomaticCardReceipt(req, pagamento, transaction, orderId) {
+  if (clean(pagamento?.comprovante_path)) return;
+  const login = getReqLogin(req);
+  const storage = await ensureUserDocumentStorage(req, login);
+  if (!storage?.relativeDir) throw new Error("Usuario sem grupo configurado para salvar comprovante.");
+  const relativeDir = `${storage.relativeDir.replace(/\/$/, "")}/comprovantes`;
+  const diskDir = resolveUploadsDirToDisk(relativeDir);
+  await fs.mkdir(diskDir, { recursive: true });
+  const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 14);
+  const fileName = `Comprovante-Cartao-${pagamento.id}-${timestamp}.pdf`;
+  const filePath = `${relativeDir}/${fileName}`.replace(/\\/g, "/");
+  const pdf = buildCardPaymentReceiptPdf([
+    `Pedido: ${pagamento.solicitacao_id}`,
+    `Pagamento interno: ${pagamento.id}`,
+    `Order Mercado Pago: ${clean(orderId) || "-"}`,
+    `Transacao Mercado Pago: ${clean(transaction?.id) || "-"}`,
+    `Status Mercado Pago: ${clean(transaction?.status) || "approved"}`,
+    `Detalhe: ${clean(transaction?.status_detail) || "accredited"}`,
+    `Valor: R$ ${Number(pagamento.valor || 0).toFixed(2).replace(".", ",")}`,
+    `Data: ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`,
+    "Documento gerado automaticamente a partir do retorno do Mercado Pago.",
+  ]);
+  await fs.writeFile(path.join(diskDir, fileName), pdf);
+  await dbFor(req).query(
+    `UPDATE ${qtable(TABLE_NAMES.hospedagemPagamentos)} SET comprovante_path = ?, comprovante_nome = ?, status = 'comprovante_enviado', motivo_recusa = NULL, enviado_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`,
+    [filePath, fileName, pagamento.id],
+  );
+  await dbFor(req).query(
+    `UPDATE ${qtable(TABLE_NAMES.hospedagemMensalidades)} SET status = 'comprovante_enviado', atualizado_em = CURRENT_TIMESTAMP WHERE pagamento_id = ?`,
+    [pagamento.id],
+  );
+  const request = await loadHostingRequestById(req, pagamento.solicitacao_id);
+  await notifyHostingReceiptAdmins(req, {
+    login,
+    request,
+    parcelaTipo: pagamento.parcela_tipo,
+    valor: pagamento.valor,
+  }).catch((error) => console.error("Erro notificando comprovante automatico de cartao:", error));
+}
 async function notifyMonthlyInvoiceReleased(req, { request, competencia, valor }) {
   const message = buildMonthlyInvoiceReleaseMessage({
     request,
@@ -1615,7 +1667,7 @@ router.post(
           .status(400)
           .json({ status: "erro", mensagem: "Solicitação inválida." });
       if (
-        !["total", "dividido", "reserva_checkin", "cartao_credito"].includes(
+        !["total", "dividido", "reserva_checkin", "cartao_credito_checkout"].includes(
           opcao,
         )
       )
@@ -1654,7 +1706,7 @@ router.post(
           mensagem: "Planos mensais permitem apenas pagamento total ou cartao de credito.",
         });
       }
-      const isCardPayment = opcao === "cartao_credito";
+      const isCardPayment = opcao === "cartao_credito_checkout";
       const pixConfig = isCardPayment ? null : await getActivePixConfig(req);
       if (!isCardPayment && !pixConfig?.chavePix)
         return res.status(400).json({
@@ -1680,16 +1732,17 @@ router.post(
         const demonstrativo = await getMonthlyForecast(req, requestForPaymentRule, decrementCompetence(monthlyCompetence));
         valorFinal = Number(demonstrativo.valor || 0);
       }
+      const cardPaymentType = "cartao_credito_direto";
       const parcelas = isMonthlyPayment
         ? [
             {
-              tipo: opcao === "cartao_credito" ? "cartao_credito" : monthlyType,
+              tipo: isCardPayment ? cardPaymentType : monthlyType,
               competencia: monthlyCompetence,
               valor: valorFinal,
             },
           ]
-        : opcao === "cartao_credito"
-          ? [{ tipo: "cartao_credito", valor: valorFinal }]
+        : isCardPayment
+          ? [{ tipo: cardPaymentType, valor: valorFinal }]
           : opcao === "total"
             ? [{ tipo: "total", valor: valorFinal }]
             : [
@@ -1713,7 +1766,7 @@ router.post(
         [solicitacaoId, clienteId],
       );
       for (const parcela of parcelas) {
-        const parcelaIsCard = parcela.tipo === "cartao_credito";
+        const parcelaIsCard = parcela.tipo === "cartao_credito_direto";
         const pixCopiaCola = parcelaIsCard
           ? ""
           : buildPixPayload({
@@ -1735,7 +1788,7 @@ router.post(
             parcela.valor,
             pixCopiaCola,
             parcelaIsCard ? "" : buildPixQrCodeUrl(pixCopiaCola),
-            parcelaIsCard ? "aguardando_link" : "aguardando_comprovante",
+            parcelaIsCard ? "aguardando_pagamento" : "aguardando_comprovante",
           ],
         );
         if (parcela.competencia) {
@@ -1755,22 +1808,10 @@ router.post(
               parcela.competencia,
               paymentRows?.[0]?.id || null,
               parcela.valor,
-              parcelaIsCard ? "aguardando_link" : "aguardando_comprovante",
+              parcelaIsCard ? "aguardando_pagamento" : "aguardando_comprovante",
             ],
           );
         }
-      }
-      const requestForNotice = await loadHostingRequestById(req, solicitacaoId);
-      if (isCardPayment && requestForNotice) {
-        await notifyHostingPaymentLinkAdmins(req, {
-          login: requestForNotice.usuarioLogin || getReqLogin(req),
-          request: requestForNotice,
-        }).catch((telegramError) => {
-          console.error(
-            "Erro notificando link de pagamento no Telegram:",
-            telegramError,
-          );
-        });
       }
       const solicitacoes = await listHostingRequests(req, { clienteId });
       return res.json({
@@ -1790,93 +1831,6 @@ router.post(
     }
   },
 );
-
-router.get("/hospedagens/pagamentos/cartao/pendentes", async (req, res) => {
-  try {
-    if (!(await requireHostingAdmin(req, res))) return;
-    const solicitacoes = await listHostingRequests(req, { status: "aprovado" });
-    const pendentes = (solicitacoes || []).filter((solicitacao) =>
-      (solicitacao.pagamentos || []).some(
-        (payment) =>
-          payment.parcelaTipo === "cartao_credito" &&
-          !clean(payment.linkPagamento) &&
-          !["confirmado", "comprovante_enviado"].includes(
-            clean(payment.status).toLowerCase(),
-          ),
-      ),
-    );
-    return res.json({
-      status: "sucesso",
-      total: pendentes.length,
-      solicitacoes: pendentes,
-    });
-  } catch (error) {
-    console.error(
-      "Error in GET /melpethostel/hospedagens/pagamentos/cartao/pendentes:",
-      error,
-    );
-    return res.status(500).json({ status: "erro", mensagem: error.message });
-  }
-});
-
-router.patch("/hospedagens/pagamentos/:id/link-pagamento", async (req, res) => {
-  try {
-    if (!(await requireHostingAdmin(req, res))) return;
-    const pagamentoId = Number(req.params?.id);
-    const linkPagamento = clean(
-      req.body?.linkPagamento || req.body?.link_pagamento,
-    );
-    if (!Number.isInteger(pagamentoId) || pagamentoId <= 0)
-      return res
-        .status(400)
-        .json({ status: "erro", mensagem: "Pagamento inválido." });
-    if (!/^https?:\/\//i.test(linkPagamento))
-      return res.status(400).json({
-        status: "erro",
-        mensagem: "Informe um link de pagamento válido.",
-      });
-    await ensureHostingPaymentsTable(req);
-    const [rows] = await dbFor(req).query(
-      "SELECT id, solicitacao_id, parcela_tipo FROM " +
-        qtable(TABLE_NAMES.hospedagemPagamentos) +
-        " WHERE id = ? LIMIT 1",
-      [pagamentoId],
-    );
-    const pagamento = rows?.[0];
-    if (!pagamento || pagamento.parcela_tipo !== "cartao_credito")
-      return res.status(404).json({
-        status: "erro",
-        mensagem: "Pagamento por cartão não encontrado.",
-      });
-    await dbFor(req).query(
-      "UPDATE " +
-        qtable(TABLE_NAMES.hospedagemPagamentos) +
-        " SET link_pagamento = ?, link_pagamento_enviado_em = CURRENT_TIMESTAMP, status = 'aguardando_pagamento', atualizado_em = CURRENT_TIMESTAMP WHERE id = ?",
-      [linkPagamento, pagamentoId],
-    );
-    const request = await loadHostingRequestById(req, pagamento.solicitacao_id);
-    const email = await sendHostingPaymentLinkEmail(
-      request,
-      linkPagamento,
-    ).catch((emailError) => ({
-      sent: false,
-      reason: "erro_envio_email",
-      message: emailError?.message || String(emailError),
-    }));
-    return res.json({
-      status: "sucesso",
-      mensagem: "Link de pagamento enviado com sucesso.",
-      solicitacao: request,
-      email,
-    });
-  } catch (error) {
-    console.error(
-      "Error in PATCH /melpethostel/hospedagens/pagamentos/:id/link-pagamento:",
-      error,
-    );
-    return res.status(500).json({ status: "erro", mensagem: error.message });
-  }
-});
 
 router.get("/hospedagens/comprovantes/pendentes", async (req, res) => {
   try {
@@ -2747,5 +2701,386 @@ router.post("/hospedagens/ajustes-mensais", async (req, res) => {
     await dbFor(req).query("INSERT INTO " + qtable(TABLE_NAMES.hospedagemAjustesMensais) + " (solicitacao_id, pet_id, competencia, tipo, modo, valor, motivo, recorrente, criado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [solicitacaoId,petId,competencia,tipo,modo,valor,motivo,recorrente,getReqLogin(req)]);
     return res.json({ status:"sucesso", mensagem:"Ajuste mensal salvo." });
   } catch (error) { return res.status(500).json({ status:"erro", mensagem:error.message }); }
+});
+function getMercadoPagoCredentials() {
+  return {
+    publicKey: clean(
+      process.env.MERCADOPAGO_PUBLIC_KEY ||
+        process.env.MERCADO_PAGO_PUBLIC_KEY ||
+        process.env.MP_PUBLIC_KEY,
+    ),
+    accessToken: clean(
+      process.env.MERCADOPAGO_ACCESS_TOKEN ||
+        process.env.MERCADO_PAGO_ACCESS_TOKEN ||
+        process.env.MP_ACCESS_TOKEN,
+    ),
+  };
+}
+
+function mapMercadoPagoStatus(status, statusDetail) {
+  const normalized = clean(status).toLowerCase();
+  const detail = clean(statusDetail).toLowerCase();
+  if (
+    ["pending", "processing", "created", "action_required", "in_review", "in_process", "contingency", "waiting"].some(
+      (value) => normalized.includes(value) || detail.includes(value),
+    )
+  ) {
+    return "aguardando_pagamento";
+  }
+  if (["approved", "processed"].includes(normalized)) return "confirmado";
+  if (
+    ["rejected", "cancelled", "canceled", "failed", "expired", "refunded", "charged_back"].includes(normalized)
+  ) {
+    return "reprovado";
+  }
+  return "aguardando_pagamento";
+}
+
+function getMercadoPagoErrorDetail(result) {
+  const values = [];
+  const seen = new Set();
+  const collect = (entry, depth = 0) => {
+    if (entry === null || entry === undefined || depth > 6) return;
+    if (typeof entry === "string" || typeof entry === "number") {
+      values.push(String(entry));
+      return;
+    }
+    if (typeof entry !== "object" || seen.has(entry)) return;
+    seen.add(entry);
+    if (Array.isArray(entry)) {
+      entry.forEach((item) => collect(item, depth + 1));
+      return;
+    }
+    Object.values(entry).forEach((value) => collect(value, depth + 1));
+  };
+
+  collect(result);
+  return values.filter(Boolean).join(" | ");
+}
+function getMercadoPagoPaymentMessage(status, statusDetail) {
+  const normalizedStatus = clean(status).toLowerCase();
+  const detail = clean(statusDetail).toLowerCase();
+
+  if (["approved", "processed"].includes(normalizedStatus)) {
+    return "Pagamento aprovado.";
+  }
+  if (
+    ["processing", "pending", "created", "action_required", "in_review"].includes(
+      normalizedStatus,
+    ) ||
+    [
+      "in_process",
+      "pending_review_manual",
+      "in_review",
+      "waiting_payment",
+      "waiting_retry",
+      "waiting_capture",
+    ].includes(detail)
+  ) {
+    return "Pagamento pendente.";
+  }
+  if (detail.includes("call_for_authorize") || detail.includes("pending_challenge")) {
+    return "Recusado com validacao para autorizar.";
+  }
+  if (detail.includes("insufficient_amount")) {
+    return "Recusado por quantia insuficiente.";
+  }
+  if (detail.includes("security_code") || detail.includes("invalid_security") || detail.includes("invalid_cvv") || detail.includes("bad_filled_security")) {
+    return "Recusado por codigo de seguranca invalido.";
+  }
+  if (detail.includes("bad_filled_date") || detail.includes("expiration") || detail.includes("expiry") || detail.includes("expired_card") || detail.includes("invalid_date")) {
+    return "Recusado por problema com a data de vencimento.";
+  }
+  if (detail.includes("bad_filled_card_number")) {
+    return "Pagamento recusado: o numero do cartao esta invalido.";
+  }
+  if (detail.includes("bad_filled") || detail.includes("invalid_card_token")) {
+    return "Recusado por erro no formulario.";
+  }
+  if (detail.includes("invalid_installments")) {
+    return "Pagamento recusado: a quantidade de parcelas selecionada e invalida.";
+  }
+  if (detail.includes("max_attempts")) {
+    return "Pagamento recusado: limite de tentativas do cartao atingido.";
+  }
+  if (detail.includes("card_disabled")) {
+    return "Pagamento recusado: este cartao nao esta habilitado para pagamentos.";
+  }
+  if (detail.includes("high_risk")) {
+    return "Pagamento recusado por analise de seguranca. Tente outro cartao.";
+  }
+  if (
+    detail.includes("other_reason") ||
+    detail.includes("processing_error") ||
+    normalizedStatus === "failed"
+  ) {
+    return "Recusado por erro geral.";
+  }
+  if (["canceled", "cancelled", "expired"].includes(normalizedStatus)) {
+    return "Pagamento cancelado ou expirado. Inicie uma nova tentativa.";
+  }
+  return "Pagamento recusado pelo Mercado Pago.";
+}
+router.get("/pagamentos/mercadopago/config", (req, res) => {
+  const { publicKey } = getMercadoPagoCredentials();
+  if (!publicKey) {
+    return res.status(503).json({
+      status: "erro",
+      mensagem: "A chave publica do Mercado Pago nao foi configurada.",
+    });
+  }
+  return res.json({
+    status: "sucesso",
+    publicKey,
+    testMode: /^TEST-/i.test(publicKey),
+  });
+});
+
+router.post("/hospedagens/pagamentos/:id/cartao", async (req, res) => {
+  try {
+    const clienteId = await getCurrentClienteId(req);
+    const pagamentoId = Number(req.params.id);
+    const token = clean(req.body?.token);
+    const paymentMethodId = clean(req.body?.payment_method_id);
+    const installments = Number(req.body?.installments);
+    const { accessToken, publicKey } = getMercadoPagoCredentials();
+
+    if (!clienteId) {
+      return res.status(401).json({
+        status: "erro",
+        mensagem: "Cliente nao identificado.",
+      });
+    }
+    if (
+      !Number.isInteger(pagamentoId) ||
+      pagamentoId <= 0 ||
+      !token ||
+      !paymentMethodId ||
+      !Number.isInteger(installments) ||
+      installments <= 0
+    ) {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Dados do pagamento invalidos.",
+      });
+    }
+    if (!accessToken) {
+      return res.status(503).json({
+        status: "erro",
+        mensagem: "O Access Token do Mercado Pago nao foi configurado.",
+      });
+    }
+
+    await ensureHostingPaymentsTable(req);
+    const [rows] = await dbFor(req).query(
+      `SELECT
+         p.id,
+         p.solicitacao_id,
+         p.parcela_tipo,
+         p.valor,
+         p.status,
+         p.cliente_id,
+         p.comprovante_path,
+         c.email
+       FROM ${qtable(TABLE_NAMES.hospedagemPagamentos)} p
+       INNER JOIN Clientes c ON c.id = p.cliente_id
+       WHERE p.id = ? AND p.cliente_id = ?
+       LIMIT 1`,
+      [pagamentoId, clienteId],
+    );
+    const pagamento = rows?.[0];
+
+    if (!pagamento || pagamento.parcela_tipo !== "cartao_credito_direto") {
+      return res.status(404).json({
+        status: "erro",
+        mensagem: "Pagamento por cartao nao encontrado.",
+      });
+    }
+    if (clean(pagamento.status).toLowerCase() === "confirmado") {
+      return res.status(409).json({
+        status: "erro",
+        mensagem: "Este pagamento ja foi confirmado.",
+      });
+    }
+
+    const isTestMode = /^TEST-/i.test(publicKey);
+    const payerEmail = isTestMode
+      ? "test@testuser.com"
+      : clean(req.body?.payer?.email) || clean(pagamento.email);
+    if (!payerEmail) {
+      return res.status(400).json({
+        status: "erro",
+        mensagem: "Informe o e-mail do titular do pagamento.",
+      });
+    }
+    const payerIdentificationType = clean(req.body?.payer?.identification?.type);
+    const payerIdentificationNumber = clean(req.body?.payer?.identification?.number);
+    const payerIdentification =
+      payerIdentificationType && payerIdentificationNumber
+        ? {
+            type: payerIdentificationType,
+            number: payerIdentificationNumber.replace(/\D/g, ""),
+          }
+        : null;
+
+    const idempotencyKey = crypto
+      .createHash("sha256")
+      .update(`${pagamentoId}:${token}`)
+      .digest("hex");
+    const amount = Number(pagamento.valor).toFixed(2);
+    const mercadoPagoResponse = await fetch(
+      "https://api.mercadopago.com/v1/orders",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify({
+          type: "online",
+          processing_mode: "automatic",
+          total_amount: amount,
+          description: `Hospedagem ${pagamento.solicitacao_id}`,
+          external_reference: `hospedagem_pagamento_${pagamentoId}`,
+          payer: { email: payerEmail, ...(payerIdentification ? { identification: payerIdentification } : {}) },
+          transactions: {
+            payments: [
+              {
+                amount,
+                payment_method: {
+                  id: paymentMethodId,
+                  type: "credit_card",
+                  token,
+                  installments,
+                },
+              },
+            ],
+          },
+        }),
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+    const result = await mercadoPagoResponse.json();
+
+    if (!mercadoPagoResponse.ok) {
+      const transactionError =
+        result?.transactions?.payments?.[0] || result?.data?.transactions?.payments?.[0];
+      const detail = getMercadoPagoErrorDetail(result);
+      const errorStatus = clean(
+        transactionError?.status ||
+          result?.data?.status ||
+          result?.payment_status ||
+          result?.status_detail ||
+          "rejected",
+      );
+      return res.status(400).json({
+        status: "erro",
+        statusPagamento: errorStatus,
+        statusDetalhePagamento: clean(transactionError?.status_detail) || detail,
+        mensagem: getMercadoPagoPaymentMessage(errorStatus, detail),
+      });
+    }
+
+    const transaction = result?.transactions?.payments?.[0] || result?.data?.transactions?.payments?.[0] || result;
+    const mercadoPagoStatus = clean(
+      transaction.status || result.status,
+    ).toLowerCase();
+    const mercadoPagoStatusDetail = clean(
+      transaction.status_detail || result.status_detail,
+    );
+    const internalStatus = mapMercadoPagoStatus(mercadoPagoStatus, mercadoPagoStatusDetail);
+    const paymentMessage = getMercadoPagoPaymentMessage(
+      mercadoPagoStatus,
+      mercadoPagoStatusDetail,
+    );
+    await dbFor(req).query(
+      `UPDATE ${qtable(TABLE_NAMES.hospedagemPagamentos)}
+       SET status = ?, motivo_recusa = ?, atualizado_em = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [
+        internalStatus,
+        internalStatus === "reprovado" ? mercadoPagoStatusDetail : null,
+        pagamentoId,
+      ],
+    );
+    await dbFor(req).query(
+      `UPDATE ${qtable(TABLE_NAMES.hospedagemMensalidades)}
+       SET status = ?, atualizado_em = CURRENT_TIMESTAMP
+       WHERE pagamento_id = ?`,
+      [internalStatus, pagamentoId],
+    );
+
+    if (internalStatus === "confirmado") {
+      await attachAutomaticCardReceipt(req, pagamento, transaction, result?.id || result?.data?.id);
+    }
+
+    return res.json({
+      status: "sucesso",
+      statusPagamento: mercadoPagoStatus,
+      statusDetalhePagamento: mercadoPagoStatusDetail,
+      orderId: clean(result?.id || result?.data?.id),
+      paymentId: clean(transaction?.id),
+      mensagem: paymentMessage,
+    });
+  } catch (error) {
+    console.error("Mercado Pago card payment:", error);
+    return res.status(500).json({
+      status: "erro",
+      mensagem: "Nao foi possivel processar o pagamento.",
+    });
+  }
+});
+
+router.get("/hospedagens/pagamentos/:id/cartao/status", async (req, res) => {
+  try {
+    const clienteId = await getCurrentClienteId(req);
+    const pagamentoId = Number(req.params.id);
+    const orderId = clean(req.query?.orderId);
+    const { accessToken } = getMercadoPagoCredentials();
+    if (!clienteId || !Number.isInteger(pagamentoId) || !orderId || !accessToken) {
+      return res.status(400).json({ status: "erro", mensagem: "Consulta de pagamento invalida." });
+    }
+    const [rows] = await dbFor(req).query(
+      `SELECT id, solicitacao_id, cliente_id, parcela_tipo, valor, comprovante_path FROM ${qtable(TABLE_NAMES.hospedagemPagamentos)} WHERE id = ? AND cliente_id = ? LIMIT 1`,
+      [pagamentoId, clienteId],
+    );
+    if (!rows?.[0] || rows[0].parcela_tipo !== "cartao_credito_direto") {
+      return res.status(404).json({ status: "erro", mensagem: "Pagamento por cartao nao encontrado." });
+    }
+    const response = await fetch(`https://api.mercadopago.com/v1/orders/${encodeURIComponent(orderId)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(15000),
+    });
+    const result = await response.json();
+    if (!response.ok) return res.status(502).json({ status: "erro", mensagem: "Nao foi possivel consultar o pagamento." });
+    const transaction = result?.transactions?.payments?.[0] || result?.data?.transactions?.payments?.[0] || result;
+    const statusPagamento = clean(transaction?.status || result?.status).toLowerCase();
+    const statusDetalhePagamento = clean(transaction?.status_detail || result?.status_detail);
+    const internalStatus = mapMercadoPagoStatus(statusPagamento, statusDetalhePagamento);
+    await dbFor(req).query(
+      `UPDATE ${qtable(TABLE_NAMES.hospedagemPagamentos)} SET status = ?, motivo_recusa = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`,
+      [internalStatus, internalStatus === "reprovado" ? statusDetalhePagamento : null, pagamentoId],
+    );
+    await dbFor(req).query(
+      `UPDATE ${qtable(TABLE_NAMES.hospedagemMensalidades)} SET status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE pagamento_id = ?`,
+      [internalStatus, pagamentoId],
+    );
+    if (internalStatus === "confirmado") {
+      await attachAutomaticCardReceipt(req, rows[0], transaction, orderId);
+    }
+
+    return res.json({
+      status: "sucesso",
+      statusPagamento,
+      statusDetalhePagamento,
+      orderId,
+      paymentId: clean(transaction?.id),
+      mensagem: getMercadoPagoPaymentMessage(statusPagamento, statusDetalhePagamento),
+    });
+  } catch (error) {
+    console.error("Mercado Pago card payment status:", error);
+    return res.status(500).json({ status: "erro", mensagem: "Nao foi possivel consultar o pagamento." });
+  }
 });
 module.exports = router;

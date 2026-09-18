@@ -32,20 +32,6 @@ Qualquer duvida, estamos a disposicao.
 Equipe Mel Pet Hostel.`;
 }
 
-function buildPaymentLinkEmail({ request, linkPagamento }) {
-  const petName = clean((request?.itens || [])[0]?.petNome) || "pet";
-  return `Ola ${clean(request?.clienteNome) || "Tutor"},
-
-Para a estadia ${getPetGenderArticle(request)} ${petName}, o modo de pagamento selecionado foi via cartao de credito.
-Geramos o link de pagamento abaixo:
-${clean(linkPagamento)}
-
-Para pagamentos realizados por cartao de credito, juros, encargos e taxas administrativas de eventuais parcelamentos serao de responsabilidade do cliente.
-
-Caso queira, voce tambem pode acessar o sistema da Mel Pet Hostel para confirmar o link de pagamento ou mudar a opcao de pagamento.
-Obrigado por escolher os servicos da Mel Pet Hostel.`;
-}
-
 function buildApprovalEmail(request) {
   return `Ola ${clean(request?.clienteNome) || "Tutor"},
 
@@ -82,14 +68,6 @@ Se tiver qualquer duvida, estamos a disposicao!
 Equipe Mel Pet Hostel!`;
 }
 
-function sendHostingPaymentLinkEmail(request, linkPagamento) {
-  return sendEmail({
-    to: request?.clienteEmail,
-    subject: "Link de Pagamento - Mel Pet Hostel",
-    text: buildPaymentLinkEmail({ request, linkPagamento }),
-  });
-}
-
 function sendHostingApprovalEmail(request) {
   return sendEmail({
     to: request?.clienteEmail,
@@ -117,7 +95,6 @@ function sendPendingPaymentReminder({ tutorEmail, tutorName, pets }) {
 module.exports = {
   buildMonthlyInvoiceReleaseMessage,
   sendHostingApprovalEmail,
-  sendHostingPaymentLinkEmail,
   sendMonthlyInvoiceReleaseEmail,
   sendPendingPaymentReminder,
 };

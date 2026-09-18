@@ -137,7 +137,10 @@ async function request(endpoint, options = {}, retry = 0) {
       }
 
       if (!response.ok) {
-        throw new Error(data?.mensagem || `Erro ${response.status}`);
+        const requestError = new Error(data?.mensagem || `Erro ${response.status}`);
+        requestError.data = data;
+        requestError.status = response.status;
+        throw requestError;
       }
 
       log("✓ resposta:", data);

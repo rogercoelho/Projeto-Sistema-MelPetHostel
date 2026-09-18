@@ -3902,6 +3902,90 @@
   border-color: rgba(198, 40, 40, 0.32);
   background: rgba(255, 245, 245, 0.9);
 }
+.melpet-card-checkout {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 14px;
+  border: 1px solid rgba(82, 132, 160, 0.28);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 16px 36px rgba(40, 85, 107, 0.12);
+}
+
+.melpet-card-checkout__header {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.melpet-card-checkout__header span {
+  color: #527184;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.melpet-card-checkout__header strong {
+  color: #28556b;
+  font-size: 1.05rem;
+}
+
+.melpet-card-checkout__amount {
+  margin: 0 0 14px;
+  color: #70482f;
+}
+
+.melpet-card-checkout__email {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+  color: #28556b;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.melpet-card-checkout__email input {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  box-sizing: border-box;
+  border: 1px solid rgba(82, 132, 160, 0.38);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  color: #203d4c;
+  font: inherit;
+}
+
+.melpet-card-checkout__email input:focus {
+  border-color: #327596;
+  outline: 3px solid rgba(50, 117, 150, 0.14);
+}
+
+.melpet-card-checkout__email input:read-only {
+  background: #f1f6f8;
+  color: #527184;
+}
+
+.melpet-card-checkout__email small {
+  color: #6c7f89;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.melpet-card-checkout iframe {
+  max-width: 100%;
+}
+
+@media (min-width: 600px) {
+  .melpet-card-checkout {
+    padding: 20px;
+  }
+}
 .melpet-hosting-payment-installment + .melpet-hosting-receipt-upload {
   display: grid;
   gap: 12px;
@@ -7772,5 +7856,651 @@ button.melpet-presence-day:not(:disabled):focus-visible::before {
   }
   .melpet-presence-calendar:not(.melpet-presence-calendar-table) .melpet-presence-day-label.is-excess::after {
     content: "+";
+  }
+}
+/* Financeiro: navegação por pet, pedido e pagamento. */
+.melpet-financial-pet-list {
+  display: grid;
+  gap: 12px;
+}
+.melpet-financial-pet-card {
+  overflow: hidden;
+  border: 1px solid rgba(82, 132, 160, .24);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(40, 85, 107, .08);
+}
+.melpet-financial-pet-card.is-open {
+  border-color: rgba(40, 85, 107, .46);
+}
+.melpet-financial-pet-card__trigger,
+.melpet-financial-order-card {
+  width: 100%;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.melpet-financial-pet-card__trigger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  align-items: center;
+  padding: 16px;
+  background: linear-gradient(135deg, #f4fafb, #fff);
+  color: #28556b;
+}
+.melpet-financial-pet-card__trigger:hover {
+  background: #edf7f9;
+}
+.melpet-financial-pet-card__trigger:focus-visible,
+.melpet-financial-order-card:focus-visible {
+  outline: 3px solid rgba(50, 117, 150, .25);
+  outline-offset: -3px;
+}
+.melpet-financial-pet-card__eyebrow,
+.melpet-financial-item > span {
+  color: #527184;
+  font-size: .7rem;
+  font-weight: 900;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+.melpet-financial-pet-card__trigger strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 1.08rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.melpet-financial-pet-card__toggle {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: #ddecf1;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.melpet-financial-pet-card__content {
+  display: grid;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+.melpet-financial-order-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 12px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid rgba(82, 132, 160, .2);
+  border-radius: 12px;
+  background: #fff;
+  color: #28556b;
+}
+.melpet-financial-order-card > span:first-child {
+  font-weight: 900;
+}
+.melpet-financial-order-card small {
+  color: #607783;
+  font-size: .78rem;
+}
+.melpet-financial-order-card__toggle {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  color: #2d718c;
+  font-size: .75rem;
+  font-weight: 900;
+}
+.melpet-financial-item {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #f8fbfc;
+  color: #52616a;
+}
+.melpet-financial-item > strong:first-of-type {
+  color: #28556b;
+  font-size: 1.04rem;
+}
+.melpet-financial-item > small {
+  font-size: .82rem;
+}
+.melpet-financial-item > strong:last-of-type {
+  margin-top: 4px;
+  color: #70482f;
+}
+.melpet-financial-payment-details {
+  display: grid;
+  gap: 12px;
+  padding-top: 2px;
+}
+@media (min-width: 640px) {
+  .melpet-financial-pet-card__content {
+    padding: 0 16px 16px;
+  }
+}
+.melpet-financial-pet-card__trigger small {
+  grid-column: 1;
+  color: #607783;
+  font-size: .8rem;
+  font-weight: 750;
+}
+.melpet-financial-order-heading {
+  display: grid;
+  gap: 3px;
+  padding: 13px;
+  border: 1px solid rgba(82, 132, 160, .2);
+  border-radius: 12px;
+  background: #fff;
+  color: #28556b;
+}
+.melpet-financial-order-heading span {
+  color: #607783;
+  font-size: .8rem;
+}
+.melpet-financial-item--trigger {
+  width: 100%;
+  border: 1px solid rgba(82, 132, 160, .18);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.melpet-financial-item--trigger:hover {
+  background: #f0f8fa;
+}
+.melpet-financial-item--trigger:focus-visible,
+.melpet-financial-monthly-card__trigger:focus-visible {
+  outline: 3px solid rgba(50, 117, 150, .25);
+  outline-offset: 2px;
+}
+.melpet-financial-item__adjustment {
+  color: #52616a;
+  font-size: .78rem;
+  font-weight: 750;
+  line-height: 1.4;
+}
+.melpet-financial-monthly-card {
+  overflow: hidden;
+  border: 1px solid rgba(82, 132, 160, .22);
+  border-radius: 12px;
+  background: #fff;
+}
+.melpet-financial-monthly-card__trigger {
+  display: grid;
+  width: 100%;
+  gap: 4px;
+  border: 0;
+  padding: 14px;
+  background: #fff;
+  color: #28556b;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.melpet-financial-monthly-card__trigger:hover {
+  background: #f0f8fa;
+}
+.melpet-financial-monthly-card__trigger > span {
+  color: #527184;
+  font-size: .76rem;
+  font-weight: 900;
+}
+.melpet-financial-monthly-card__trigger strong {
+  font-size: 1rem;
+}
+.melpet-financial-monthly-card__trigger small {
+  color: #2d718c;
+  font-size: .75rem;
+  font-weight: 850;
+}
+.melpet-financial-monthly-card .melpet-financial-payment-details {
+  padding: 0 12px 12px;
+}
+/* Hierarquia visual do Financeiro: pet → pedido → cobrança. */
+.melpet-financial-pet-card {
+  position: relative;
+  border-color: rgba(62, 126, 151, .24);
+  box-shadow: 0 10px 26px rgba(40, 85, 107, .09);
+}
+.melpet-financial-pet-card::before {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 5px;
+  background: #75b6c8;
+  content: "";
+}
+.melpet-financial-pet-card.is-open::before {
+  background: #317895;
+}
+.melpet-financial-pet-card__trigger {
+  position: relative;
+  min-height: 92px;
+  padding: 17px 18px 17px 22px;
+  transition: background .18s ease, color .18s ease;
+}
+.melpet-financial-pet-card__trigger::after {
+  grid-column: 1;
+  color: #317895;
+  content: "Clique para abrir o pedido";
+  font-size: .72rem;
+  font-weight: 850;
+}
+.melpet-financial-pet-card__trigger[aria-expanded="true"]::after {
+  content: "Clique para recolher o pedido";
+}
+.melpet-financial-pet-card__trigger[aria-expanded="true"] {
+  background: linear-gradient(135deg, #e7f5f8, #fff);
+}
+.melpet-financial-pet-card__toggle {
+  width: 36px;
+  height: 36px;
+  background: #d8edf3;
+  color: #27647d;
+  font-size: 1.45rem;
+  font-weight: 500;
+  transition: transform .18s ease, background .18s ease;
+}
+.melpet-financial-pet-card__trigger[aria-expanded="true"] .melpet-financial-pet-card__toggle {
+  transform: rotate(180deg);
+  background: #317895;
+  color: #fff;
+}
+.melpet-financial-pet-card__content {
+  position: relative;
+  gap: 14px;
+  padding-top: 2px;
+}
+.melpet-financial-pet-card__content::before {
+  position: absolute;
+  top: 0;
+  bottom: 12px;
+  left: 28px;
+  width: 1px;
+  background: rgba(73, 138, 162, .28);
+  content: "";
+}
+.melpet-financial-order-heading,
+.melpet-financial-item,
+.melpet-financial-monthly-card {
+  position: relative;
+  margin-left: 16px;
+}
+.melpet-financial-order-heading::before,
+.melpet-financial-item::before,
+.melpet-financial-monthly-card::before {
+  position: absolute;
+  top: 24px;
+  left: -17px;
+  width: 11px;
+  height: 11px;
+  box-sizing: border-box;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #75b6c8;
+  box-shadow: 0 0 0 1px rgba(49, 120, 149, .25);
+  content: "";
+}
+.melpet-financial-order-heading {
+  border-color: rgba(89, 137, 159, .24);
+  background: #f8fbfc;
+}
+.melpet-financial-order-heading strong::before {
+  margin-right: 7px;
+  color: #317895;
+  content: "1";
+  font-size: .7rem;
+  font-weight: 900;
+}
+.melpet-financial-item--trigger {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 12px;
+  min-height: 138px;
+  border-color: rgba(213, 152, 88, .3);
+  background: linear-gradient(135deg, #fffaf4, #fff);
+  transition: background .18s ease, border-color .18s ease, transform .18s ease;
+}
+.melpet-financial-item--trigger::before {
+  background: #d99858;
+}
+.melpet-financial-item--trigger::after {
+  align-self: center;
+  grid-row: 1 / span 4;
+  grid-column: 2;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: #f8e3cd;
+  color: #95531c;
+  content: "+";
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.melpet-financial-item--trigger[aria-expanded="true"] {
+  border-color: rgba(187, 110, 39, .48);
+  background: #fff5e8;
+}
+.melpet-financial-item--trigger[aria-expanded="true"]::after {
+  background: #b86d28;
+  color: #fff;
+  content: "−";
+}
+.melpet-financial-item--trigger > *:not(.melpet-financial-item__adjustment) {
+  grid-column: 1;
+}
+.melpet-financial-item__adjustment {
+  grid-column: 1 / -1;
+  padding-top: 4px;
+}
+.melpet-financial-payment-details {
+  position: relative;
+  margin-left: 16px;
+  padding: 14px;
+  border: 1px solid rgba(92, 139, 160, .2);
+  border-radius: 14px;
+  background: #f7fbfc;
+}
+.melpet-financial-payment-details::before {
+  position: absolute;
+  top: 21px;
+  left: -17px;
+  width: 11px;
+  height: 11px;
+  box-sizing: border-box;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #5c9bb5;
+  box-shadow: 0 0 0 1px rgba(49, 120, 149, .25);
+  content: "";
+}
+.melpet-financial-monthly-card {
+  border-color: rgba(123, 104, 173, .27);
+  background: #fff;
+}
+.melpet-financial-monthly-card::before {
+  background: #8b79ba;
+}
+.melpet-financial-monthly-card__trigger {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 12px;
+  min-height: 104px;
+  padding: 15px 16px;
+  background: linear-gradient(135deg, #faf8ff, #fff);
+}
+.melpet-financial-monthly-card__trigger > span,
+.melpet-financial-monthly-card__trigger strong {
+  grid-column: 1;
+}
+.melpet-financial-monthly-card__trigger small {
+  grid-column: 1;
+}
+.melpet-financial-monthly-card__trigger::after {
+  grid-row: 1 / span 3;
+  grid-column: 2;
+  align-self: center;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e8e1f7;
+  color: #66538e;
+  content: "+";
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.melpet-financial-monthly-card__trigger[aria-expanded="true"] {
+  background: linear-gradient(135deg, #f1edfb, #fff);
+}
+.melpet-financial-monthly-card__trigger[aria-expanded="true"]::after {
+  background: #7560a5;
+  color: #fff;
+  content: "−";
+}
+.melpet-financial-monthly-card .melpet-financial-payment-details {
+  margin: 0 12px 12px;
+  padding: 12px;
+  border-color: rgba(123, 104, 173, .2);
+  background: #fbfaff;
+}
+.melpet-financial-monthly-card .melpet-financial-payment-details::before {
+  display: none;
+}
+@media (max-width: 480px) {
+  .melpet-financial-pet-card__content::before,
+  .melpet-financial-order-heading::before,
+  .melpet-financial-item::before,
+  .melpet-financial-monthly-card::before,
+  .melpet-financial-payment-details::before {
+    display: none;
+  }
+  .melpet-financial-order-heading,
+  .melpet-financial-item,
+  .melpet-financial-monthly-card,
+  .melpet-financial-payment-details {
+    margin-left: 0;
+  }
+}
+.melpet-financial-pet-card__order {
+  grid-column: 1;
+  color: #476a7a;
+  font-size: .76rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.melpet-financial-pet-card__trigger .melpet-financial-pet-card__toggle {
+  grid-row: 1 / span 4;
+}
+/* Opções de pagamento: largura definida pelo conteúdo e quebra fluida. */
+.melpet-hosting-payment-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+}
+.melpet-hosting-payment-option.btn {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: min(100%, 148px);
+  min-height: 0;
+  padding: 12px 16px;
+}
+.melpet-hosting-payment-option strong,
+.melpet-hosting-payment-option span {
+  width: auto;
+}
+@media (max-width: 480px) {
+  .melpet-hosting-payment-options {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .melpet-hosting-payment-option.btn {
+    width: 100%;
+    min-width: 0;
+  }
+}
+/* Pedidos agrupados dentro do card de cada pet. */
+.melpet-financial-pet-card__trigger::after,
+.melpet-financial-pet-card__trigger[aria-expanded="true"]::after {
+  content: none;
+}
+.melpet-financial-pet-card__trigger {
+  min-height: 72px;
+}
+.melpet-financial-hosting-card {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  margin-left: 16px;
+  padding: 14px;
+  border: 1px solid rgba(72, 138, 163, .24);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f7fbfc, #fff);
+}
+.melpet-financial-hosting-card::before {
+  position: absolute;
+  top: 25px;
+  left: -17px;
+  width: 11px;
+  height: 11px;
+  box-sizing: border-box;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #4f9db7;
+  box-shadow: 0 0 0 1px rgba(49, 120, 149, .25);
+  content: "";
+}
+.melpet-financial-hosting-card__header {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed rgba(72, 138, 163, .28);
+}
+.melpet-financial-hosting-card__header > span {
+  color: #527184;
+  font-size: .7rem;
+  font-weight: 900;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+.melpet-financial-hosting-card__header strong {
+  color: #28556b;
+  font-size: 1.02rem;
+}
+.melpet-financial-hosting-card__header small {
+  color: #607783;
+  font-size: .78rem;
+  font-weight: 700;
+}
+.melpet-financial-hosting-card .melpet-financial-item,
+.melpet-financial-hosting-card .melpet-financial-monthly-card,
+.melpet-financial-hosting-card .melpet-financial-payment-details {
+  margin-left: 0;
+}
+.melpet-financial-hosting-card .melpet-financial-item::before,
+.melpet-financial-hosting-card .melpet-financial-monthly-card::before,
+.melpet-financial-hosting-card .melpet-financial-payment-details::before {
+  display: none;
+}
+@media (max-width: 480px) {
+  .melpet-financial-hosting-card {
+    margin-left: 0;
+    padding: 12px;
+  }
+}
+.melpet-financial-hosting-card__header {
+  width: 100%;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: background .18s ease;
+}
+.melpet-financial-hosting-card__header:hover {
+  background: #edf7f9;
+}
+.melpet-financial-hosting-card__header::after {
+  position: absolute;
+  top: 50%;
+  right: 13px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: #d8edf3;
+  color: #27647d;
+  content: "+";
+  font-size: 1.25rem;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+.melpet-financial-hosting-card__header[aria-expanded="true"]::after {
+  background: #317895;
+  color: #fff;
+  content: "−";
+}
+.melpet-financial-hosting-card__header small {
+  padding-right: 42px;
+  color: #317895;
+  font-weight: 850;
+}
+/* Mantém o visual original do tipo de hospedagem, agora clicável. */
+.melpet-financial-hosting-card__header {
+  display: grid;
+  gap: 3px;
+  padding: 0 0 10px;
+  border-bottom: 1px dashed rgba(72, 138, 163, .28);
+  background: transparent;
+  color: #28556b;
+}
+.melpet-financial-hosting-card__header:hover {
+  background: transparent;
+}
+.melpet-financial-hosting-card__header::after,
+.melpet-financial-hosting-card__header[aria-expanded="true"]::after {
+  display: none;
+  content: none;
+}
+.melpet-financial-hosting-card__header small {
+  padding-right: 0;
+  color: #607783;
+  font-weight: 700;
+}
+.melpet-financial-hosting-card::before {
+  top: 21px;
+  left: -23px;
+  width: 19px;
+  height: 19px;
+  border-width: 4px;
+  background: #2e819e;
+  box-shadow: 0 0 0 2px rgba(49, 120, 149, .22);
+}
+@media (max-width: 480px) {
+  .melpet-financial-hosting-card::before {
+    display: none;
+  }
+}
+/* Opções de cartão independentes no mesmo nível. */
+.melpet-hosting-payment-options .melpet-hosting-payment-option.is-card,
+.melpet-hosting-payment-options .melpet-hosting-payment-option.is-card-direct {
+  flex: 0 1 auto;
+}
+.melpet-hosting-payment-option.is-card-direct {
+  background: linear-gradient(135deg, #edf2ff, #dce7fb);
+  border-color: rgba(76, 104, 177, .35);
+  color: #304b98;
+}
+.melpet-hosting-payment-option.is-card-direct:hover:not(:disabled) {
+  background: linear-gradient(135deg, #e1eaff, #ceddf9);
+  color: #263d80;
+}
+.melpet-card-checkout__provider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.melpet-card-checkout__mercadopago-logo {
+  display: block;
+  width: 112px;
+  max-width: 38vw;
+  height: auto;
+  border-radius: 10px;
+  object-fit: contain;
+  box-shadow: 0 1px 2px rgb(33 60 92 / 14%);
+}
+@media (max-width: 420px) {
+  .melpet-card-checkout__mercadopago-logo {
+    width: 96px;
   }
 }

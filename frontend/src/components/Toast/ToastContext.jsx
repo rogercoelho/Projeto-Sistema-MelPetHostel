@@ -11,10 +11,10 @@ export function ToastProvider({ children }) {
   }, []);
 
   const showToast = useCallback(
-    (text, type = "success") => {
+    (text, type = "success", duration = 2500) => {
       const id = Date.now() + Math.random();
       setToasts((t) => [...t, { id, text, type }]);
-      setTimeout(() => removeToast(id), 2500);
+      setTimeout(() => removeToast(id), duration);
     },
     [removeToast],
   );
